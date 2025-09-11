@@ -1,0 +1,58 @@
+{
+  "name": "quick-resume-ai",
+  "version": "2.0.0",
+  "description": "AI-powered resume generator Chrome extension with server backend",
+  "type": "module",
+  "scripts": {
+    "start": "npm run server:start",
+    "dev": "concurrently \"npm run server:dev\" \"npm run extension:watch\"",
+    "server:start": "cd server && node server.js",
+    "server:dev": "cd server && nodemon server.js",
+    "server:install": "cd server && npm install",
+    "extension:build": "npm run extension:validate && npm run extension:zip",
+    "extension:validate": "node scripts/validate-extension.js",
+    "extension:zip": "zip -r dist/extension.zip extension/ -x '*.DS_Store' -x '__MACOSX'",
+    "extension:watch": "nodemon --watch extension --ext js,html,css,json --exec 'echo Extension files changed'",
+    "install:all": "npm install && npm run server:install",
+    "test": "npm run test:server && npm run test:extension",
+    "test:server": "cd server && npm test",
+    "test:extension": "node scripts/test-extension.js",
+    "lint": "eslint . --ext .js",
+    "format": "prettier --write '**/*.{js,json,html,css}'",
+    "docker:build": "docker-compose build",
+    "docker:up": "docker-compose up",
+    "docker:down": "docker-compose down",
+    "setup": "npm run install:all && npm run setup:env",
+    "setup:env": "node scripts/setup-env.js",
+    "clean": "rm -rf node_modules server/node_modules dist",
+    "production:build": "npm run lint && npm run test && npm run extension:build",
+    "check:tectonic": "which tectonic || echo 'Tectonic not installed. Install from: https://tectonic-typesetting.github.io/'"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.2",
+    "node-fetch": "^3.3.2"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "nodemon": "^3.0.2",
+    "eslint": "^8.56.0",
+    "prettier": "^3.1.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/quick-resume-ai"
+  },
+  "keywords": [
+    "resume",
+    "ai",
+    "chrome-extension",
+    "job-search",
+    "ats-optimization"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  }
+}

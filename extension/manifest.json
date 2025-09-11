@@ -1,0 +1,43 @@
+{
+  "manifest_version": 3,
+  "name": "Quick Resume AI",
+  "version": "2.0.0",
+  "description": "Instant AI resume generation for any job",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "scripting",
+    "downloads"
+  ],
+  "host_permissions": [
+    "https://*.linkedin.com/*",
+    "https://*.indeed.com/*",
+    "https://*.glassdoor.com/*",
+    "https://*.monster.com/*",
+    "https://*.ziprecruiter.com/*",
+    "http://localhost:3000/*",
+    "https://resume.yourdomain.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.linkedin.com/*",
+        "https://*.indeed.com/*", 
+        "https://*.glassdoor.com/*",
+        "https://*.monster.com/*",
+        "https://*.ziprecruiter.com/*"
+      ],
+      "js": ["content.js"],
+      "css": ["inject.css"]
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "side_panel": {
+    "default_path": "sidepanel_new.html"
+  }
+}
