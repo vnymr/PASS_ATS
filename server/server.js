@@ -1418,18 +1418,18 @@ function buildOnePageTemplateWithTransformation(profile = {}, jobData = {}) {
 \\fancyfoot{}
 \\renewcommand{\\headrulewidth}{0pt}
 \\renewcommand{\\footrulewidth}{0pt}
-\\addtolength{\\oddsidemargin}{-0.8in}
-\\addtolength{\\evensidemargin}{-0.8in}
-\\addtolength{\\textwidth}{1.6in}
-\\addtolength{\\topmargin}{-0.9in}
-\\addtolength{\\textheight}{1.8in}
+\\addtolength{\\oddsidemargin}{-0.75in}
+\\addtolength{\\evensidemargin}{-0.75in}
+\\addtolength{\\textwidth}{1.5in}
+\\addtolength{\\topmargin}{-0.8in}
+\\addtolength{\\textheight}{1.6in}
 \\urlstyle{same}
 \\raggedbottom
 \\raggedright
 \\setlength{\\tabcolsep}{0in}
-\\titleformat{\\section}{\\vspace{-3pt}\\scshape\\raggedright\\large\\bfseries}{}{0em}{}[\\color{black}\\titlerule \\vspace{-3pt}]
-\\newcommand{\\resumeItem}[1]{\\item\\small{#1 \\vspace{-0.5pt}}}
-\\newcommand{\\resumeSubheading}[4]{\\vspace{-1pt}\\item \\textbf{#1} \\hfill \\textbf{\\small #2} \\\\ \\textit{\\small#3} \\hfill \\textit{\\small #4} \\\\ \\vspace{-3pt}}
+\\titleformat{\\section}{\\vspace{-4pt}\\scshape\\raggedright\\large\\bfseries}{}{0em}{}[\\color{black}\\titlerule \\vspace{-4pt}]
+\\newcommand{\\resumeItem}[1]{\\item\\small{#1 \\vspace{-1pt}}}
+\\newcommand{\\resumeSubheading}[4]{\\vspace{-2pt}\\item \\textbf{#1} \\hfill \\textbf{\\small #2} \\\\ \\textit{\\small#3} \\hfill \\textit{\\small #4} \\\\ \\vspace{-4pt}}
 \\newcommand{\\resumeSubItem}[1]{\\resumeItem{#1}\\vspace{-1pt}}
 \\newcommand{\\resumeSubHeadingListStart}{\\begin{itemize}[leftmargin=0.0in, label={}]}  
 \\newcommand{\\resumeSubHeadingListEnd}{\\end{itemize}}
@@ -1544,18 +1544,18 @@ function buildOnePageTemplate(profile = {}, jobData = {}) {
 \\fancyfoot{}
 \\renewcommand{\\headrulewidth}{0pt}
 \\renewcommand{\\footrulewidth}{0pt}
-\\addtolength{\\oddsidemargin}{-0.8in}
-\\addtolength{\\evensidemargin}{-0.8in}
-\\addtolength{\\textwidth}{1.6in}
-\\addtolength{\\topmargin}{-0.9in}
-\\addtolength{\\textheight}{1.8in}
+\\addtolength{\\oddsidemargin}{-0.75in}
+\\addtolength{\\evensidemargin}{-0.75in}
+\\addtolength{\\textwidth}{1.5in}
+\\addtolength{\\topmargin}{-0.8in}
+\\addtolength{\\textheight}{1.6in}
 \\urlstyle{same}
 \\raggedbottom
 \\raggedright
 \\setlength{\\tabcolsep}{0in}
-\\titleformat{\\section}{\\vspace{-3pt}\\scshape\\raggedright\\large\\bfseries}{}{0em}{}[\\color{black}\\titlerule \\vspace{-3pt}]
-\\newcommand{\\resumeItem}[1]{\\item\\small{#1 \\vspace{-0.5pt}}}
-\\newcommand{\\resumeSubheading}[4]{\\vspace{-1pt}\\item \\textbf{#1} \\hfill \\textbf{\\small #2} \\\\ \\textit{\\small#3} \\hfill \\textit{\\small #4} \\\\ \\vspace{-3pt}}
+\\titleformat{\\section}{\\vspace{-4pt}\\scshape\\raggedright\\large\\bfseries}{}{0em}{}[\\color{black}\\titlerule \\vspace{-4pt}]
+\\newcommand{\\resumeItem}[1]{\\item\\small{#1 \\vspace{-1pt}}}
+\\newcommand{\\resumeSubheading}[4]{\\vspace{-2pt}\\item \\textbf{#1} \\hfill \\textbf{\\small #2} \\\\ \\textit{\\small#3} \\hfill \\textit{\\small #4} \\\\ \\vspace{-4pt}}
 \\newcommand{\\resumeSubItem}[1]{\\resumeItem{#1}\\vspace{-1pt}}
 \\newcommand{\\resumeSubHeadingListStart}{\\begin{itemize}[leftmargin=0.0in, label={}]}  
 \\newcommand{\\resumeSubHeadingListEnd}{\\end{itemize}}

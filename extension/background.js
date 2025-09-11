@@ -34,6 +34,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       });
     return true;
   }
+  
+  if (request.action === 'openGeneratingPage') {
+    chrome.tabs.create({ url: chrome.runtime.getURL('generating.html') });
+    sendResponse({ success: true });
+    return false;
+  }
 
   if (request.action === 'getJobStatus') {
     const jobId = request.jobId;
@@ -117,8 +123,32 @@ async function handleResumeGeneration(jobData, tab) {
       throw new Error('Invalid job data: missing job description');
     }
     
-    // Get user profile
-    const { profile, tempId } = await chrome.storage.local.get(['profile', 'tempId']);
+    // Try to get profile from database first, fallback to local
+    let profile = null;
+    let tempId = null;
+    
+    try {
+      // First try to get from database if authenticated
+      const token = await ensureAuthToken();
+      if (token) {
+        const dbProfile = await getProfile();
+        if (dbProfile && !dbProfile.error) {
+          profile = dbProfile;
+          tempId = profile.tempId || `DB_${profile.email.split('@')[0]}`;
+          console.log('Using profile from database');
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to fetch profile from database:', error);
+    }
+    
+    // Fallback to local storage
+    if (!profile) {
+      const localData = await chrome.storage.local.get(['profile', 'tempId']);
+      profile = localData.profile;
+      tempId = localData.tempId;
+      console.log('Using profile from local storage');
+    }
 
     if (!profile || !tempId) {
       // Open onboarding
@@ -316,30 +346,88 @@ async function getProfile() {
 }
 
 async function saveProfile(profile) {
-  // Persist locally first (so it “always saves”)
-  await chrome.storage.local.set({ profile });
+  // Always persist locally first as backup
+  await chrome.storage.local.set({ profile, lastSaved: Date.now() });
 
-  // Try to sync to server if authenticated
+  // Try to sync to server
   let token = await ensureAuthToken();
+  
+  // If no token and we have email, try to create account or login
+  if (!token && profile.email) {
+    try {
+      // First try to login with a generated password based on email
+      const tempPassword = `${profile.email.split('@')[0]}_Resume2024!`;
+      
+      // Try login first
+      let response = await fetch(`${API_BASE}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: profile.email,
+          password: tempPassword
+        })
+      });
+      
+      // If login fails, try to create account
+      if (!response.ok) {
+        response = await fetch(`${API_BASE}/auth/signup`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: profile.email,
+            password: tempPassword
+          })
+        });
+      }
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.token) {
+          token = data.token;
+          authToken = data.token;
+          await chrome.storage.local.set({ authToken: data.token });
+          console.log('Auto-authenticated user for database storage');
+        }
+      }
+    } catch (error) {
+      console.warn('Auto-auth failed:', error);
+    }
+  }
+  
+  // If still no token, save locally only
   if (!token) {
-    // Skip auto-auth for now - user needs to manually authenticate
-    // This prevents 401 errors when trying random passwords for existing users
-    return { success: true, warning: 'Saved locally only. Please sign in to sync to server.' };
+    return { success: true, warning: 'Saved locally. Create account to sync to cloud.' };
   }
 
-  const response = await fetch(`${API_BASE}/me`, {
-    method: 'PUT',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(profile)
-  });
+  // Save to server database
+  try {
+    const response = await fetch(`${API_BASE}/me`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(profile)
+    });
 
-  if (!response.ok) {
-    return { success: false, warning: 'Saved locally. Server sync failed.' };
+    if (!response.ok) {
+      console.error('Server save failed:', response.status);
+      return { success: false, warning: 'Saved locally. Server sync failed.' };
+    }
+    
+    // Mark as synced in local storage
+    await chrome.storage.local.set({ 
+      profile, 
+      dbSynced: true,
+      lastSyncTime: Date.now() 
+    });
+    
+    console.log('Profile successfully saved to database');
+    return { success: true, synced: true };
+  } catch (error) {
+    console.error('Database save error:', error);
+    return { success: false, warning: 'Saved locally. Database error.' };
   }
-  return { success: true, synced: true };
 }
 
 async function compilePDF(latex) {
@@ -376,4 +464,27 @@ async function compilePDF(latex) {
 // Handle extension install
 chrome.runtime.onInstalled.addListener(() => {
   console.log('Quick Resume: Extension installed');
+  
+  // Set up periodic sync every 5 minutes
+  chrome.alarms.create('syncProfile', { periodInMinutes: 5 });
+});
+
+// Handle periodic sync
+chrome.alarms.onAlarm.addListener(async (alarm) => {
+  if (alarm.name === 'syncProfile') {
+    try {
+      const { profile, dbSynced, lastSyncTime } = await chrome.storage.local.get(['profile', 'dbSynced', 'lastSyncTime']);
+      
+      // Only sync if we have a profile and it hasn't been synced recently
+      if (profile && (!dbSynced || !lastSyncTime || Date.now() - lastSyncTime > 300000)) {
+        console.log('Running periodic profile sync to database');
+        const result = await saveProfile(profile);
+        if (result.synced) {
+          console.log('Periodic sync successful');
+        }
+      }
+    } catch (error) {
+      console.error('Periodic sync failed:', error);
+    }
+  }
 });

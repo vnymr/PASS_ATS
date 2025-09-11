@@ -24,15 +24,51 @@ function injectGenerateButton() {
   // Click handler
   button.addEventListener('click', async () => {
     button.classList.add('qr-loading');
-    button.querySelector('.qr-text').textContent = 'Extracting...';
+    
+    // Show progress updates
+    const updateStatus = (text, progress) => {
+      button.querySelector('.qr-text').textContent = text;
+      if (progress) {
+        button.style.background = `linear-gradient(90deg, rgba(76,175,80,0.3) ${progress}%, transparent ${progress}%)`;
+      }
+    };
+    
+    updateStatus('Extracting job details...', 10);
     
     const jobData = extractJobData();
     
-    // Send to background
-    chrome.runtime.sendMessage({
+    // Ensure jdText is set for the backend
+    if (!jobData.jdText) {
+      jobData.jdText = jobData.text || '';
+    }
+    
+    updateStatus('Analyzing requirements...', 30);
+    
+    // Send to background and wait for response
+    const response = await chrome.runtime.sendMessage({
       action: 'generateResume',
       jobData: jobData
     });
+    
+    // Open the generating page in a new tab
+    if (!response?.error) {
+      updateStatus('Opening generator...', 50);
+      await chrome.runtime.sendMessage({ action: 'openGeneratingPage' });
+      
+      // Reset button after a delay
+      setTimeout(() => {
+        button.classList.remove('qr-loading');
+        button.querySelector('.qr-text').textContent = 'Generate Resume';
+        button.style.background = '';
+      }, 2000);
+    } else {
+      updateStatus('Error: ' + response.error, 0);
+      setTimeout(() => {
+        button.classList.remove('qr-loading');
+        button.querySelector('.qr-text').textContent = 'Generate Resume';
+        button.style.background = '';
+      }, 3000);
+    }
   });
 }
 
@@ -113,8 +149,18 @@ function extractJobData() {
   return data;
 }
 
-// Listen for messages from popup
+// Listen for status updates from background
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === 'statusUpdate') {
+    const button = document.getElementById('quick-resume-btn');
+    if (button && button.classList.contains('qr-loading')) {
+      button.querySelector('.qr-text').textContent = request.message || 'Processing...';
+      if (request.progress) {
+        button.style.background = `linear-gradient(90deg, rgba(76,175,80,0.3) ${request.progress}%, transparent ${request.progress}%)`;
+      }
+    }
+  }
+  
   if (request.action === 'extractJob' || request.action === 'extractJobData') {
     const jobData = extractJobData();
     console.log('Quick Resume: Extracted job data:', jobData);

@@ -217,11 +217,35 @@ document.getElementById('nextStep2').addEventListener('click', async () => {
   // Generate temporary ID
   profileData.tempId = 'TMP_' + Math.random().toString(36).substr(2, 9).toUpperCase();
   
-  // Save locally immediately
+  // Show loading state
+  const submitBtn = document.getElementById('nextStep2');
+  const originalText = submitBtn.textContent;
+  submitBtn.textContent = 'Saving to database...';
+  submitBtn.disabled = true;
+  
+  try {
+    // First, try to save to server database
+    const saveResult = await chrome.runtime.sendMessage({ 
+      action: 'saveProfile', 
+      profile: profileData 
+    });
+    
+    if (saveResult?.success) {
+      console.log('Profile saved to database successfully');
+    } else {
+      console.warn('Database save failed, using local storage as fallback');
+    }
+  } catch (error) {
+    console.error('Failed to save to database:', error);
+  }
+  
+  // Always save locally as backup
   await chrome.storage.local.set({ profile: profileData, tempId: profileData.tempId });
   
-  // Show success immediately
+  // Show success
   document.getElementById('tempId').textContent = profileData.tempId;
+  submitBtn.textContent = originalText;
+  submitBtn.disabled = false;
   showStep(3);
 
   // Fire-and-forget: AI analysis to enrich structured fields if resume text present
@@ -247,15 +271,32 @@ document.getElementById('nextStep2').addEventListener('click', async () => {
       } catch {}
     }
 
-    // Fire-and-forget sync to server
+    // Sync enriched data to server database
     if (profileData.email) {
       try {
         const result = await chrome.runtime.sendMessage({ action: 'saveProfile', profile: profileData });
-        if (!result?.success) {
-          console.warn('Profile sync failed:', result?.warning || 'unknown');
+        if (result?.success) {
+          console.log('Enriched profile synced to database');
+          // Update local storage with confirmation
+          await chrome.storage.local.set({ 
+            profile: profileData, 
+            dbSynced: true,
+            lastSyncTime: Date.now()
+          });
+        } else {
+          console.warn('Database sync failed:', result?.warning || 'unknown');
+          // Mark as not synced
+          await chrome.storage.local.set({ 
+            profile: profileData, 
+            dbSynced: false 
+          });
         }
       } catch (e) {
-        console.warn('Profile sync error:', e.message);
+        console.warn('Database sync error:', e.message);
+        await chrome.storage.local.set({ 
+          profile: profileData, 
+          dbSynced: false 
+        });
       }
     }
   })();
