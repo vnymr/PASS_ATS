@@ -16,6 +16,11 @@ if (process.env.NODE_ENV !== 'production') {
   dotenv.config();
 }
 
+// Debug: Log environment status (remove after testing)
+console.log('Environment:', process.env.NODE_ENV || 'not set');
+console.log('API Key present:', !!process.env.OPENAI_API_KEY);
+console.log('API Key starts with:', process.env.OPENAI_API_KEY ? process.env.OPENAI_API_KEY.substring(0, 10) + '...' : 'not set');
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
