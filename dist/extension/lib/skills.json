@@ -1,0 +1,31 @@
+{
+  "technical": [
+    "JavaScript", "TypeScript", "Python", "Java", "C++", "C#", "Go", "Rust", "Ruby", "PHP",
+    "React", "Angular", "Vue.js", "Next.js", "Node.js", "Express", "Django", "Flask", "Spring",
+    "AWS", "Azure", "GCP", "Docker", "Kubernetes", "Terraform", "Jenkins", "GitHub Actions",
+    "PostgreSQL", "MySQL", "MongoDB", "Redis", "Elasticsearch", "Kafka", "RabbitMQ",
+    "REST API", "GraphQL", "Microservices", "CI/CD", "DevOps", "Agile", "Scrum",
+    "Machine Learning", "Deep Learning", "TensorFlow", "PyTorch", "Scikit-learn",
+    "Data Analysis", "SQL", "NoSQL", "ETL", "Data Pipeline", "Apache Spark",
+    "HTML", "CSS", "SASS", "Webpack", "Babel", "Jest", "Cypress", "Selenium",
+    "Git", "Linux", "Bash", "Shell Scripting", "Nginx", "Apache", "Load Balancing",
+    "Security", "OAuth", "JWT", "HTTPS", "Encryption", "Penetration Testing",
+    "Mobile Development", "iOS", "Android", "React Native", "Flutter", "Swift", "Kotlin",
+    "Blockchain", "Solidity", "Web3", "Smart Contracts", "Ethereum",
+    "UI/UX", "Figma", "Sketch", "Adobe XD", "Responsive Design", "Accessibility"
+  ],
+  "soft": [
+    "Leadership", "Communication", "Problem Solving", "Team Collaboration", "Project Management",
+    "Critical Thinking", "Time Management", "Adaptability", "Creativity", "Attention to Detail",
+    "Mentoring", "Presentation", "Documentation", "Research", "Analysis",
+    "Customer Service", "Stakeholder Management", "Negotiation", "Decision Making",
+    "Strategic Planning", "Innovation", "Cross-functional Collaboration"
+  ],
+  "verbs": [
+    "Developed", "Implemented", "Designed", "Built", "Created", "Architected",
+    "Led", "Managed", "Coordinated", "Delivered", "Deployed", "Optimized",
+    "Improved", "Enhanced", "Automated", "Integrated", "Migrated", "Refactored",
+    "Analyzed", "Researched", "Tested", "Debugged", "Maintained", "Monitored",
+    "Collaborated", "Mentored", "Trained", "Presented", "Documented", "Reviewed"
+  ]
+}

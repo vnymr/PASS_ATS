@@ -21,9 +21,6 @@ RUN cd server && npm ci --only=production
 COPY server/ ./server/
 COPY extension/ ./extension/
 
-# Generate Prisma client
-RUN cd server && npx prisma generate
-
 # Production stage
 FROM node:18-alpine
 
