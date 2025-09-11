@@ -1317,20 +1317,8 @@ function buildOnePageTemplateWithTransformation(profile = {}, jobData = {}) {
   const linkedin = profile.linkedin ? esc(profile.linkedin) : '';
   const website = profile.website ? esc(profile.website) : '';
   
-  // Enhanced summary for cross-domain transitions
-  const targetRole = jobData.role || 'Target Role';
-  const targetCompany = jobData.company || 'Target Company';
-  const jdText = (jobData.text || '').toLowerCase();
-  
-  // Detect if this is a cross-domain transition and create appropriate summary
-  let summary;
-  if (jdText.includes('business development') || jdText.includes('sales') || jdText.includes('b2b')) {
-    summary = esc(`Business-focused professional with proven track record in market research, client relationship management, and driving growth initiatives. Seeking to leverage analytical skills and leadership experience as ${targetRole} at ${targetCompany}.`);
-  } else if (jdText.includes('product') && jdText.includes('management')) {
-    summary = esc(`Product-oriented professional with experience in market research, user analysis, and cross-functional team leadership. Proven ability to drive product development and client satisfaction as ${targetRole} at ${targetCompany}.`);
-  } else {
-    summary = esc(profile.summary_narrative || `Professional seeking to contribute expertise and drive results as ${targetRole} at ${targetCompany}.`);
-  }
+  // AI-generated summary only - no hardcoded content
+  const summary = profile.summary_narrative ? esc(profile.summary_narrative) : '';
   
   const expArray = Array.isArray(profile.experience) ? profile.experience : [];
   
@@ -1472,7 +1460,8 @@ function buildOnePageTemplate(profile = {}, jobData = {}) {
   // Only include LinkedIn/website if they actually exist
   const linkedin = profile.linkedin ? esc(profile.linkedin) : '';
   const website = profile.website ? esc(profile.website) : '';
-  const summary = esc(profile.summary_narrative || `Professional seeking opportunities to contribute expertise and drive results.`);
+  // AI-generated summary only - no hardcoded content
+  const summary = profile.summary_narrative ? esc(profile.summary_narrative) : '';
   const role = esc(jobData.role || 'Target Role');
   const company = esc(jobData.company || 'Target Company');
 
@@ -1597,7 +1586,8 @@ function buildOnePageTemplateEnhanced(profile = {}, jobData = {}) {
   const location = profile.location ? esc(profile.location) : '';
   const linkedin = profile.linkedin ? esc(profile.linkedin) : '';
   const website = profile.website ? esc(profile.website) : '';
-  const summary = esc(profile.summary_narrative || `Professional seeking opportunities to contribute expertise and drive results.`);
+  // AI-generated summary only - no hardcoded content
+  const summary = profile.summary_narrative ? esc(profile.summary_narrative) : '';
 
   const expArray = Array.isArray(profile.experience) ? profile.experience : [];
   const skillsArray = Array.isArray(profile.skills) ? profile.skills : [];

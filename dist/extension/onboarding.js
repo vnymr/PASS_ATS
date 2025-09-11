@@ -163,17 +163,11 @@ async function analyzeAndPreview() {
       if (structured?.summary) {
         summaryDiv.innerHTML = `<strong style="color: #fff;">📝 AI Summary:</strong><br>${structured.summary}`;
       } else {
-        // Fallback: Generate a basic summary from the text
-        const lines = profileData.resumeText.split('\n').filter(l => l.trim());
-        const summary = `Professional with ${lines.length > 50 ? 'extensive' : 'solid'} experience. Resume includes ${
-          profileData.resumeText.match(/\d{4}/g)?.length || 0
-        } years of work history and ${
-          profileData.resumeText.match(/\b[A-Z][a-z]+\b/g)?.length || 'multiple'
-        } key skills.`;
-        summaryDiv.innerHTML = `<strong style="color: #fff;">📝 Quick Summary:</strong><br>${summary}`;
+        // No AI summary available - wait for server
+        summaryDiv.innerHTML = `<strong style="color: #ffa500;">⚠️ AI Analysis Pending:</strong><br>Summary will be generated when you proceed. Server may be starting up.`;
       }
       
-      // Display skills
+      // Display skills - ONLY from AI
       if (Array.isArray(structured?.skills) && structured.skills.length > 0) {
         const wrap = document.getElementById('previewSkills');
         wrap.innerHTML = '';
@@ -184,30 +178,16 @@ async function analyzeAndPreview() {
           wrap.appendChild(chip);
         });
       } else {
-        // Try to extract skills from text
-        const skillKeywords = ['Python', 'JavaScript', 'React', 'Node.js', 'SQL', 'AWS', 'Docker', 'Git', 'Java', 'C++'];
-        const foundSkills = skillKeywords.filter(skill => 
-          profileData.resumeText.toLowerCase().includes(skill.toLowerCase())
-        );
-        if (foundSkills.length > 0) {
-          const wrap = document.getElementById('previewSkills');
-          wrap.innerHTML = '';
-          foundSkills.forEach(s => {
-            const chip = document.createElement('span');
-            chip.textContent = s;
-            chip.style.cssText = 'display:inline-block;background:#1b1b1b;border:1px solid #2a2a2a;border-radius:12px;padding:4px 8px;font-size:12px;margin:2px;';
-            wrap.appendChild(chip);
-          });
-        }
+        // No skills from AI - show placeholder
+        const wrap = document.getElementById('previewSkills');
+        wrap.innerHTML = '<span style="color:#999;font-size:12px;">Skills will be extracted by AI...</span>';
       }
       
-      // Display experience count
+      // Display experience count - ONLY from AI
       if (Array.isArray(structured?.experience)) {
         document.getElementById('previewExpCount').textContent = `${structured.experience.length} sections`;
       } else {
-        // Count sections based on common patterns
-        const expMatches = profileData.resumeText.match(/\d{4}\s*-\s*\d{4}|\d{4}\s*-\s*Present/gi);
-        document.getElementById('previewExpCount').textContent = `${expMatches?.length || 0} sections detected`;
+        document.getElementById('previewExpCount').textContent = 'AI will analyze experience...';
       }
       // Detect links
       try {
@@ -221,27 +201,13 @@ async function analyzeAndPreview() {
       if (Array.isArray(structured?.projects)) profileData.projects = structured.projects;
       if (Array.isArray(structured?.education)) profileData.education = structured.education;
     } else {
-      // Server error - show fallback analysis
-      console.warn('Server analysis failed, using local analysis');
-      const lines = profileData.resumeText.split('\n').filter(l => l.trim());
-      const summary = `Professional profile detected. Resume contains ${lines.length} lines of experience and qualifications. Upload complete - ready to generate tailored resumes.`;
-      summaryDiv.innerHTML = `<strong style="color: #fff;">📝 Profile Summary:</strong><br>${summary}`;
+      // Server error - NO hardcoded fallback, wait for AI
+      console.warn('Server AI analysis not available yet');
+      summaryDiv.innerHTML = `<strong style="color: #ffa500;">⚠️ Waiting for AI:</strong><br>The AI server is starting up. Your resume will be analyzed when you click Next.`;
       
-      // Extract basic skills
-      const commonSkills = ['Management', 'Leadership', 'Communication', 'Analysis', 'Strategy', 'Development', 'Marketing', 'Sales', 'Finance', 'Operations'];
-      const foundSkills = commonSkills.filter(skill => 
-        profileData.resumeText.toLowerCase().includes(skill.toLowerCase())
-      );
-      if (foundSkills.length > 0) {
-        const wrap = document.getElementById('previewSkills');
-        wrap.innerHTML = '';
-        foundSkills.forEach(s => {
-          const chip = document.createElement('span');
-          chip.textContent = s;
-          chip.style.cssText = 'display:inline-block;background:#1b1b1b;border:1px solid #2a2a2a;border-radius:12px;padding:4px 8px;font-size:12px;margin:2px;';
-          wrap.appendChild(chip);
-        });
-      }
+      // Show placeholders
+      document.getElementById('previewSkills').innerHTML = '<span style="color:#999;font-size:12px;">AI analysis required...</span>';
+      document.getElementById('previewExpCount').textContent = 'Pending AI analysis...';
     }
   } catch (e) {
     console.warn('Analyze preview failed:', e.message);
