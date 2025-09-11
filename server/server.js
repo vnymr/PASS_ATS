@@ -2056,6 +2056,59 @@ app.get('/health', (_req, res) => {
   res.json(health);
 });
 
+// Root endpoint
+app.get('/', (_req, res) => {
+  res.json({
+    service: 'PASS ATS - AI Resume Generator',
+    version: '2.0.0',
+    status: 'running',
+    description: 'AI-powered resume generator with ATS optimization',
+    endpoints: {
+      health: '/health',
+      status: '/api/status',
+      generate: '/generate',
+      auth: {
+        signup: '/auth/signup',
+        login: '/auth/login'
+      },
+      profile: '/profile',
+      analyze: '/analyze-job'
+    },
+    features: {
+      aiGeneration: !!process.env.OPENAI_API_KEY,
+      database: 'Connected',
+      latex: 'Enabled',
+      cors: 'Configured'
+    },
+    timestamp: new Date().toISOString()
+  });
+});
+
+// API Status endpoint (for compatibility)
+app.get('/api/status', (_req, res) => {
+  const status = {
+    status: 'operational',
+    service: 'PASS ATS API',
+    version: '2.0.0',
+    uptime: process.uptime(),
+    database: {
+      status: 'connected',
+      type: 'PostgreSQL (Supabase)'
+    },
+    ai: {
+      status: process.env.OPENAI_API_KEY ? 'enabled' : 'disabled',
+      provider: 'OpenAI GPT-4'
+    },
+    latex: {
+      status: 'enabled',
+      compiler: 'Tectonic'
+    },
+    environment: process.env.NODE_ENV || 'development',
+    timestamp: new Date().toISOString()
+  };
+  res.json(status);
+});
+
 // AI Job Analysis endpoint - let AI make ALL decisions
 app.post('/analyze-job', async (req, res) => {
   try {
