@@ -854,7 +854,7 @@ app.post('/onboarding/analyze', async (req, res) => {
     const system = 'You extract structured resume data as strict JSON. Always return valid JSON only.';
     const user = `Resume text:\n\n${text}\n\nSchema:\n{\n  "summary": string,\n  "skills": string[],\n  "experience": [{ "company": string, "role": string, "location": string, "dates": string, "bullets": string[] }],\n  "projects": [{ "name": string, "summary": string, "bullets": string[] }],\n  "education": [{ "institution": string, "degree": string, "location": string, "dates": string }]\n}`;
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: 'gpt-5-mini',
       messages: [ { role: 'system', content: system }, { role: 'user', content: user } ],
       temperature: 0,
       max_tokens: 2000
@@ -871,7 +871,7 @@ app.post('/onboarding/analyze', async (req, res) => {
 // AI analysis endpoint for extension (secure server-side OpenAI calls)
 app.post('/api/ai-analyze', async (req, res) => {
   try {
-    const { systemPrompt, userPrompt, model = 'gpt-4o-mini', temperature = 0.3, max_tokens = 2000 } = req.body;
+    const { systemPrompt, userPrompt, model = 'gpt-5-mini', temperature = 0.3, max_tokens = 2000 } = req.body;
     
     if (!systemPrompt || !userPrompt) {
       return res.status(400).json({ error: 'Missing required prompts' });
@@ -1175,7 +1175,7 @@ Generate LaTeX body content between the markers exactly as specified in the syst
     const { default: OpenAI } = await import('openai');
     const openai = new OpenAI({ apiKey });
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: 'gpt-5-mini',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
@@ -1875,10 +1875,10 @@ ${(jobData.text || '').slice(0, 5000)}
 Transform the candidate's experience to match this job while staying truthful.`;
 
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: 'gpt-5-mini',
       messages: [ { role: 'system', content: system }, { role: 'user', content: user } ],
       temperature: 0.2,
-      max_tokens: 1800
+      max_tokens: 2500
     });
     
     let content = completion.choices?.[0]?.message?.content || '{}';
@@ -1912,7 +1912,7 @@ async function refineStructuredWithAI(structured, missingKeywords, lockedFacts) 
     const system = 'You revise ONLY bullets/summary to add missing keywords naturally. Output valid minified JSON, same schema. Do not change employers/roles/dates. Preserve numbers as-is. Do not add irrelevant content.';
     const user = `Current structured resume JSON:\n${JSON.stringify(structured)}\n\nAdd these missing keywords naturally (no fluff): ${missingKeywords.join(', ')}\nPreserve numeric facts verbatim: ${lockedFacts.join(' | ')}\nReturn only JSON.`;
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: 'gpt-5-mini',
       messages: [ { role: 'system', content: system }, { role: 'user', content: user } ],
       temperature: 0.2,
       max_tokens: 1000
@@ -1995,7 +1995,7 @@ async function generateKeywordsWithAI(jdText = '', profile = {}, synonyms = {}) 
     const system = 'Extract 15-25 PRIORITY KEYWORDS/PHRASES for resume tailoring. Return a JSON array of strings only. No code fences.';
     const user = `Job description:\n${jdText.slice(0,4000)}\n\nProfile skills (bias toward these): ${(Array.isArray(profile.skills)?profile.skills.join(', '):'')}`;
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: 'gpt-5-mini',
       messages: [ { role: 'system', content: system }, { role: 'user', content: user } ],
       temperature: 0,
       max_tokens: 400
@@ -2097,7 +2097,7 @@ app.get('/api/status', (_req, res) => {
     },
     ai: {
       status: process.env.OPENAI_API_KEY ? 'enabled' : 'disabled',
-      provider: 'OpenAI GPT-4'
+      provider: 'OpenAI GPT-5 Mini'
     },
     latex: {
       status: 'enabled',
@@ -2152,7 +2152,7 @@ Base all recommendations on actual job requirements and candidate background. No
     const userPrompt = `Job Description:\n${jdText}\n\nCandidate Profile:\n${JSON.stringify(profile, null, 2)}`;
 
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: 'gpt-5-mini',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
