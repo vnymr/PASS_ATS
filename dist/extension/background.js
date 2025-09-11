@@ -25,6 +25,12 @@ function handleError(error, context) {
 
 // Unified message router
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  // Ping check for context validation
+  if (request.action === 'ping') {
+    sendResponse({ status: 'alive' });
+    return false;
+  }
+  
   if (request.action === 'generateResume') {
     handleResumeGeneration(request.jobData, sender.tab)
       .then(() => sendResponse({ success: true }))

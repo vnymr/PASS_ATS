@@ -1,7 +1,16 @@
-// Guard against double-injection
+// Guard against double-injection and check for valid context
 if (!window.__quick_resume_injected) {
   window.__quick_resume_injected = true;
   console.log('Quick Resume: Content script loaded');
+  
+  // Check if extension context is valid
+  chrome.runtime.sendMessage({ action: 'ping' }).catch(error => {
+    if (error.message.includes('Extension context invalidated')) {
+      console.warn('Extension context invalidated. Page refresh needed.');
+      // Don't inject button if context is invalid
+      return;
+    }
+  });
 
   // Inject floating button on job pages
   let buttonInjected = false;
@@ -23,6 +32,17 @@ function injectGenerateButton() {
   
   // Click handler with detailed progress
   button.addEventListener('click', async () => {
+    // Check if extension context is still valid
+    try {
+      await chrome.runtime.sendMessage({ action: 'ping' });
+    } catch (error) {
+      if (error.message.includes('Extension context invalidated')) {
+        alert('Extension was updated. Please refresh the page to continue.');
+        location.reload();
+        return;
+      }
+    }
+    
     button.classList.add('qr-loading');
     
     // Create progress display
@@ -130,11 +150,47 @@ function injectGenerateButton() {
     // Step 5: AI optimization
     const step5 = addStep('🤖', 'AI optimizing content for ATS');
     
-    // Send to background
-    const response = await chrome.runtime.sendMessage({
-      action: 'generateResume',
-      jobData: jobData
-    });
+    // Send to background with error handling
+    let response;
+    try {
+      response = await chrome.runtime.sendMessage({
+        action: 'generateResume',
+        jobData: jobData
+      });
+    } catch (error) {
+      console.error('Communication error:', error);
+      
+      // Handle extension context invalidated
+      if (error.message.includes('Extension context invalidated')) {
+        progressDisplay.innerHTML = `
+          <div style="text-align: center; padding: 20px;">
+            <div style="font-size: 48px; margin-bottom: 10px;">🔄</div>
+            <div style="font-size: 16px; font-weight: bold; margin-bottom: 10px;">Extension Updated</div>
+            <div style="color: #666; margin-bottom: 15px;">Please refresh the page to use the new version</div>
+            <button onclick="location.reload()" style="padding: 8px 20px; background: black; color: white; border: none; border-radius: 6px; cursor: pointer;">Refresh Page</button>
+          </div>
+        `;
+        
+        button.classList.remove('qr-loading');
+        button.querySelector('.qr-text').textContent = 'Refresh Needed';
+        return;
+      }
+      
+      // Other errors
+      progressDisplay.innerHTML = `
+        <div style="text-align: center; padding: 20px;">
+          <div style="font-size: 48px; margin-bottom: 10px; color: red;">❌</div>
+          <div style="font-size: 16px; font-weight: bold; margin-bottom: 10px;">Connection Error</div>
+          <div style="color: #666; margin-bottom: 15px;">${error.message}</div>
+          <button onclick="this.parentElement.parentElement.remove(); location.reload();" style="padding: 8px 20px; background: black; color: white; border: none; border-radius: 6px; cursor: pointer;">Try Again</button>
+        </div>
+      `;
+      
+      button.classList.remove('qr-loading');
+      button.classList.add('qr-error');
+      button.querySelector('.qr-text').textContent = 'Error';
+      return;
+    }
     
     if (!response?.error) {
       completeStep(step5);
@@ -178,8 +234,13 @@ function injectGenerateButton() {
         }, 5000);
       }, 2000);
       
-      // Open generating page for actual processing
-      await chrome.runtime.sendMessage({ action: 'openGeneratingPage' });
+      // Open generating page for actual processing with error handling
+      try {
+        await chrome.runtime.sendMessage({ action: 'openGeneratingPage' });
+      } catch (error) {
+        console.log('Could not open generating page:', error);
+        // Continue anyway - the PDF generation might still work
+      }
       
     } else {
       // Error handling
@@ -281,16 +342,23 @@ function extractJobData() {
   return data;
 }
 
-// Listen for status updates from background
+// Listen for status updates from background with error handling
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === 'statusUpdate') {
-    const button = document.getElementById('quick-resume-btn');
-    if (button && button.classList.contains('qr-loading')) {
-      button.querySelector('.qr-text').textContent = request.message || 'Processing...';
-      if (request.progress) {
-        button.style.background = `linear-gradient(90deg, rgba(76,175,80,0.3) ${request.progress}%, transparent ${request.progress}%)`;
+  try {
+    if (request.action === 'statusUpdate') {
+      const button = document.getElementById('quick-resume-btn');
+      if (button && button.classList.contains('qr-loading')) {
+        const textElement = button.querySelector('.qr-text');
+        if (textElement) {
+          textElement.textContent = request.message || 'Processing...';
+        }
+        if (request.progress) {
+          button.style.background = `linear-gradient(90deg, rgba(76,175,80,0.3) ${request.progress}%, transparent ${request.progress}%)`;
+        }
       }
     }
+  } catch (error) {
+    console.error('Message handling error:', error);
   }
   
   if (request.action === 'extractJob' || request.action === 'extractJobData') {
