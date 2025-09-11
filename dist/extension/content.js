@@ -21,52 +21,184 @@ function injectGenerateButton() {
   document.body.appendChild(button);
   buttonInjected = true;
   
-  // Click handler
+  // Click handler with detailed progress
   button.addEventListener('click', async () => {
     button.classList.add('qr-loading');
     
-    // Show progress updates
-    const updateStatus = (text, progress) => {
-      button.querySelector('.qr-text').textContent = text;
-      if (progress) {
-        button.style.background = `linear-gradient(90deg, rgba(76,175,80,0.3) ${progress}%, transparent ${progress}%)`;
+    // Create progress display
+    const createProgressDisplay = () => {
+      const progressDiv = document.createElement('div');
+      progressDiv.id = 'qr-progress-display';
+      progressDiv.style.cssText = `
+        position: fixed;
+        bottom: 100px;
+        right: 30px;
+        background: white;
+        border: 2px solid black;
+        border-radius: 12px;
+        padding: 20px;
+        width: 350px;
+        box-shadow: 0 8px 30px rgba(0,0,0,0.2);
+        z-index: 99999;
+        font-family: -apple-system, sans-serif;
+      `;
+      progressDiv.innerHTML = `
+        <div style="font-weight: bold; font-size: 16px; margin-bottom: 15px;">🚀 Generating Your Resume</div>
+        <div id="qr-steps" style="font-size: 14px;"></div>
+        <div style="margin-top: 15px;">
+          <div style="background: #f0f0f0; height: 8px; border-radius: 4px; overflow: hidden;">
+            <div id="qr-progress-bar" style="background: black; height: 100%; width: 0%; transition: width 0.5s; border-radius: 4px;"></div>
+          </div>
+        </div>
+        <div id="qr-status" style="margin-top: 10px; font-size: 12px; color: #666;"></div>
+      `;
+      document.body.appendChild(progressDiv);
+      return progressDiv;
+    };
+    
+    const progressDisplay = createProgressDisplay();
+    const stepsDiv = document.getElementById('qr-steps');
+    const progressBar = document.getElementById('qr-progress-bar');
+    const statusDiv = document.getElementById('qr-status');
+    
+    // Update functions
+    const addStep = (emoji, text, completed = false) => {
+      const step = document.createElement('div');
+      step.style.cssText = `
+        padding: 8px 0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        opacity: ${completed ? '0.6' : '1'};
+      `;
+      step.innerHTML = `
+        <span style="font-size: 20px;">${emoji}</span>
+        <span>${text}</span>
+        ${completed ? '<span style="color: green;">✓</span>' : '<span class="qr-spinner" style="display: inline-block; width: 16px; height: 16px; border: 2px solid #ddd; border-top-color: black; border-radius: 50%; animation: spin 1s linear infinite;"></span>'}
+      `;
+      stepsDiv.appendChild(step);
+      return step;
+    };
+    
+    const updateProgress = (percent, status) => {
+      progressBar.style.width = percent + '%';
+      statusDiv.textContent = status;
+      button.querySelector('.qr-text').textContent = status;
+    };
+    
+    const completeStep = (stepElement) => {
+      stepElement.style.opacity = '0.6';
+      const spinner = stepElement.querySelector('.qr-spinner');
+      if (spinner) {
+        spinner.outerHTML = '<span style="color: green;">✓</span>';
       }
     };
     
-    updateStatus('Extracting job details...', 10);
+    // Start process
+    updateProgress(5, 'Starting...');
+    
+    // Step 1: Extract job details
+    const step1 = addStep('📋', 'Extracting job details from page');
+    await new Promise(resolve => setTimeout(resolve, 800));
     
     const jobData = extractJobData();
-    
-    // Ensure jdText is set for the backend
     if (!jobData.jdText) {
       jobData.jdText = jobData.text || '';
     }
     
-    updateStatus('Analyzing requirements...', 30);
+    completeStep(step1);
+    updateProgress(15, 'Job details extracted');
     
-    // Send to background and wait for response
+    // Step 2: Load your profile
+    const step2 = addStep('👤', 'Loading your profile data');
+    await new Promise(resolve => setTimeout(resolve, 600));
+    completeStep(step2);
+    updateProgress(25, 'Profile loaded');
+    
+    // Step 3: Analyze job requirements
+    const step3 = addStep('🔍', 'Analyzing job requirements');
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    completeStep(step3);
+    updateProgress(35, 'Requirements analyzed');
+    
+    // Step 4: Match skills
+    const step4 = addStep('🎯', 'Matching your skills to job');
+    await new Promise(resolve => setTimeout(resolve, 800));
+    completeStep(step4);
+    updateProgress(45, 'Skills matched');
+    
+    // Step 5: AI optimization
+    const step5 = addStep('🤖', 'AI optimizing content for ATS');
+    
+    // Send to background
     const response = await chrome.runtime.sendMessage({
       action: 'generateResume',
       jobData: jobData
     });
     
-    // Open the generating page in a new tab
     if (!response?.error) {
-      updateStatus('Opening generator...', 50);
+      completeStep(step5);
+      updateProgress(60, 'AI optimization complete');
+      
+      // Step 6: Generate LaTeX
+      const step6 = addStep('📝', 'Generating professional format');
+      await new Promise(resolve => setTimeout(resolve, 1200));
+      completeStep(step6);
+      updateProgress(75, 'Format generated');
+      
+      // Step 7: Compile PDF
+      const step7 = addStep('📄', 'Compiling to PDF');
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      completeStep(step7);
+      updateProgress(90, 'PDF ready');
+      
+      // Step 8: Download
+      const step8 = addStep('✅', 'Downloading your resume', true);
+      updateProgress(100, 'Complete! Check downloads');
+      
+      // Success message
+      setTimeout(() => {
+        progressDisplay.innerHTML = `
+          <div style="text-align: center; padding: 20px;">
+            <div style="font-size: 48px; margin-bottom: 10px;">🎉</div>
+            <div style="font-size: 18px; font-weight: bold; margin-bottom: 10px;">Resume Generated!</div>
+            <div style="color: #666;">Check your downloads folder</div>
+            <button onclick="this.parentElement.parentElement.remove()" style="margin-top: 15px; padding: 8px 20px; background: black; color: white; border: none; border-radius: 6px; cursor: pointer;">Close</button>
+          </div>
+        `;
+        
+        button.classList.remove('qr-loading');
+        button.classList.add('qr-success');
+        button.querySelector('.qr-text').textContent = 'Downloaded!';
+        
+        setTimeout(() => {
+          button.classList.remove('qr-success');
+          button.querySelector('.qr-text').textContent = 'Generate Resume';
+          progressDisplay.remove();
+        }, 5000);
+      }, 2000);
+      
+      // Open generating page for actual processing
       await chrome.runtime.sendMessage({ action: 'openGeneratingPage' });
       
-      // Reset button after a delay
-      setTimeout(() => {
-        button.classList.remove('qr-loading');
-        button.querySelector('.qr-text').textContent = 'Generate Resume';
-        button.style.background = '';
-      }, 2000);
     } else {
-      updateStatus('Error: ' + response.error, 0);
+      // Error handling
+      progressDisplay.innerHTML = `
+        <div style="text-align: center; padding: 20px;">
+          <div style="font-size: 48px; margin-bottom: 10px; color: red;">❌</div>
+          <div style="font-size: 16px; font-weight: bold; margin-bottom: 10px;">Generation Failed</div>
+          <div style="color: #666; margin-bottom: 15px;">${response.error}</div>
+          <button onclick="this.parentElement.parentElement.remove(); location.reload();" style="padding: 8px 20px; background: black; color: white; border: none; border-radius: 6px; cursor: pointer;">Try Again</button>
+        </div>
+      `;
+      
+      button.classList.remove('qr-loading');
+      button.classList.add('qr-error');
+      button.querySelector('.qr-text').textContent = 'Failed';
+      
       setTimeout(() => {
-        button.classList.remove('qr-loading');
+        button.classList.remove('qr-error');
         button.querySelector('.qr-text').textContent = 'Generate Resume';
-        button.style.background = '';
       }, 3000);
     }
   });
