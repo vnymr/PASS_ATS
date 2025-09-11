@@ -11,7 +11,10 @@ import dotenv from 'dotenv';
 import { createRequire } from 'module';
 import multer from 'multer';
 
-dotenv.config();
+// Only load .env file in development
+if (process.env.NODE_ENV !== 'production') {
+  dotenv.config();
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
