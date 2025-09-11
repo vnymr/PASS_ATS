@@ -96,7 +96,7 @@ function initializeUI() {
   // Load server URL setting
   chrome.storage.local.get('serverUrl').then(({ serverUrl }) => {
     const input = document.getElementById('serverUrl');
-    if (input) input.value = serverUrl || 'http://localhost:3000';
+    if (input) input.value = serverUrl || 'https://passats-production.up.railway.app';
   });
 }
 
@@ -220,7 +220,7 @@ async function loadHistory() {
     
     // Fetch usage and resume list from server
     const { serverUrl } = await chrome.storage.local.get('serverUrl');
-    const API_BASE = (serverUrl || 'http://localhost:3000').replace(/\/$/, '');
+    const API_BASE = (serverUrl || 'https://passats-production.up.railway.app').replace(/\/$/, '');
     
     // Fetch resume list
     const resResp = await fetch(`${API_BASE}/me/resumes`, {

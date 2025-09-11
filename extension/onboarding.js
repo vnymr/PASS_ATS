@@ -78,7 +78,7 @@ async function handleFile(file) {
       fd.append('resume', file);
       let resp = null;
       const { serverUrl } = await chrome.storage.local.get('serverUrl');
-      const API_BASE = (serverUrl || 'http://localhost:3000').replace(/\/$/, '');
+      const API_BASE = (serverUrl || 'https://passats-production.up.railway.app').replace(/\/$/, '');
       resp = await fetch(`${API_BASE}/onboarding/parse`, { method: 'POST', body: fd });
       if (resp.ok) {
         const data = await resp.json();
@@ -133,7 +133,7 @@ async function analyzeAndPreview() {
   try { if (loading) loading.style.display = 'block'; if (nextBtn) nextBtn.disabled = true; } catch {}
   try {
     const { serverUrl: serverUrl2 } = await chrome.storage.local.get('serverUrl');
-    const API_BASE2 = (serverUrl2 || 'http://localhost:3000').replace(/\/$/, '');
+    const API_BASE2 = (serverUrl2 || 'https://passats-production.up.railway.app').replace(/\/$/, '');
     const resp = await fetch(`${API_BASE2}/onboarding/analyze`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -229,7 +229,7 @@ document.getElementById('nextStep2').addEventListener('click', async () => {
     if ((profileData.resumeText || '').length > 80) {
       try {
         const { serverUrl: serverUrl4 } = await chrome.storage.local.get('serverUrl');
-        const API_BASE4 = (serverUrl4 || 'http://localhost:3000').replace(/\/$/, '');
+        const API_BASE4 = (serverUrl4 || 'https://passats-production.up.railway.app').replace(/\/$/, '');
         const resp = await fetch(`${API_BASE4}/onboarding/analyze`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

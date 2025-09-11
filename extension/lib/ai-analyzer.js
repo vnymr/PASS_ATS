@@ -157,7 +157,7 @@ Generate a compelling 2-3 line summary.`;
     // Call server endpoint instead of direct OpenAI API for security
     try {
       const { serverUrl } = await chrome.storage.local.get('serverUrl');
-      const API_BASE = (serverUrl || 'http://localhost:3000').replace(/\/$/, '');
+      const API_BASE = (serverUrl || 'https://passats-production.up.railway.app').replace(/\/$/, '');
       const response = await fetch(`${API_BASE}/api/ai-analyze`, {
         method: 'POST',
         headers: {
@@ -217,7 +217,7 @@ function calculateYearsOfExperience(experience) {
 async function fallbackAnalysis(jdText, profile) {
   // Try to use the server-side AI analysis as fallback
   try {
-    const response = await fetch('http://localhost:3000/analyze-job', {
+    const response = await fetch('https://passats-production.up.railway.app/analyze-job', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

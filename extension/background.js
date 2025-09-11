@@ -1,7 +1,7 @@
 // Background service worker with error handling
 console.log('Quick Resume: Background service worker started');
 
-let API_BASE = 'http://localhost:3000';
+let API_BASE = 'https://passats-production.up.railway.app';
 chrome.storage.local.get('serverUrl').then(({ serverUrl }) => { if (serverUrl) API_BASE = serverUrl.replace(/\/$/, ''); });
 let authToken = null;
 

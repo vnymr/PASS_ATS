@@ -6,7 +6,7 @@
     appendLog('Starting generation job...');
 
     const { serverUrl } = await chrome.storage.local.get('serverUrl');
-    const API_BASE = (serverUrl || 'http://localhost:3000').replace(/\/$/, '');
+    const API_BASE = (serverUrl || 'https://passats-production.up.railway.app').replace(/\/$/, '');
     const resp = await fetch(`${API_BASE}/generate/job`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
