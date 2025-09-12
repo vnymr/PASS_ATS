@@ -513,9 +513,26 @@ app.get('/profile', authenticateToken, async (req, res) => {
 
 app.post('/profile', authenticateToken, async (req, res) => {
   try {
-    const profileData = req.body;
+    const profileData = {
+      ...req.body,
+      email: req.user.email, // Ensure email is always set
+      updatedAt: new Date().toISOString(),
+      isComplete: true // Mark profile as complete after onboarding
+    };
+    
+    // Log what's being saved for debugging
+    console.log(`[PROFILE:SAVE] User ${req.user.email} saving profile with:`, {
+      hasName: !!profileData.name,
+      hasEmail: !!profileData.email,
+      hasPhone: !!profileData.phone,
+      hasSummary: !!profileData.summary,
+      skillsCount: profileData.skills?.length || 0,
+      experienceCount: profileData.experience?.length || 0,
+      educationCount: profileData.education?.length || 0
+    });
+    
     await dbSaveProfile(req.user.email, profileData);
-    res.json({ success: true });
+    res.json({ success: true, profile: profileData });
   } catch (error) {
     console.error('Save profile error:', error);
     res.status(500).json({ error: 'Failed to save profile' });
@@ -1311,6 +1328,13 @@ async function generateLatexWithAI(profile, jobData, statusCb) {
 
   const systemPrompt = `You are an elite resume strategist specializing in ATS-optimized, cross-domain career transitions. Generate ONLY LaTeX body content that fits into an existing document template. The document header, preamble, and contact information are already handled - you generate ONLY the content sections.
 
+CRITICAL: You MUST use ALL the user's profile information provided. This includes:
+- Their complete professional summary (enhance but preserve their voice)
+- ALL their work experience entries (optimize descriptions for the target role)
+- ALL their education entries (highlight relevant coursework/achievements)
+- Their ACTUAL skills (reorganize and emphasize based on job requirements)
+- Any projects, certifications, or additional sections they've provided
+
 % === Critical Structure Requirements ===
 - Generate no contact information: Do not include name, email, phone, address, or contact details
 - Generate no document structure: Do not use \\documentclass, \\begin{document}, \\end{document}, or preamble
@@ -1318,6 +1342,7 @@ async function generateLatexWithAI(profile, jobData, statusCb) {
 - Start with summary: Your first line must be \\section*{Summary}
 - Body content only: Generate only Summary, Experience, Skills, Education sections
 - The complete document template with headers is automatically provided
+- PRESERVE USER DATA: Never omit or replace user's actual experience, education, or skills
 
 % === Macro Whitelist (Only These Allowed) ===
 \\section* (always with *), \\resumeSubHeadingListStart, \\resumeSubHeadingListEnd, \\resumeItemListStart, \\resumeItemListEnd, \\resumeSubheading{#1}{#2}{#3}{#4}, \\resumeItem{#1}
