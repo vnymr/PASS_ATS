@@ -31,6 +31,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return false;
   }
   
+  // Handle authentication page opening
+  if (request.action === 'openAuthPage') {
+    chrome.tabs.create({ url: chrome.runtime.getURL('auth.html') });
+    return false;
+  }
+  
+  // Handle onboarding page opening
+  if (request.action === 'openOnboardingPage') {
+    chrome.tabs.create({ url: chrome.runtime.getURL('onboarding_new.html') });
+    return false;
+  }
+  
   if (request.action === 'generateResume') {
     const correlationId = crypto.randomUUID();
     

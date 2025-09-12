@@ -15,14 +15,21 @@ if (!window.__quick_resume_injected) {
   // Inject floating button on job pages
   let buttonInjected = false;
 
-function injectGenerateButton() {
+async function injectGenerateButton() {
   if (buttonInjected) return;
+  
+  // Check authentication status
+  const storage = await chrome.storage.local.get(['isAuthenticated', 'hasCompletedOnboarding']);
   
   const button = document.createElement('div');
   button.id = 'quick-resume-btn';
   button.innerHTML = `
     <div class="qr-button">
-      <div class="qr-icon">📄</div>
+      <div class="qr-icon">
+        <svg viewBox="0 0 24 24" fill="currentColor">
+          <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20M10,19L12,15H9V10H15V15L13,19H10Z"/>
+        </svg>
+      </div>
       <div class="qr-text">Generate Resume</div>
     </div>
   `;
@@ -32,6 +39,21 @@ function injectGenerateButton() {
   
   // Click handler with detailed progress
   button.addEventListener('click', async () => {
+    // Check authentication
+    const { isAuthenticated, hasCompletedOnboarding } = await chrome.storage.local.get(['isAuthenticated', 'hasCompletedOnboarding']);
+    
+    if (!isAuthenticated) {
+      // Open authentication page
+      chrome.runtime.sendMessage({ action: 'openAuthPage' });
+      return;
+    }
+    
+    if (!hasCompletedOnboarding) {
+      // Open onboarding page
+      chrome.runtime.sendMessage({ action: 'openOnboardingPage' });
+      return;
+    }
+    
     // Check if extension context is still valid
     try {
       await chrome.runtime.sendMessage({ action: 'ping' });
