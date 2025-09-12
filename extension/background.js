@@ -1,10 +1,6 @@
 // Background service worker with error handling
 console.log('Quick Resume: Background service worker started');
 
-// Import observability
-importScripts('./lib/observability.js');
-const obs = window.extensionObservability;
-
 let API_BASE = 'https://passats-production.up.railway.app';
 chrome.storage.local.get('serverUrl').then(({ serverUrl }) => { if (serverUrl) API_BASE = serverUrl.replace(/\/$/, ''); });
 let authToken = null;
@@ -36,19 +32,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
   
   if (request.action === 'generateResume') {
-    const correlationId = obs.generateCorrelationId();
-    const span = obs.startSpan('generate_resume_request', { correlationId, action: 'generateResume' });
+    const correlationId = crypto.randomUUID();
     
     handleResumeGeneration(request.jobData, sender.tab, correlationId)
       .then(() => {
-        span.end('success');
-        obs.recordMetric('resume_generation_success', 1);
         sendResponse({ success: true, correlationId });
       })
       .catch(err => {
-        span.setAttribute('error', err.message);
-        span.end('error');
-        obs.recordMetric('resume_generation_error', 1);
         handleError(err, 'generateResume');
         sendResponse({ error: err.message, correlationId });
       });
