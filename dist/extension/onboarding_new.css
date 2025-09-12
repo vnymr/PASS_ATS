@@ -59,7 +59,7 @@ body {
 }
 
 .step.active .step-circle {
-    background: #1a73e8;
+    background: #000000;
     color: white;
 }
 
@@ -77,7 +77,7 @@ body {
 
 .progress-fill {
     height: 100%;
-    background: #1a73e8;
+    background: #000000;
     transition: width 0.3s ease;
 }
 
@@ -133,12 +133,12 @@ body {
 }
 
 .upload-area:hover {
-    border-color: #1a73e8;
+    border-color: #000000;
     background: #f1f3f4;
 }
 
 .upload-area.dragover {
-    border-color: #1a73e8;
+    border-color: #000000;
     background: #e8f0fe;
 }
 
@@ -190,7 +190,7 @@ body {
 
 .progress-bar-fill {
     height: 100%;
-    background: #1a73e8;
+    background: #000000;
     transition: width 0.3s;
 }
 
@@ -209,7 +209,7 @@ body {
     width: 48px;
     height: 48px;
     border: 3px solid #e8eaed;
-    border-top-color: #1a73e8;
+    border-top-color: #000000;
     border-radius: 50%;
     margin: 0 auto 24px;
     animation: spin 1s linear infinite;
@@ -289,7 +289,7 @@ body {
 
 .form-group input:focus,
 .form-group textarea:focus {
-    border-color: #1a73e8;
+    border-color: #000000;
     border-width: 2px;
     padding: 15px 11px 7px;
 }
@@ -300,7 +300,7 @@ body {
 .form-group textarea:not(:placeholder-shown) + label {
     top: 4px;
     font-size: 12px;
-    color: #1a73e8;
+    color: #000000;
 }
 
 .form-group input:not(:focus):not(:placeholder-shown) + label,
@@ -348,7 +348,7 @@ body {
 
 /* Buttons */
 .btn-primary {
-    background: #1a73e8;
+    background: #000000;
     color: white;
     border: none;
     padding: 12px 24px;
@@ -366,7 +366,7 @@ body {
 
 .btn-secondary {
     background: white;
-    color: #1a73e8;
+    color: #000000;
     border: 1px solid #dadce0;
     padding: 12px 24px;
     border-radius: 4px;
@@ -383,7 +383,7 @@ body {
 .btn-text {
     background: none;
     border: none;
-    color: #1a73e8;
+    color: #000000;
     font-size: 14px;
     cursor: pointer;
     padding: 8px;
@@ -410,8 +410,8 @@ body {
 }
 
 .btn-add:hover {
-    border-color: #1a73e8;
-    color: #1a73e8;
+    border-color: #000000;
+    color: #000000;
 }
 
 .btn-large {

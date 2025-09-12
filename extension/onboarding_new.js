@@ -109,6 +109,7 @@ async function processResume(file) {
     formData.append('resume', file);
 
     try {
+        // Step 1: Parse the resume
         const response = await fetch(`${API_BASE}/onboarding/parse`, {
             method: 'POST',
             headers: {
@@ -119,8 +120,58 @@ async function processResume(file) {
 
         if (!response.ok) throw new Error('Failed to process resume');
 
-        const data = await response.json();
-        extractedProfile = data.profile;
+        const parseData = await response.json();
+        console.log('Parsed data:', parseData);
+
+        // Step 2: Get AI analysis for better structure
+        let aiProfile = null;
+        if (parseData.text && parseData.text.length > 50) {
+            try {
+                const analyzeResponse = await fetch(`${API_BASE}/onboarding/analyze`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({ 
+                        text: parseData.text,
+                        saveToProfile: true 
+                    })
+                });
+
+                if (analyzeResponse.ok) {
+                    const analyzeData = await analyzeResponse.json();
+                    aiProfile = analyzeData.structured;
+                    console.log('AI analysis:', aiProfile);
+                }
+            } catch (aiError) {
+                console.warn('AI analysis failed, using basic parsing:', aiError);
+            }
+        }
+
+        // Combine parsed data with AI analysis
+        extractedProfile = {
+            name: parseData.fields?.name || '',
+            email: parseData.fields?.email || '',
+            phone: parseData.fields?.phone || '',
+            location: '', // Will be extracted from AI if available
+            linkedin: parseData.urls?.find(url => url.includes('linkedin.com')) || '',
+            summary: aiProfile?.summary || '',
+            skills: aiProfile?.skills || parseData.skills || [],
+            experience: aiProfile?.experience?.map(exp => ({
+                title: exp.role || '',
+                company: exp.company || '',
+                startDate: exp.dates?.split('-')[0]?.trim() || '',
+                endDate: exp.dates?.split('-')[1]?.trim() || '',
+                description: exp.bullets?.join('\n') || ''
+            })) || [],
+            education: aiProfile?.education?.map(edu => ({
+                degree: edu.degree || '',
+                school: edu.institution || '',
+                field: '', // Not in AI response
+                graduationYear: edu.dates || ''
+            })) || []
+        };
 
         // Populate form with extracted data
         populateProfileForm(extractedProfile);
@@ -303,10 +354,12 @@ async function saveProfile() {
         location: formData.get('location'),
         linkedin: formData.get('linkedin'),
         summary: formData.get('summary'),
-        skills: formData.get('skills').split(',').map(s => s.trim()).filter(s => s),
+        skills: formData.get('skills') ? formData.get('skills').split(',').map(s => s.trim()).filter(s => s) : [],
         experience: collectExperience(),
         education: collectEducation()
     };
+
+    console.log('Saving profile:', profile);
 
     try {
         const response = await fetch(`${API_BASE}/profile`, {
@@ -318,7 +371,16 @@ async function saveProfile() {
             body: JSON.stringify(profile)
         });
 
-        if (!response.ok) throw new Error('Failed to save profile');
+        console.log('Response status:', response.status);
+        
+        if (!response.ok) {
+            const errorData = await response.text();
+            console.error('Server error:', errorData);
+            throw new Error('Failed to save profile');
+        }
+
+        const data = await response.json();
+        console.log('Profile saved:', data);
 
         // Mark onboarding as complete
         await chrome.storage.local.set({ 
@@ -330,7 +392,7 @@ async function saveProfile() {
         moveToStep(3);
     } catch (error) {
         console.error('Error saving profile:', error);
-        alert('Failed to save profile. Please try again.');
+        alert('Failed to save profile. Please try again. Check console for details.');
     }
 }
 

@@ -1173,18 +1173,18 @@ app.post('/onboarding/parse', upload.single('resume'), async (req, res) => {
 });
 
 // AI-based resume analysis: structure profile from text
-app.post('/onboarding/analyze', async (req, res) => {
+app.post('/onboarding/analyze', authenticateToken, async (req, res) => {
   try {
-    const { text = '' } = req.body || {};
+    const { text = '', saveToProfile = false } = req.body || {};
     if (!text || text.length < 50) return res.status(400).json({ error: 'Insufficient text' });
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) return res.status(501).json({ error: 'OPENAI_API_KEY not configured' });
     const { default: OpenAI } = await import('openai');
     const openai = new OpenAI({ apiKey });
-    const system = 'You extract structured resume data as strict JSON. Always return valid JSON only.';
+    const system = 'You extract structured resume data as strict JSON. Create a professional summary if one does not exist. Always return valid JSON only.';
     const user = `Resume text:\n\n${text}\n\nSchema:\n{\n  "summary": string,\n  "skills": string[],\n  "experience": [{ "company": string, "role": string, "location": string, "dates": string, "bullets": string[] }],\n  "projects": [{ "name": string, "summary": string, "bullets": string[] }],\n  "education": [{ "institution": string, "degree": string, "location": string, "dates": string }]\n}`;
     const completion = await openai.chat.completions.create({
-      model: 'gpt-5-mini',
+      model: 'gpt-4o-mini',
       messages: [ { role: 'system', content: system }, { role: 'user', content: user } ],
       temperature: 0,
       max_tokens: 2000
@@ -1192,6 +1192,22 @@ app.post('/onboarding/analyze', async (req, res) => {
     let content = completion.choices?.[0]?.message?.content || '{}';
     try { content = content.replace(/^```json|```$/g, '').trim(); } catch {}
     const structured = JSON.parse(content);
+    
+    // If requested, save the AI-parsed profile to database
+    if (saveToProfile && req.user?.email) {
+      const profileData = {
+        summary: structured.summary || '',
+        skills: structured.skills || [],
+        experience: structured.experience || [],
+        education: structured.education || [],
+        projects: structured.projects || [],
+        aiParsed: true,
+        parsedAt: new Date().toISOString()
+      };
+      await dbSaveProfile(req.user.email, profileData);
+      console.log(`[AI-PARSE] Saved profile for ${req.user.email}`);
+    }
+    
     res.json({ structured });
   } catch (e) {
     res.status(500).json({ error: e.message });
