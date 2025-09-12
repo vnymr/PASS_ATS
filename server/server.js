@@ -2391,6 +2391,7 @@ setInterval(async () => {
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Resume Generator Server v2.0.0`);
   console.log(`📡 Server running on http://0.0.0.0:${PORT}`);
+  console.log(`🔍 PORT environment variable: ${process.env.PORT || 'not set (using default 3000)'}`);
   console.log(`🤖 AI Generation: ${process.env.OPENAI_API_KEY ? '✅ Enabled' : '❌ Disabled (using enhanced templates)'}`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🔗 Public URL: ${PUBLIC_BASE_URL || 'http://localhost:' + PORT}`);
