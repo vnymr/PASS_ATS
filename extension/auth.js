@@ -82,7 +82,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const password = document.getElementById('signupPassword').value;
 
         try {
-            const response = await fetch(`${API_BASE}/auth/register`, {
+            const response = await fetch(`${API_BASE}/auth/signup`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name, email, password })

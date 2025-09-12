@@ -109,7 +109,7 @@ async function processResume(file) {
     formData.append('resume', file);
 
     try {
-        const response = await fetch(`${API_BASE}/profile/extract`, {
+        const response = await fetch(`${API_BASE}/onboarding/parse`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${authToken}`
@@ -309,7 +309,7 @@ async function saveProfile() {
     };
 
     try {
-        const response = await fetch(`${API_BASE}/profile/save`, {
+        const response = await fetch(`${API_BASE}/profile`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

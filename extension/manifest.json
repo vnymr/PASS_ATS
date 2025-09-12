@@ -39,5 +39,20 @@
   },
   "side_panel": {
     "default_path": "sidepanel_new.html"
-  }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "auth.html",
+        "auth.css",
+        "auth.js",
+        "onboarding_new.html",
+        "onboarding_new.css",
+        "onboarding_new.js",
+        "sidepanel_new.html",
+        "lib/*.js"
+      ],
+      "matches": ["<all_urls>"]
+    }
+  ]
 }
