@@ -1,3 +1,8 @@
+// SSE reconnection logic
+let retryCount = 0;
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 2000;
+
 // Start job on load using pending payload
 (async function init() {
   try {
@@ -17,7 +22,29 @@
     appendLog(`Job ID: ${jobId}`);
     setProgress(8);
 
-    const es = new EventSource(`${API_BASE}/generate/stream/${jobId}`);
+    let es;
+    
+    function connectSSE() {
+      es = new EventSource(`${API_BASE}/generate/stream/${jobId}`);
+      
+      es.onerror = (error) => {
+        console.error('SSE error:', error);
+        es.close();
+        
+        if (retryCount < MAX_RETRIES) {
+          retryCount++;
+          appendLog(`Connection lost. Retrying (${retryCount}/${MAX_RETRIES})...`);
+          setTimeout(connectSSE, RETRY_DELAY * retryCount);
+        } else {
+          appendLog('Connection failed. Please check your network.');
+          showError('Connection lost. Please refresh and try again.');
+        }
+      };
+      
+      return es;
+    }
+    
+    es = connectSSE();
     es.addEventListener('status', (ev) => {
       try {
         const data = JSON.parse(ev.data);
@@ -34,31 +61,68 @@
         setProgress(100);
         document.getElementById('loading').style.display = 'none';
         document.getElementById('success').classList.add('show');
-        document.getElementById('viewPdf').addEventListener('click', () => {
+        
+        // Remove any existing listeners to prevent duplicates
+        const viewBtn = document.getElementById('viewPdf');
+        const closeBtn = document.getElementById('close');
+        
+        const newViewBtn = viewBtn.cloneNode(true);
+        const newCloseBtn = closeBtn.cloneNode(true);
+        
+        viewBtn.parentNode.replaceChild(newViewBtn, viewBtn);
+        closeBtn.parentNode.replaceChild(newCloseBtn, closeBtn);
+        
+        newViewBtn.addEventListener('click', () => {
           window.open(data.pdfUrl);
         });
-        document.getElementById('close').addEventListener('click', () => window.close());
+        newCloseBtn.addEventListener('click', () => window.close());
+        
         // Auto-download
         if (chrome?.downloads?.download) {
           chrome.downloads.download({ url: data.pdfUrl, filename: data.fileName || 'resume.pdf', saveAs: true });
         }
-      } catch {}
+      } catch (err) {
+        console.error('Error handling complete event:', err);
+      }
       es.close();
     });
     es.addEventListener('error', (ev) => {
-      try {
-        const data = JSON.parse(ev.data);
-        appendLog('Error: ' + data.error);
-      } catch { appendLog('An error occurred.'); }
-      es.close();
-      setTimeout(() => {
-        window.location.href = chrome.runtime.getURL('error.html');
-      }, 500);
+      if (ev.data) {
+        try {
+          const data = JSON.parse(ev.data);
+          appendLog('Error: ' + data.error);
+          showError(data.error);
+        } catch { 
+          appendLog('An error occurred.');
+          showError('An unexpected error occurred.');
+        }
+        es.close();
+      }
     });
   } catch (e) {
     appendLog('Failed to initialize job: ' + e.message);
   }
 })();
+
+function showError(message) {
+  const loading = document.getElementById('loading');
+  const statusText = document.getElementById('statusText');
+  
+  if (loading && statusText) {
+    statusText.textContent = message;
+    statusText.style.color = '#666';
+    
+    // Add retry button
+    if (!document.getElementById('retryBtn')) {
+      const retryBtn = document.createElement('button');
+      retryBtn.id = 'retryBtn';
+      retryBtn.textContent = 'Retry';
+      retryBtn.style.marginTop = '20px';
+      retryBtn.onclick = () => window.location.reload();
+      loading.appendChild(retryBtn);
+    }
+  }
+}
 
 // Listen for completion and status from background (legacy path)
 function appendLog(line) {

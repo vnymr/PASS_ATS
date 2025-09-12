@@ -46,6 +46,12 @@ function setupEventListeners() {
     btn.addEventListener('click', () => switchTab(btn.dataset.tab));
   });
   
+  // Fix for "Create Resume" button in history tab
+  const createFirstResumeBtn = document.getElementById('createFirstResumeBtn');
+  if (createFirstResumeBtn) {
+    createFirstResumeBtn.addEventListener('click', () => switchTab('generate'));
+  }
+  
   // Generate tab
   document.getElementById('jdInput').addEventListener('input', updateCharCount);
   document.getElementById('useSelectionBtn').addEventListener('click', useSelection);

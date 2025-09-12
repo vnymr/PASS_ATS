@@ -167,9 +167,17 @@ function injectGenerateButton() {
             <div style="font-size: 48px; margin-bottom: 10px;">🔄</div>
             <div style="font-size: 16px; font-weight: bold; margin-bottom: 10px;">Extension Updated</div>
             <div style="color: #666; margin-bottom: 15px;">Please refresh the page to use the new version</div>
-            <button onclick="location.reload()" style="padding: 8px 20px; background: black; color: white; border: none; border-radius: 6px; cursor: pointer;">Refresh Page</button>
+            <button class="qr-refresh-btn" style="padding: 8px 20px; background: black; color: white; border: none; border-radius: 6px; cursor: pointer;">Refresh Page</button>
           </div>
         `;
+        
+        // Add event listener for refresh button
+        const refreshBtn = progressDisplay.querySelector('.qr-refresh-btn');
+        if (refreshBtn) {
+          refreshBtn.addEventListener('click', () => {
+            location.reload();
+          });
+        }
         
         button.classList.remove('qr-loading');
         button.querySelector('.qr-text').textContent = 'Refresh Needed';
@@ -182,7 +190,7 @@ function injectGenerateButton() {
           <div style="font-size: 48px; margin-bottom: 10px; color: red;">❌</div>
           <div style="font-size: 16px; font-weight: bold; margin-bottom: 10px;">Connection Error</div>
           <div style="color: #666; margin-bottom: 15px;">${error.message}</div>
-          <button onclick="this.parentElement.parentElement.remove(); location.reload();" style="padding: 8px 20px; background: black; color: white; border: none; border-radius: 6px; cursor: pointer;">Try Again</button>
+          <button class="qr-try-again-btn" style="padding: 8px 20px; background: black; color: white; border: none; border-radius: 6px; cursor: pointer;">Try Again</button>
         </div>
       `;
       
@@ -219,9 +227,17 @@ function injectGenerateButton() {
             <div style="font-size: 48px; margin-bottom: 10px;">🎉</div>
             <div style="font-size: 18px; font-weight: bold; margin-bottom: 10px;">Resume Generated!</div>
             <div style="color: #666;">Check your downloads folder</div>
-            <button onclick="this.parentElement.parentElement.remove()" style="margin-top: 15px; padding: 8px 20px; background: black; color: white; border: none; border-radius: 6px; cursor: pointer;">Close</button>
+            <button class="qr-close-btn" style="margin-top: 15px; padding: 8px 20px; background: black; color: white; border: none; border-radius: 6px; cursor: pointer;">Close</button>
           </div>
         `;
+        
+        // Add event listener to close button
+        const closeBtn = progressDisplay.querySelector('.qr-close-btn');
+        if (closeBtn) {
+          closeBtn.addEventListener('click', () => {
+            progressDisplay.remove();
+          });
+        }
         
         button.classList.remove('qr-loading');
         button.classList.add('qr-success');
@@ -230,7 +246,9 @@ function injectGenerateButton() {
         setTimeout(() => {
           button.classList.remove('qr-success');
           button.querySelector('.qr-text').textContent = 'Generate Resume';
-          progressDisplay.remove();
+          if (progressDisplay.parentNode) {
+            progressDisplay.remove();
+          }
         }, 5000);
       }, 2000);
       
@@ -249,7 +267,7 @@ function injectGenerateButton() {
           <div style="font-size: 48px; margin-bottom: 10px; color: red;">❌</div>
           <div style="font-size: 16px; font-weight: bold; margin-bottom: 10px;">Generation Failed</div>
           <div style="color: #666; margin-bottom: 15px;">${response.error}</div>
-          <button onclick="this.parentElement.parentElement.remove(); location.reload();" style="padding: 8px 20px; background: black; color: white; border: none; border-radius: 6px; cursor: pointer;">Try Again</button>
+          <button class="qr-try-again-btn" style="padding: 8px 20px; background: black; color: white; border: none; border-radius: 6px; cursor: pointer;">Try Again</button>
         </div>
       `;
       

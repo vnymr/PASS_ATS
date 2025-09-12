@@ -172,64 +172,6 @@
         <button class="btn-link" id="toggleDetails">Show Details</button>
     </div>
     
-    <script>
-        // Parse error from URL params or storage
-        const urlParams = new URLSearchParams(window.location.search);
-        const errorParam = urlParams.get('error');
-        const messageParam = urlParams.get('message');
-        
-        // Get error from storage if available
-        chrome.storage.local.get(['lastError'], (result) => {
-            if (result.lastError) {
-                document.getElementById('errorMessage').textContent = result.lastError.message || 'An unexpected error occurred';
-                document.getElementById('errorText').textContent = result.lastError.details || result.lastError.stack || 'No additional details available';
-                
-                // Clear the error from storage
-                chrome.storage.local.remove(['lastError']);
-            } else if (messageParam) {
-                document.getElementById('errorMessage').textContent = decodeURIComponent(messageParam);
-                if (errorParam) {
-                    document.getElementById('errorText').textContent = decodeURIComponent(errorParam);
-                }
-            }
-        });
-        
-        // Toggle error details
-        document.getElementById('toggleDetails').addEventListener('click', () => {
-            const details = document.getElementById('errorDetails');
-            const toggle = document.getElementById('toggleDetails');
-            
-            if (details.classList.contains('show')) {
-                details.classList.remove('show');
-                toggle.textContent = 'Show Details';
-            } else {
-                details.classList.add('show');
-                toggle.textContent = 'Hide Details';
-            }
-        });
-        
-        // Retry button
-        document.getElementById('retryBtn').addEventListener('click', async () => {
-            // Check if we have a pending job to retry
-            const { pendingJob } = await chrome.storage.local.get(['pendingJob']);
-            
-            if (pendingJob) {
-                // Retry the job
-                window.location.href = chrome.runtime.getURL('generating.html');
-            } else {
-                // Go back to previous page or home
-                if (window.history.length > 1) {
-                    window.history.back();
-                } else {
-                    window.location.href = chrome.runtime.getURL('popup.html');
-                }
-            }
-        });
-        
-        // Home button
-        document.getElementById('homeBtn').addEventListener('click', () => {
-            window.location.href = chrome.runtime.getURL('popup.html');
-        });
-    </script>
+    <script src="error.js"></script>
 </body>
 </html>

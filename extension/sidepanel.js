@@ -55,6 +55,12 @@ function setupEventListeners() {
   // Navigation
   document.getElementById('homeBtn').addEventListener('click', () => switchTab('dashboard'));
   
+  // Fix for "Generate First Resume" button
+  const generateFirstResumeBtn = document.getElementById('generateFirstResumeBtn');
+  if (generateFirstResumeBtn) {
+    generateFirstResumeBtn.addEventListener('click', () => switchTab('dashboard'));
+  }
+  
   document.querySelectorAll('.tab').forEach(tab => {
     tab.addEventListener('click', () => switchTab(tab.dataset.tab));
   });

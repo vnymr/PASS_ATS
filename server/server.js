@@ -10,16 +10,66 @@ import crypto from 'crypto';
 import dotenv from 'dotenv';
 import { createRequire } from 'module';
 import multer from 'multer';
+// Observability will be added later - keeping it simple for now
+// import observability from './lib/observability.js';
 
 // Only load .env file in development
 if (process.env.NODE_ENV !== 'production') {
   dotenv.config();
 }
 
-// Debug: Log environment status (remove after testing)
-console.log('Environment:', process.env.NODE_ENV || 'not set');
-console.log('API Key present:', !!process.env.OPENAI_API_KEY);
-console.log('API Key starts with:', process.env.OPENAI_API_KEY ? process.env.OPENAI_API_KEY.substring(0, 10) + '...' : 'not set');
+// Utility function for log redaction
+function redactSensitive(obj, message = '') {
+  const sensitiveKeys = ['password', 'token', 'key', 'secret', 'api_key', 'authorization', 'bearer'];
+  
+  if (typeof obj === 'string') {
+    // Redact JWT tokens and API keys
+    return obj.replace(/sk-[a-zA-Z0-9-]{20,}/g, 'sk-***REDACTED***')
+              .replace(/ey[A-Za-z0-9+/=]+\.[A-Za-z0-9+/=]+\.[A-Za-z0-9+/=_-]+/g, 'jwt-***REDACTED***');
+  }
+  
+  if (typeof obj === 'object' && obj !== null) {
+    const redacted = { ...obj };
+    Object.keys(redacted).forEach(key => {
+      if (sensitiveKeys.some(sk => key.toLowerCase().includes(sk))) {
+        redacted[key] = '***REDACTED***';
+      }
+    });
+    return redacted;
+  }
+  
+  return obj;
+}
+
+// Environment validation and logging
+function validateEnvironment() {
+  const required = ['JWT_SECRET', 'OPENAI_API_KEY'];
+  const missing = required.filter(key => !process.env[key]);
+  
+  if (process.env.NODE_ENV === 'production') {
+    required.push('DATABASE_URL');
+    if (!process.env.DATABASE_URL) {
+      missing.push('DATABASE_URL');
+    }
+  }
+  
+  if (missing.length > 0) {
+    console.error('❌ Missing required environment variables:', missing);
+    process.exit(1);
+  }
+  
+  // Safe logging without sensitive data
+  console.log('🚀 Environment validated successfully');
+  console.log('   - Node Environment:', process.env.NODE_ENV || 'development');
+  console.log('   - OpenAI API Key:', process.env.OPENAI_API_KEY ? '✅ Present' : '❌ Missing');
+  console.log('   - Database URL:', process.env.DATABASE_URL ? '✅ Present' : '⚠️ Missing (development mode)');
+  console.log('   - JWT Secret:', process.env.JWT_SECRET ? '✅ Present' : '❌ Missing');
+}
+
+validateEnvironment();
+
+// Initialize observability
+// initializeObservability('pass-ats-server'); // Disabled for simple production readiness
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -29,52 +79,111 @@ const PORT = process.env.PORT || 3000;
 const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '');
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 
-// CORS configuration for production
-const corsOptions = {
-  origin: function (origin, callback) {
-    const allowedOrigins = [
-      'chrome-extension://*',
-      'http://localhost:3000',
-      'http://localhost:3001'
-    ];
-    
-    // Allow requests with no origin (like mobile apps or Postman)
-    if (!origin) return callback(null, true);
-    
-    // Check if origin matches any allowed pattern
-    const isAllowed = allowedOrigins.some(allowed => {
-      if (allowed.includes('*')) {
-        const pattern = new RegExp('^' + allowed.replace(/\*/g, '.*') + '$');
-        return pattern.test(origin);
+// CORS configuration from environment
+function getCorsOptions() {
+  const corsOptions = {
+    origin: function (origin, callback) {
+      // Get allowed origins from environment, fallback to development defaults
+      const envOrigins = process.env.ALLOWED_ORIGINS;
+      let allowedOrigins = [];
+      
+      if (envOrigins) {
+        // Parse comma-separated origins from environment
+        allowedOrigins = envOrigins.split(',').map(o => o.trim());
+      } else if (process.env.NODE_ENV === 'production') {
+        // In production, require explicit ALLOWED_ORIGINS configuration
+        console.warn('⚠️ ALLOWED_ORIGINS not configured for production. CORS will be restrictive.');
+        allowedOrigins = [];
+      } else {
+        // Development defaults
+        allowedOrigins = [
+          'chrome-extension://*',
+          'http://localhost:3000',
+          'http://localhost:3001',
+          'http://127.0.0.1:3000',
+          'http://127.0.0.1:3001'
+        ];
       }
-      return allowed === origin;
+      
+      // Allow requests with no origin (like mobile apps, curl, or direct server requests)
+      if (!origin) {
+        return callback(null, true);
+      }
+      
+      // Check if origin matches any allowed pattern
+      const isAllowed = allowedOrigins.some(allowed => {
+        if (allowed.includes('*')) {
+          const pattern = new RegExp('^' + allowed.replace(/\*/g, '.*') + '$');
+          return pattern.test(origin);
+        }
+        return allowed === origin;
+      });
+      
+      if (isAllowed) {
+        callback(null, true);
+      } else {
+        console.warn(`🙅 CORS blocked origin: ${redactSensitive(origin)}`);
+        callback(new Error(`CORS policy violation: Origin ${origin} not allowed`));
+      }
+    },
+    credentials: true,
+    optionsSuccessStatus: 200
+  };
+  
+  return corsOptions;
+}
+
+// Add observability middleware first
+// app.use(observabilityMiddleware()); // Disabled for simple production readiness
+app.use(cors(getCorsOptions()));
+// JSON parsing middleware with better error handling
+app.use(express.json({ 
+  limit: '10mb',
+  verify: (req, res, buf, encoding) => {
+    // Store raw body for verification if needed
+    req.rawBody = buf;
+  }
+}));
+
+// Global JSON parsing error handler
+app.use((err, req, res, next) => {
+  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+    console.error(`🚨 JSON parsing error from ${redactSensitive(req.ip)}:`, err.message);
+    return res.status(400).json({ 
+      error: 'Invalid JSON format',
+      message: 'Request body contains malformed JSON'
     });
-    
-    if (isAllowed) {
-      callback(null, true);
-    } else {
-      callback(new Error('CORS policy violation'));
-    }
-  },
-  credentials: true,
-  optionsSuccessStatus: 200
-};
+  }
+  next(err);
+});
+app.options('*', cors(getCorsOptions()));
 
-app.use(cors(corsOptions));
-app.use(express.json({ limit: '10mb' }));
-app.options('*', cors(corsOptions));
-
-// Rate limiting
+// Rate limiting from environment variables
 const requestCounts = new Map();
-const RATE_LIMIT = 100; // requests per minute
-const RATE_WINDOW = 60000; // 1 minute
+const RATE_LIMIT = parseInt(process.env.RATE_LIMIT_REQUESTS) || 100;
+const RATE_WINDOW = parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 60000;
+
+// Cleanup old rate limit entries every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, data] of requestCounts.entries()) {
+    if (now > data.resetTime + RATE_WINDOW) {
+      requestCounts.delete(ip);
+    }
+  }
+}, 5 * 60 * 1000);
 
 function rateLimit(req, res, next) {
-  const ip = req.ip || req.connection.remoteAddress;
+  const ip = req.ip || req.connection.remoteAddress || 'unknown';
   const now = Date.now();
   
   if (!requestCounts.has(ip)) {
     requestCounts.set(ip, { count: 1, resetTime: now + RATE_WINDOW });
+    res.set({
+      'X-RateLimit-Limit': RATE_LIMIT,
+      'X-RateLimit-Remaining': RATE_LIMIT - 1,
+      'X-RateLimit-Reset': Math.ceil((now + RATE_WINDOW) / 1000)
+    });
     return next();
   }
   
@@ -83,13 +192,29 @@ function rateLimit(req, res, next) {
   if (now > userData.resetTime) {
     userData.count = 1;
     userData.resetTime = now + RATE_WINDOW;
+    res.set({
+      'X-RateLimit-Limit': RATE_LIMIT,
+      'X-RateLimit-Remaining': RATE_LIMIT - 1,
+      'X-RateLimit-Reset': Math.ceil(userData.resetTime / 1000)
+    });
     return next();
   }
   
+  const remaining = Math.max(0, RATE_LIMIT - userData.count);
+  res.set({
+    'X-RateLimit-Limit': RATE_LIMIT,
+    'X-RateLimit-Remaining': remaining,
+    'X-RateLimit-Reset': Math.ceil(userData.resetTime / 1000)
+  });
+  
   if (userData.count >= RATE_LIMIT) {
+    const retryAfter = Math.ceil((userData.resetTime - now) / 1000);
+    console.warn(`🚫 Rate limit exceeded for IP: ${redactSensitive(ip)}, retry after: ${retryAfter}s`);
     return res.status(429).json({ 
       error: 'Too many requests. Please try again later.',
-      retryAfter: Math.ceil((userData.resetTime - now) / 1000)
+      retryAfter,
+      limit: RATE_LIMIT,
+      window: RATE_WINDOW
     });
   }
   
@@ -98,6 +223,7 @@ function rateLimit(req, res, next) {
 }
 
 app.use(rateLimit);
+console.log(`🛡️ Rate limiting: ${RATE_LIMIT} requests per ${RATE_WINDOW}ms`);
 
 // Simple JSON file persistence (upgradeable to a real DB)
 const dataDir = path.join(path.dirname(fileURLToPath(import.meta.url)));
@@ -126,16 +252,84 @@ let db = await loadDB();
 
 // Optional: Prisma (Postgres) integration with graceful fallback
 let prisma = null;
+let dbHealthy = false;
+
 async function getPrisma() {
   if (prisma) return prisma;
-  if (!process.env.DATABASE_URL) return null;
+  
+  if (!process.env.DATABASE_URL) {
+    if (process.env.NODE_ENV === 'production') {
+      console.error('🚨 DATABASE_URL required in production mode');
+      throw new Error('DATABASE_URL is required in production');
+    }
+    console.warn('⚠️ No DATABASE_URL provided, using JSON fallback in development mode');
+    return null;
+  }
+  
   try {
     const { PrismaClient } = await import('@prisma/client');
-    prisma = new PrismaClient();
+    prisma = new PrismaClient({
+      log: process.env.NODE_ENV === 'development' ? ['query', 'info', 'warn', 'error'] : ['warn', 'error'],
+    });
+    
+    // Test database connection
+    await prisma.$connect();
+    dbHealthy = true;
+    console.log('✅ Database connection established');
+    
+    // Run migrations in production
+    if (process.env.NODE_ENV === 'production') {
+      try {
+        console.log('🔄 Running database migrations...');
+        const { exec } = await import('child_process');
+        await new Promise((resolve, reject) => {
+          exec('npx prisma migrate deploy', (error, stdout, stderr) => {
+            if (error) {
+              console.error('❌ Migration failed:', error);
+              reject(error);
+            } else {
+              console.log('✅ Migrations completed successfully');
+              resolve(stdout);
+            }
+          });
+        });
+      } catch (migrationError) {
+        console.error('⚠️ Migration warning:', migrationError.message);
+        // Don't fail startup for migration issues in production
+      }
+    }
+    
     return prisma;
   } catch (e) {
-    console.warn('Prisma not available, using JSON DB fallback. Reason:', e.message);
+    dbHealthy = false;
+    console.error('🚨 Database connection failed:', redactSensitive(e.message));
+    
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('Database connection required in production mode');
+    }
+    
+    console.warn('⚠️ Falling back to JSON DB in development mode');
     return null;
+  }
+}
+
+// Health check for database
+async function checkDatabaseHealth() {
+  if (!process.env.DATABASE_URL) {
+    return { healthy: false, error: 'No DATABASE_URL configured' };
+  }
+  
+  try {
+    const p = await getPrisma();
+    if (!p) {
+      return { healthy: false, error: 'Prisma client not initialized' };
+    }
+    
+    // Simple query to test connection
+    await p.$queryRaw`SELECT 1`;
+    return { healthy: true };
+  } catch (error) {
+    return { healthy: false, error: redactSensitive(error.message) };
   }
 }
 
@@ -589,6 +783,27 @@ app.post('/generate', async (req, res) => {
 
     // 3) Ensure output exists and return URL
     await fs.access(pdfPath);
+    
+    // 4) Validate PDF for ATS compatibility
+    try {
+      const { enforceATSCompliance } = await import('./lib/pdf-validator.js');
+      const validationResult = await enforceATSCompliance(
+        pdfPath,
+        jobData,
+        profile,
+        { skill_analysis: { matched_skills: [] } } // Basic coverage data
+      );
+      
+      if (validationResult.success) {
+        console.log(`✅ PDF validated successfully. ATS Score: ${validationResult.ats_score}/100`);
+      } else {
+        console.warn('⚠️ PDF validation issues:', validationResult.validation_report.issues_found);
+      }
+    } catch (validationError) {
+      console.error('PDF validation error:', validationError);
+      // Continue even if validation fails - don't block the response
+    }
+    
     const origin = PUBLIC_BASE_URL || `${req.protocol}://${req.get('host')}` || `http://localhost:${PORT}`;
     const pdfUrl = `${origin}/pdfs/${base}.pdf`;
     const texUrl = `${origin}/tex/${base}.tex`;
@@ -612,16 +827,65 @@ app.post('/generate', async (req, res) => {
 });
 
 // --- Streaming job-based generation (SSE) ---
-const jobs = new Map(); // jobId -> { listeners:Set<res>, last: any }
+const jobs = new Map(); // jobId -> { listeners:Set<res>, last: any, startedAt: number, stage: string }
 
-function sendEvent(jobId, type, data) {
+// Job cleanup to prevent memory leaks - cleanup after 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  const CLEANUP_AGE = 5 * 60 * 1000; // 5 minutes
+  
+  for (const [jobId, job] of jobs.entries()) {
+    if (now - job.startedAt > CLEANUP_AGE) {
+      console.log(`🧹 Cleaning up stale job: ${jobId} (age: ${Math.round((now - job.startedAt) / 1000)}s)`);
+      // Close any lingering SSE connections
+      for (const res of job.listeners) {
+        try {
+          res.write('event: cleanup\ndata: {"message":"Job expired","error":true}\n\n');
+          res.end();
+        } catch (_) {}
+      }
+      jobs.delete(jobId);
+    }
+  }
+}, 60 * 1000); // Run cleanup every minute
+
+function sendEvent(jobId, type, data, stage) {
   const job = jobs.get(jobId);
   if (!job) return;
-  const payload = `event: ${type}\n` + `data: ${JSON.stringify(data)}\n\n`;
-  job.last = { type, data };
-  for (const res of job.listeners) {
-    try { res.write(payload); } catch (_) {}
+  
+  // Update job stage if provided
+  if (stage) {
+    job.stage = stage;
   }
+  
+  // Add timestamp and job info to data
+  const enhancedData = {
+    ...data,
+    timestamp: Date.now(),
+    jobId,
+    stage: job.stage || 'unknown'
+  };
+  
+  const payload = `event: ${type}\ndata: ${JSON.stringify(enhancedData)}\n\n`;
+  job.last = { type, data: enhancedData };
+  
+  // Send to all active listeners with error handling
+  const deadConnections = new Set();
+  for (const res of job.listeners) {
+    try {
+      res.write(payload);
+    } catch (error) {
+      console.warn(`🔌 Dead SSE connection detected for job ${jobId}`);
+      deadConnections.add(res);
+    }
+  }
+  
+  // Clean up dead connections
+  for (const deadRes of deadConnections) {
+    job.listeners.delete(deadRes);
+  }
+  
+  console.log(`[SSE] ${jobId} -> ${type} (${job.listeners.size} listeners): ${data.message || JSON.stringify(data).substring(0, 100)}`);
 }
 
 function closeJob(jobId) {
@@ -636,7 +900,7 @@ function closeJob(jobId) {
 app.post('/generate/job', async (req, res) => {
   const { profile = {}, jobData = {}, tempId = 'TMP' } = req.body || {};
   const jobId = crypto.randomBytes(8).toString('hex');
-  jobs.set(jobId, { listeners: new Set(), last: null, startedAt: Date.now() });
+  jobs.set(jobId, { listeners: new Set(), last: null, startedAt: Date.now(), stage: 'queued' });
   console.log(`[JOB] start jobId=${jobId} email=${profile.email || 'anon'} role=${jobData.role || ''} company=${jobData.company || ''}`);
   res.json({ jobId });
 
@@ -651,7 +915,7 @@ app.post('/generate/job', async (req, res) => {
           return setTimeout(() => closeJob(jobId), 500);
         }
       }
-      sendEvent(jobId, 'status', { message: 'Extracting JD keywords...', progress: 10 });
+      sendEvent(jobId, 'status', { message: 'Extracting job description keywords...', progress: 10 }, 'extract');
       const synonyms = await loadSynonyms();
       const jdText = jobData.text || '';
       const jdKey = sha(jdText);
@@ -664,17 +928,17 @@ app.post('/generate/job', async (req, res) => {
       sendEvent(jobId, 'analysis', { matchedSkills: (profile.skills||[]).slice(0,10), missingSkills: priority.filter(k => !(profile.skills||[]).map(s=>String(s).toUpperCase()).includes(k)).slice(0,10) });
 
       // Stage 1: get structured JSON
-      sendEvent(jobId, 'status', { message: 'Structuring user memory...', progress: 20 });
+      sendEvent(jobId, 'status', { message: 'Analyzing user profile and experience...', progress: 20 }, 'analyze');
       const profileKey = sha(JSON.stringify(profileToStructured(profile)));
       const structKey = `${profileKey}:${jdKey}`;
       let structured1 = structuredCache.get(structKey);
       if (!structured1) {
-        structured1 = await generateStructuredWithAI(profile, jobData, priority, locked, (msg, p) => sendEvent(jobId, 'status', { message: msg, progress: p }));
+        structured1 = await generateStructuredWithAI(profile, jobData, priority, locked, (msg, p) => sendEvent(jobId, 'status', { message: msg, progress: p }, 'compose'));
         cacheSet(structuredCache, structKey, structured1);
       }
 
       // Stage 2: coverage check and refine if needed
-      sendEvent(jobId, 'status', { message: 'Checking keyword coverage...', progress: 45 });
+      sendEvent(jobId, 'status', { message: 'Checking keyword coverage and optimization...', progress: 45 }, 'analyze');
       const cov = computeCoverage(structured1, priority, synonyms);
       let structured = structured1;
       let tries = 0;
@@ -682,7 +946,7 @@ app.post('/generate/job', async (req, res) => {
       while (tries < 1) {
         const ratio = (cov.present.length) / (priority.length || 1);
         if (ratio >= threshold || cov.missing.length === 0) break;
-        sendEvent(jobId, 'status', { message: `Refining draft to improve coverage (${Math.round(ratio*100)}%)...`, progress: 50 + tries*5 });
+        sendEvent(jobId, 'status', { message: `Refining resume content to improve coverage (${Math.round(ratio*100)}%)...`, progress: 50 + tries*5 }, 'compose');
         structured = await refineStructuredWithAI(structured, cov.missing.slice(0,8), locked);
         const cov2 = computeCoverage(structured, priority, synonyms);
         if (cov2.present.length > cov.present.length) {
@@ -693,16 +957,16 @@ app.post('/generate/job', async (req, res) => {
       }
 
       // Stage 3: render LaTeX deterministically
-      sendEvent(jobId, 'status', { message: 'Rendering LaTeX...', progress: 60 });
+      sendEvent(jobId, 'status', { message: 'Generating LaTeX document structure...', progress: 60 }, 'latex');
       // Prefer direct AI LaTeX when possible; fallback to structured->template
       let latex = null;
       try {
-        latex = await generateLatexWithAI(profile, jobData, (m, pr) => sendEvent(jobId, 'status', { message: m, progress: pr || 60 }));
+        latex = await generateLatexWithAI(profile, jobData, (m, pr) => sendEvent(jobId, 'status', { message: m, progress: pr || 60 }, 'latex'));
       } catch (_) {
         latex = renderLatexFromStructured(structured, jobData);
       }
 
-      sendEvent(jobId, 'status', { message: 'Compiling PDF...', progress: 70 });
+      sendEvent(jobId, 'status', { message: 'Compiling LaTeX to PDF using Tectonic...', progress: 70 }, 'compile');
       const ts = Date.now();
       const base = `resume_${tempId}_${ts}`;
       const texPath = path.join(generatedDir, `${base}.tex`);
@@ -722,6 +986,46 @@ app.post('/generate/job', async (req, res) => {
       });
 
       await fs.access(pdfPath);
+      
+      // Validate PDF for ATS compatibility
+      sendEvent(jobId, 'status', { message: 'Validating PDF for ATS compliance...', progress: 80 }, 'validate');
+      try {
+        const { enforceATSCompliance } = await import('./lib/pdf-validator.js');
+        const validationResult = await enforceATSCompliance(
+          pdfPath,
+          jobData,
+          profile,
+          { 
+            skill_analysis: { 
+              matched_skills: cov.present?.map(s => ({ skill: s })) || [] 
+            },
+            requirement_coverage: {
+              matched: priority?.slice(0, 5).map(p => ({ keywords: [p] })) || []
+            }
+          }
+        );
+        
+        if (validationResult.success) {
+          sendEvent(jobId, 'status', { 
+            message: `PDF validated! ATS Score: ${validationResult.ats_score}/100`, 
+            progress: 85,
+            atsScore: validationResult.ats_score
+          }, 'validate');
+        } else {
+          sendEvent(jobId, 'status', { 
+            message: 'PDF has validation warnings', 
+            progress: 85,
+            warnings: validationResult.validation_report.issues_found
+          }, 'validate');
+        }
+      } catch (validationError) {
+        console.error('PDF validation error:', validationError);
+        sendEvent(jobId, 'status', { 
+          message: 'PDF validation skipped', 
+          progress: 85 
+        }, 'validate');
+      }
+      
       const origin = PUBLIC_BASE_URL || `${req.protocol}://${req.get('host')}` || `http://localhost:${PORT}`;
       const pdfUrl = `${origin}/pdfs/${base}.pdf`;
       const texUrl = `${origin}/tex/${base}.tex`;
@@ -739,11 +1043,23 @@ app.post('/generate/job', async (req, res) => {
           }
         });
       }
-      sendEvent(jobId, 'complete', { pdfUrl, texUrl, fileName: `${base}.pdf` });
+      sendEvent(jobId, 'complete', { 
+        pdfUrl, 
+        texUrl, 
+        fileName: `${base}.pdf`,
+        message: 'Resume generation completed successfully!',
+        progress: 100,
+        totalTime: Date.now() - jobs.get(jobId)?.startedAt
+      }, 'done');
       setTimeout(() => closeJob(jobId), 500);
     } catch (err) {
       console.error('Generate job error:', err);
-      sendEvent(jobId, 'error', { error: err.message });
+      sendEvent(jobId, 'error', { 
+        error: redactSensitive(err.message),
+        message: 'Resume generation failed',
+        stage: jobs.get(jobId)?.stage || 'unknown',
+        totalTime: Date.now() - (jobs.get(jobId)?.startedAt || Date.now())
+      }, 'error');
       setTimeout(() => closeJob(jobId), 500);
     }
   })();
@@ -752,28 +1068,72 @@ app.post('/generate/job', async (req, res) => {
 app.get('/generate/stream/:jobId', (req, res) => {
   const { jobId } = req.params;
   const job = jobs.get(jobId);
-  if (!job) return res.status(404).json({ error: 'Job not found' });
-  console.log(`[JOB] stream open jobId=${jobId}`);
+  
+  if (!job) {
+    console.warn(`🚫 SSE request for unknown job: ${jobId}`);
+    return res.status(404).json({ error: 'Job not found' });
+  }
+  
+  const clientId = `${req.ip}_${Date.now()}`;
+  console.log(`🔗 [SSE] Connection opened for job ${jobId} from client ${redactSensitive(clientId)} (${job.listeners.size} total)`);
 
+  // Set proper SSE headers with CORS support
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
-    Connection: 'keep-alive',
-    'X-Accel-Buffering': 'no'
+    'Cache-Control': 'no-cache, no-transform',
+    'Connection': 'keep-alive',
+    'Access-Control-Allow-Origin': req.headers.origin || '*',
+    'Access-Control-Allow-Credentials': 'true',
+    'X-Accel-Buffering': 'no', // Disable proxy buffering
+    'Transfer-Encoding': 'chunked'
   });
-  res.write(`retry: 3000\n\n`);
-
+  
+  // Send initial SSE setup
+  res.write(`retry: 5000\n\n`);
+  
+  // Add this connection to the job's listeners
   job.listeners.add(res);
+  
+  // Send current status
   if (job.last) {
     const { type, data } = job.last;
-    res.write(`event: ${type}\n` + `data: ${JSON.stringify(data)}\n\n`);
+    res.write(`event: ${type}\ndata: ${JSON.stringify(data)}\n\n`);
   } else {
-    res.write(`event: status\n` + `data: ${JSON.stringify({ message: 'Queued...', progress: 5 })}\n\n`);
+    // Send initial queued status with enhanced information
+    const initialData = {
+      message: `Job queued (${job.stage || 'unknown'} stage)`,
+      progress: 5,
+      stage: job.stage || 'queued',
+      jobId,
+      timestamp: Date.now(),
+      listeners: job.listeners.size
+    };
+    res.write(`event: status\ndata: ${JSON.stringify(initialData)}\n\n`);
   }
+  
+  // Send periodic heartbeat to keep connection alive
+  const heartbeat = setInterval(() => {
+    try {
+      res.write(`event: heartbeat\ndata: {"timestamp":${Date.now()}}\n\n`);
+    } catch (error) {
+      clearInterval(heartbeat);
+      job.listeners.delete(res);
+    }
+  }, 30000); // Every 30 seconds
 
-  req.on('close', () => {
-    try { job.listeners.delete(res); } catch (_) {}
-    console.log(`[JOB] stream closed jobId=${jobId}`);
+  // Handle connection cleanup
+  const cleanup = () => {
+    clearInterval(heartbeat);
+    job.listeners.delete(res);
+    console.log(`🔗 [SSE] Connection closed for job ${jobId} from client ${redactSensitive(clientId)} (${job.listeners.size} remaining)`);
+  };
+  
+  req.on('close', cleanup);
+  req.on('end', cleanup);
+  res.on('close', cleanup);
+  res.on('error', (error) => {
+    console.error(`🚨 [SSE] Connection error for job ${jobId}:`, redactSensitive(error.message));
+    cleanup();
   });
 });
 
@@ -2037,21 +2397,150 @@ app.listen(PORT, () => {
 });
 
 // Health check
-app.get('/health', (_req, res) => {
+// Comprehensive health check with database connectivity
+// Metrics endpoint for Prometheus scraping
+app.get('/metrics', async (req, res) => {
+  res.set('Content-Type', metricsRegistry.contentType);
+  const metrics = await metricsRegistry.metrics();
+  res.end(metrics);
+});
+
+app.get('/health', async (req, res) => {
+  const startTime = Date.now();
+  
   const health = {
     status: 'ok',
     service: 'resume-server',
     version: '2.0.0',
     timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV || 'development',
     features: {
       aiGeneration: !!process.env.OPENAI_API_KEY,
       crossDomainTransformation: true,
       enhancedPrompts: true,
-      fullPageOptimization: true
+      fullPageOptimization: true,
+      database: !!process.env.DATABASE_URL
     },
-    environment: process.env.NODE_ENV || 'development'
+    checks: {
+      database: { status: 'unknown', responseTime: 0 },
+      tectonic: { status: 'unknown', responseTime: 0 },
+      memory: { status: 'ok', usage: process.memoryUsage() },
+      activeJobs: jobs.size
+    }
   };
-  res.json(health);
+  
+  let httpStatus = 200;
+  
+  // Database health check
+  try {
+    const dbStart = Date.now();
+    const dbHealth = await checkDatabaseHealth();
+    health.checks.database = {
+      status: dbHealth.healthy ? 'ok' : 'error',
+      responseTime: Date.now() - dbStart,
+      error: dbHealth.error || undefined
+    };
+    
+    if (!dbHealth.healthy && process.env.NODE_ENV === 'production') {
+      health.status = 'degraded';
+      httpStatus = 503;
+    }
+  } catch (error) {
+    health.checks.database = {
+      status: 'error',
+      responseTime: Date.now() - startTime,
+      error: redactSensitive(error.message)
+    };
+    if (process.env.NODE_ENV === 'production') {
+      health.status = 'degraded';
+      httpStatus = 503;
+    }
+  }
+  
+  // Tectonic availability check
+  try {
+    const tectonicStart = Date.now();
+    const tectonic = spawn('tectonic', ['--version'], { stdio: 'pipe' });
+    const timeout = setTimeout(() => {
+      tectonic.kill();
+      health.checks.tectonic = {
+        status: 'timeout',
+        responseTime: Date.now() - tectonicStart
+      };
+    }, 3000);
+    
+    tectonic.on('close', (code) => {
+      clearTimeout(timeout);
+      health.checks.tectonic = {
+        status: code === 0 ? 'ok' : 'error',
+        responseTime: Date.now() - tectonicStart
+      };
+    });
+    
+    await new Promise(resolve => {
+      tectonic.on('close', resolve);
+      tectonic.on('error', resolve);
+    });
+  } catch (error) {
+    health.checks.tectonic = {
+      status: 'error',
+      responseTime: Date.now() - startTime,
+      error: redactSensitive(error.message)
+    };
+  }
+  
+  health.totalResponseTime = Date.now() - startTime;
+  res.status(httpStatus).json(health);
+});
+
+// Readiness probe for Kubernetes/container orchestration
+app.get('/readiness', async (req, res) => {
+  const ready = {
+    ready: true,
+    timestamp: new Date().toISOString(),
+    checks: []
+  };
+  
+  // Check if server can accept requests
+  if (process.env.NODE_ENV === 'production') {
+    // In production, require database connectivity
+    try {
+      const dbHealth = await checkDatabaseHealth();
+      if (!dbHealth.healthy) {
+        ready.ready = false;
+        ready.checks.push({ name: 'database', status: 'fail', error: dbHealth.error });
+      } else {
+        ready.checks.push({ name: 'database', status: 'pass' });
+      }
+    } catch (error) {
+      ready.ready = false;
+      ready.checks.push({ name: 'database', status: 'fail', error: redactSensitive(error.message) });
+    }
+  } else {
+    ready.checks.push({ name: 'database', status: 'skip', reason: 'development mode' });
+  }
+  
+  // Check essential environment variables
+  const required = ['JWT_SECRET', 'OPENAI_API_KEY'];
+  const missing = required.filter(key => !process.env[key]);
+  if (missing.length > 0) {
+    ready.ready = false;
+    ready.checks.push({ name: 'environment', status: 'fail', missing });
+  } else {
+    ready.checks.push({ name: 'environment', status: 'pass' });
+  }
+  
+  res.status(ready.ready ? 200 : 503).json(ready);
+});
+
+// Liveness probe for Kubernetes/container orchestration  
+app.get('/liveness', (req, res) => {
+  res.json({
+    alive: true,
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
+  });
 });
 
 // Root endpoint
@@ -2180,6 +2669,106 @@ Base all recommendations on actual job requirements and candidate background. No
     console.error('Job analysis error:', error);
     res.status(500).json({ 
       error: 'Analysis failed',
+      details: error.message 
+    });
+  }
+});
+
+// --- PDF Validation Endpoint ---
+// Validate existing PDF for ATS compatibility
+app.post('/validate-pdf', upload.single('pdf'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No PDF file uploaded' });
+    }
+
+    const { candidateName, targetRole, targetCompany, keywords } = req.body;
+    
+    // Parse keywords if provided as string
+    const keywordList = keywords ? 
+      (typeof keywords === 'string' ? keywords.split(',').map(k => k.trim()) : keywords) : 
+      [];
+
+    // Import validator
+    const { validatePDFForATS } = await import('./lib/pdf-validator.js');
+    
+    // Prepare metadata
+    const metadata = {
+      candidateName: candidateName || 'Unknown',
+      targetRole: targetRole || 'Position',
+      targetCompany: targetCompany || 'Company',
+      keywords: keywordList
+    };
+
+    // Validate PDF
+    const validation = await validatePDFForATS(req.file.path, metadata);
+    
+    // Clean up uploaded file
+    await fs.unlink(req.file.path).catch(() => {});
+    
+    // Return validation results
+    res.json({
+      success: validation.validation_status === 'PASS',
+      status: validation.validation_status,
+      ats_score: validation.ats_parse_check?.parseability_score || 0,
+      corrected_path: validation.corrected_path,
+      issues: validation.issues_found,
+      recommendations: validation.recommendations,
+      metadata_report: validation.metadata_report,
+      parse_check: validation.ats_parse_check
+    });
+
+  } catch (error) {
+    console.error('PDF validation error:', error);
+    
+    // Clean up uploaded file on error
+    if (req.file?.path) {
+      await fs.unlink(req.file.path).catch(() => {});
+    }
+    
+    res.status(500).json({ 
+      error: 'PDF validation failed',
+      details: error.message 
+    });
+  }
+});
+
+// Quick PDF validation without metadata
+app.post('/quick-validate-pdf', upload.single('pdf'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No PDF file uploaded' });
+    }
+
+    // Import validator
+    const { quickValidatePDF } = await import('./lib/pdf-validator.js');
+    
+    // Quick validate PDF
+    const validation = await quickValidatePDF(req.file.path);
+    
+    // Clean up uploaded file
+    await fs.unlink(req.file.path).catch(() => {});
+    
+    // Return validation results
+    res.json({
+      success: validation.validation_status === 'PASS',
+      status: validation.validation_status,
+      ats_score: validation.ats_parse_check?.parseability_score || 0,
+      checks: validation.checks,
+      issues: validation.issues_found,
+      recommendations: validation.recommendations
+    });
+
+  } catch (error) {
+    console.error('Quick PDF validation error:', error);
+    
+    // Clean up uploaded file on error
+    if (req.file?.path) {
+      await fs.unlink(req.file.path).catch(() => {});
+    }
+    
+    res.status(500).json({ 
+      error: 'PDF validation failed',
       details: error.message 
     });
   }
