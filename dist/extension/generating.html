@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Generating Resume...</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #000;
+      color: #fff;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .container {
+      text-align: center;
+      padding: 40px;
+    }
+    .spinner {
+      width: 60px;
+      height: 60px;
+      border: 3px solid #333;
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 30px;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    h1 {
+      font-size: 28px;
+      margin-bottom: 10px;
+    }
+    .status {
+      color: #999;
+      font-size: 14px;
+      margin-bottom: 30px;
+    }
+    .progress {
+      width: 300px;
+      height: 4px;
+      background: #333;
+      border-radius: 2px;
+      overflow: hidden;
+      margin: 0 auto;
+    }
+    .progress-bar {
+      height: 100%;
+      background: #fff;
+      width: 0%;
+      animation: progress 15s ease-out;
+    }
+    @keyframes progress {
+      0% { width: 0%; }
+      20% { width: 30%; }
+      40% { width: 50%; }
+      60% { width: 70%; }
+      80% { width: 85%; }
+      100% { width: 95%; }
+    }
+    .success {
+      display: none;
+    }
+    .success.show {
+      display: block;
+      animation: fadeIn 0.5s;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    .success-icon {
+      font-size: 64px;
+      margin-bottom: 20px;
+    }
+    button {
+      background: #fff;
+      color: #000;
+      border: none;
+      padding: 12px 30px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      margin: 10px;
+    }
+    button:hover {
+      background: #f0f0f0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div id="loading">
+      <div class="spinner"></div>
+      <h1>Generating Your Resume</h1>
+      <p id="statusText" class="status">Using AI to tailor your resume to this position...</p>
+      <div class="progress">
+        <div id="progressBar" class="progress-bar"></div>
+      </div>
+      <div id="log" style="text-align:left;margin-top:16px;font-size:12px;color:#aaa;max-width:560px;">
+        <!-- live steps -->
+      </div>
+    </div>
+    
+    <div id="success" class="success">
+      <div class="success-icon">
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+          <polyline points="22 4 12 14.01 9 11.01"/>
+        </svg>
+      </div>
+      <h1>Resume Generated!</h1>
+      <p class="status">Your tailored resume has been downloaded</p>
+      <button id="viewPdf">View PDF</button>
+      <button id="close">Close</button>
+    </div>
+  </div>
+  <script src="generating.js"></script>
+</body>
+</html>

@@ -1,8 +1,8 @@
 # Simple single-stage build for Railway
 FROM node:18-alpine
 
-# Install system dependencies for LaTeX compilation
-RUN apk add --no-cache curl ca-certificates && \
+# Install system dependencies for LaTeX compilation and Prisma
+RUN apk add --no-cache curl ca-certificates openssl1.1-compat && \
     curl -L https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic%400.15.0/tectonic-0.15.0-x86_64-unknown-linux-musl.tar.gz \
     | tar -xz -C /usr/local/bin/
 
@@ -11,8 +11,9 @@ WORKDIR /app
 # Copy all files
 COPY . .
 
-# Install server dependencies
-RUN cd server && npm install
+# Install server dependencies and generate Prisma client
+RUN cd server && npm install && \
+    npx prisma generate
 
 # Create temp directories
 RUN mkdir -p server/temp server/generated

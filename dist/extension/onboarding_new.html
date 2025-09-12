@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quick Resume AI - Setup Your Profile</title>
+    <link rel="stylesheet" href="onboarding_new.css">
+</head>
+<body>
+    <div class="onboarding-container">
+        <!-- Progress indicator -->
+        <div class="progress-header">
+            <div class="progress-steps">
+                <div class="step active" data-step="1">
+                    <div class="step-circle">1</div>
+                    <span>Upload Resume</span>
+                </div>
+                <div class="step" data-step="2">
+                    <div class="step-circle">2</div>
+                    <span>Review Profile</span>
+                </div>
+                <div class="step" data-step="3">
+                    <div class="step-circle">3</div>
+                    <span>Complete Setup</span>
+                </div>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" style="width: 33%"></div>
+            </div>
+        </div>
+
+        <!-- Step 1: Upload Resume -->
+        <div id="step1" class="step-content active">
+            <div class="step-card">
+                <h1>Let's start with your resume</h1>
+                <p class="step-description">Upload your current resume and we'll extract your information automatically</p>
+                
+                <div class="upload-area" id="uploadArea">
+                    <svg class="upload-icon" width="48" height="48" viewBox="0 0 48 48" fill="none">
+                        <path d="M24 32V16M24 16L18 22M24 16L30 22" stroke="#5f6368" stroke-width="2" stroke-linecap="round"/>
+                        <path d="M40 28V36C40 38 38 40 36 40H12C10 40 8 38 8 36V28" stroke="#5f6368" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                    <p class="upload-text">Drop your resume here or click to browse</p>
+                    <p class="upload-hint">PDF, DOC, DOCX up to 10MB</p>
+                    <input type="file" id="resumeFile" accept=".pdf,.doc,.docx" hidden>
+                </div>
+
+                <div id="uploadProgress" class="upload-progress hidden">
+                    <div class="file-info">
+                        <span class="file-name"></span>
+                        <span class="file-size"></span>
+                    </div>
+                    <div class="progress-track">
+                        <div class="progress-bar-fill"></div>
+                    </div>
+                    <p class="status-text">Uploading...</p>
+                </div>
+
+                <div id="processingStatus" class="processing-status hidden">
+                    <div class="processing-spinner"></div>
+                    <p class="processing-text">Analyzing your resume...</p>
+                    <p class="processing-detail">Extracting contact information, experience, and skills</p>
+                </div>
+
+                <button id="skipUpload" class="btn-text">Enter details manually instead</button>
+            </div>
+        </div>
+
+        <!-- Step 2: Review and Edit Profile -->
+        <div id="step2" class="step-content">
+            <div class="step-card">
+                <h1>Review your profile</h1>
+                <p class="step-description">We've extracted the following information. Please review and update as needed.</p>
+                
+                <form id="profileForm" class="profile-form">
+                    <!-- Personal Information -->
+                    <div class="form-section">
+                        <h3>Personal Information</h3>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <input type="text" id="fullName" required placeholder=" ">
+                                <label for="fullName">Full Name</label>
+                            </div>
+                            <div class="form-group">
+                                <input type="email" id="email" required placeholder=" ">
+                                <label for="email">Email</label>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <input type="tel" id="phone" placeholder=" ">
+                                <label for="phone">Phone</label>
+                            </div>
+                            <div class="form-group">
+                                <input type="text" id="location" placeholder=" ">
+                                <label for="location">Location</label>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <input type="url" id="linkedin" placeholder=" ">
+                            <label for="linkedin">LinkedIn URL</label>
+                        </div>
+                    </div>
+
+                    <!-- Professional Summary -->
+                    <div class="form-section">
+                        <h3>Professional Summary</h3>
+                        <div class="form-group">
+                            <textarea id="summary" rows="4" placeholder=" "></textarea>
+                            <label for="summary">Summary</label>
+                        </div>
+                    </div>
+
+                    <!-- Experience -->
+                    <div class="form-section">
+                        <h3>Experience</h3>
+                        <div id="experienceList" class="dynamic-list"></div>
+                        <button type="button" class="btn-add" id="addExperience">
+                            <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                                <path d="M10 5v10M5 10h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                            </svg>
+                            Add Experience
+                        </button>
+                    </div>
+
+                    <!-- Skills -->
+                    <div class="form-section">
+                        <h3>Skills</h3>
+                        <div class="form-group">
+                            <textarea id="skills" rows="3" placeholder=" "></textarea>
+                            <label for="skills">Skills (comma separated)</label>
+                        </div>
+                    </div>
+
+                    <!-- Education -->
+                    <div class="form-section">
+                        <h3>Education</h3>
+                        <div id="educationList" class="dynamic-list"></div>
+                        <button type="button" class="btn-add" id="addEducation">
+                            <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                                <path d="M10 5v10M5 10h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                            </svg>
+                            Add Education
+                        </button>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" class="btn-secondary" id="backToUpload">Back</button>
+                        <button type="submit" class="btn-primary">Continue</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Step 3: Complete Setup -->
+        <div id="step3" class="step-content">
+            <div class="step-card complete-card">
+                <div class="success-icon">
+                    <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
+                        <circle cx="32" cy="32" r="30" stroke="#34a853" stroke-width="3"/>
+                        <path d="M20 32L28 40L44 24" stroke="#34a853" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+                <h1>You're all set!</h1>
+                <p class="complete-description">Your profile has been saved. You can now start generating tailored resumes for any job posting.</p>
+                
+                <div class="feature-list">
+                    <div class="feature-item">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="#1a73e8">
+                            <path d="M9 11H7a5 5 0 0 1 0-10h2m6 0h2a5 5 0 1 1 0 10h-2m-6 0h6" stroke="#1a73e8" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                        <span>One-click resume generation on job sites</span>
+                    </div>
+                    <div class="feature-item">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="#1a73e8">
+                            <path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z" fill="#1a73e8"/>
+                        </svg>
+                        <span>AI-powered optimization for each application</span>
+                    </div>
+                    <div class="feature-item">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="#1a73e8">
+                            <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z" fill="#1a73e8"/>
+                        </svg>
+                        <span>Track all your generated resumes</span>
+                    </div>
+                </div>
+
+                <button id="completeSetup" class="btn-primary btn-large">Open Dashboard</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="onboarding_new.js"></script>
+</body>
+</html>

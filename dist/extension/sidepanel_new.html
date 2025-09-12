@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Resume Pro</title>
+  <link rel="stylesheet" href="sidepanel_new.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Modern Header -->
+    <header class="header">
+      <div class="header-content">
+        <div class="logo">
+          <div class="logo-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+              <rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="2"/>
+              <path d="M8 7h8M8 12h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <span class="logo-text">Resume Pro</span>
+        </div>
+        <div id="userMenu" class="user-menu hidden">
+          <div class="user-avatar">
+            <span id="userInitial">U</span>
+          </div>
+          <button id="menuBtn" class="menu-btn" aria-label="User menu" aria-expanded="false">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="1" fill="currentColor"/>
+              <circle cx="12" cy="6" r="1" fill="currentColor"/>
+              <circle cx="12" cy="18" r="1" fill="currentColor"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Auth View -->
+    <div id="authView" class="view">
+      <div class="auth-container">
+        <div class="auth-card">
+          <h1>Get started</h1>
+          <p class="subtitle">Create tailored resumes in seconds</p>
+          
+          <form id="authForm" class="auth-form">
+            <div class="input-group">
+              <input type="email" id="email" placeholder=" " required aria-label="Email address">
+              <label for="email">Email address</label>
+            </div>
+            
+            <div class="input-group">
+              <input type="password" id="password" placeholder=" " required aria-label="Password">
+              <label for="password">Password</label>
+            </div>
+            
+            <button type="submit" class="btn-primary">
+              <span>Continue</span>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                <path d="M5 12h14m-7-7l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+          </form>
+          
+          <div class="divider">
+            <span>or</span>
+          </div>
+          
+          <button id="magicLinkBtn" class="btn-secondary">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <path d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            <span>Create new account</span>
+          </button>
+          
+          <p class="terms">By continuing, you agree to our Terms of Service</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main App View -->
+    <div id="mainView" class="view hidden">
+      <!-- Tab Navigation -->
+      <nav class="tab-nav" role="tablist" aria-label="Main navigation">
+        <button class="tab-btn active" data-tab="generate" role="tab" aria-selected="true" aria-controls="generateTab" id="generate-tab" tabindex="0">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span>Generate</span>
+        </button>
+        <button class="tab-btn" data-tab="history" role="tab" aria-selected="false" aria-controls="historyTab" id="history-tab" tabindex="-1">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <path d="M12 8v5l4 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M21 12a9 9 0 11-6.219-8.56" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          <span>History</span>
+        </button>
+        <button class="tab-btn" data-tab="profile" role="tab" aria-selected="false" aria-controls="profileTab" id="profile-tab" tabindex="-1">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="8" r="3" stroke="currentColor" stroke-width="2"/>
+            <path d="M20 21a8 8 0 10-16 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          <span>Profile</span>
+        </button>
+        <button class="tab-btn" data-tab="settings" role="tab" aria-selected="false" aria-controls="settingsTab" id="settings-tab" tabindex="-1">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/>
+            <path d="M12 1v6m0 6v6m11-7h-6m-6 0H1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          <span>Settings</span>
+        </button>
+      </nav>
+
+      <!-- Generate Tab -->
+      <div id="generateTab" class="tab-content" role="tabpanel" aria-labelledby="generate-tab">
+        <div class="content-wrapper">
+          <div class="section-header">
+            <h2>Create your resume</h2>
+            <p>Paste a job description to get started</p>
+          </div>
+
+          <div class="input-card">
+            <div class="input-header">
+              <span class="input-label">Job description</span>
+              <button id="useSelectionBtn" class="text-btn">Use selected text</button>
+            </div>
+            <textarea 
+              id="jdInput" 
+              class="modern-textarea" 
+              placeholder="Paste the full job description here..."
+              rows="8"
+              aria-label="Job description"
+            ></textarea>
+            <div class="input-footer">
+              <span class="char-count"><span id="charCount">0</span> characters</span>
+            </div>
+          </div>
+
+          <div class="template-section">
+            <span class="section-label">Template style</span>
+            <div class="template-grid">
+              <label class="template-card">
+                <input type="radio" name="template" value="modern" checked>
+                <div class="template-preview">
+                  <div class="template-icon">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none">
+                      <rect x="4" y="4" width="16" height="16" rx="2" stroke="currentColor" stroke-width="1.5"/>
+                      <path d="M8 9h8M8 12h5M8 15h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    </svg>
+                  </div>
+                  <span>Modern</span>
+                </div>
+              </label>
+              <label class="template-card">
+                <input type="radio" name="template" value="classic">
+                <div class="template-preview">
+                  <div class="template-icon">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none">
+                      <rect x="4" y="4" width="16" height="16" rx="1" stroke="currentColor" stroke-width="1.5"/>
+                      <path d="M8 9h8M8 12h8M8 15h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    </svg>
+                  </div>
+                  <span>Classic</span>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <button id="analyzeBtn" class="btn-primary large">
+            <span>Analyze & Generate</span>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <path d="M5 12h14m-7-7l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Results Section -->
+        <div id="resultsSection" class="results-section hidden">
+          <div class="content-wrapper">
+            <div class="score-card">
+              <div class="score-header">
+                <span class="score-label">ATS Match Score</span>
+                <div class="score-badge">
+                  <span id="atsScore" class="score-value">0</span>
+                  <span class="score-percent">%</span>
+                </div>
+              </div>
+              <div class="score-bar">
+                <div id="scoreProgress" class="score-fill"></div>
+              </div>
+              <p class="score-message" id="scoreMessage">Analyzing your compatibility...</p>
+            </div>
+
+            <div class="insights-grid">
+              <div class="insight-card">
+                <div class="insight-icon green">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                    <path d="M9 11l3 3L22 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </div>
+                <div class="insight-content">
+                  <span class="insight-label">Matched Skills</span>
+                  <span class="insight-value" id="matchedSkills">0</span>
+                </div>
+              </div>
+
+              <div class="insight-card">
+                <div class="insight-icon yellow">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                    <path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </div>
+                <div class="insight-content">
+                  <span class="insight-label">Keywords Found</span>
+                  <span class="insight-value" id="keywordsFound">0</span>
+                </div>
+              </div>
+
+              <div class="insight-card">
+                <div class="insight-icon blue">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                    <path d="M13 10V3L4 14h7v7l9-11h-7z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </div>
+                <div class="insight-content">
+                  <span class="insight-label">Optimizations</span>
+                  <span class="insight-value" id="optimizations">0</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="preview-section">
+              <div class="preview-header">
+                <h3>Proposed Changes</h3>
+                <button class="text-btn" id="toggleAllBtn">Accept all</button>
+              </div>
+
+              <div id="changesContainer" class="changes-container">
+                <!-- Dynamic content will be inserted here -->
+              </div>
+            </div>
+
+            <div class="action-bar">
+              <button id="regenerateBtn" class="btn-secondary">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                  <path d="M1 4v6h6M23 20v-6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <span>Regenerate</span>
+              </button>
+              <button id="downloadBtn" class="btn-primary">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <span>Download PDF</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- History Tab -->
+      <div id="historyTab" class="tab-content hidden" role="tabpanel" aria-labelledby="history-tab">
+        <div class="content-wrapper">
+          <div class="section-header">
+            <h2>Resume History</h2>
+            <p>Your generated resumes and activity</p>
+          </div>
+
+          <!-- Stats Cards -->
+          <div class="stats-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:24px;">
+            <div class="stat-card" style="background:var(--white);border:1px solid var(--gray-200);border-radius:var(--radius-lg);padding:16px;">
+              <div style="color:var(--gray-600);font-size:var(--font-size-sm);margin-bottom:4px;">Total Generated</div>
+              <div id="totalCount" style="font-size:24px;font-weight:700;color:var(--gray-900);">0</div>
+            </div>
+            <div class="stat-card" style="background:var(--white);border:1px solid var(--gray-200);border-radius:var(--radius-lg);padding:16px;">
+              <div style="color:var(--gray-600);font-size:var(--font-size-sm);margin-bottom:4px;">This Month</div>
+              <div id="monthlyCount" style="font-size:24px;font-weight:700;color:var(--gray-900);">0</div>
+            </div>
+          </div>
+
+          <!-- Filter Tabs -->
+          <div class="filter-tabs" style="display:flex;gap:8px;margin-bottom:20px;">
+            <button class="filter-btn active" data-filter="all" style="padding:8px 16px;background:var(--black);color:var(--white);border:none;border-radius:20px;font-size:var(--font-size-sm);font-weight:500;cursor:pointer;">All</button>
+            <button class="filter-btn" data-filter="completed" style="padding:8px 16px;background:var(--gray-100);color:var(--gray-700);border:none;border-radius:20px;font-size:var(--font-size-sm);font-weight:500;cursor:pointer;">Completed</button>
+            <button class="filter-btn" data-filter="failed" style="padding:8px 16px;background:var(--gray-100);color:var(--gray-700);border:none;border-radius:20px;font-size:var(--font-size-sm);font-weight:500;cursor:pointer;">Failed</button>
+          </div>
+
+          <!-- History List -->
+          <div id="historyList" class="history-list" style="display:grid;gap:12px;">
+            <!-- Dynamic content will be inserted here -->
+            <div class="empty-state" style="text-align:center;padding:40px 20px;color:var(--gray-500);">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" style="margin-bottom:16px;opacity:0.5;">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14,2 14,8 20,8"/>
+                <line x1="16" y1="13" x2="8" y2="13"/>
+                <line x1="16" y1="17" x2="8" y2="17"/>
+                <line x1="10" y1="9" x2="8" y2="9"/>
+              </svg>
+              <h3 style="font-size:var(--font-size-lg);font-weight:600;margin-bottom:8px;color:var(--gray-700);">No resumes yet</h3>
+              <p style="margin-bottom:20px;">Generate your first resume to see it here</p>
+              <button id="createFirstResumeBtn" class="btn-primary small">Create Resume</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Profile Tab -->
+      <div id="profileTab" class="tab-content hidden" role="tabpanel" aria-labelledby="profile-tab">
+        <div class="content-wrapper">
+          <div class="section-header">
+            <h2>Your Profile</h2>
+            <p>Keep your information up to date</p>
+          </div>
+
+          <form id="profileForm" class="modern-form">
+            <!-- Basic Information -->
+            <div class="form-section">
+              <div class="section-header">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                  <circle cx="12" cy="7" r="4"/>
+                </svg>
+                <h3>Basic Information</h3>
+              </div>
+              <div class="form-grid">
+                <div class="input-group">
+                  <input type="text" id="name" placeholder=" " required>
+                  <label for="name">Full name</label>
+                </div>
+                <div class="input-group">
+                  <input type="email" id="profileEmail" placeholder=" " required>
+                  <label for="profileEmail">Email address</label>
+                </div>
+                <div class="input-group">
+                  <input type="tel" id="phone" placeholder=" ">
+                  <label for="phone">Phone number</label>
+                </div>
+                <div class="input-group">
+                  <input type="text" id="location" placeholder=" ">
+                  <label for="location">Location (City, State)</label>
+                </div>
+              </div>
+              <div class="form-grid">
+                <div class="input-group">
+                  <input type="url" id="linkedinUrl" placeholder=" ">
+                  <label for="linkedinUrl">LinkedIn URL</label>
+                </div>
+                <div class="input-group">
+                  <input type="url" id="portfolioUrl" placeholder=" ">
+                  <label for="portfolioUrl">Portfolio/Website URL</label>
+                </div>
+              </div>
+            </div>
+
+            <!-- Professional Summary -->
+            <div class="form-section">
+              <div class="section-header">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4c0-1.1.9-2 2-2h8a2 2 0 0 1 2 2v5z"/>
+                </svg>
+                <h3>Professional Summary</h3>
+              </div>
+              <div class="input-group">
+                <textarea id="summary" placeholder=" " rows="4"></textarea>
+                <label for="summary">Brief professional summary (optional - AI will enhance)</label>
+              </div>
+            </div>
+
+            <!-- Skills -->
+            <div class="form-section">
+              <div class="section-header">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 20h9"/>
+                  <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+                </svg>
+                <h3>Skills</h3>
+              </div>
+              <div class="skills-input">
+                <input type="text" id="skillInput" placeholder="Add a skill (e.g., JavaScript, Project Management)">
+                <button type="button" id="addSkillBtn" class="btn-add">Add</button>
+              </div>
+              <div id="skillsList" class="skills-list"></div>
+            </div>
+
+            <!-- Experience -->
+            <div class="form-section">
+              <div class="section-header">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                  <line x1="8" y1="21" x2="16" y2="21"/>
+                  <line x1="12" y1="17" x2="12" y2="21"/>
+                </svg>
+                <h3>Work Experience</h3>
+              </div>
+              <div id="experienceContainer"></div>
+              <button type="button" id="addExperienceBtn" class="btn-add-section">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="12" y1="5" x2="12" y2="19"/>
+                  <line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+                Add Experience
+              </button>
+            </div>
+
+            <!-- Projects -->
+            <div class="form-section">
+              <div class="section-header">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2v11z"/>
+                </svg>
+                <h3>Projects</h3>
+              </div>
+              <div id="projectsContainer"></div>
+              <button type="button" id="addProjectBtn" class="btn-add-section">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="12" y1="5" x2="12" y2="19"/>
+                  <line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+                Add Project
+              </button>
+            </div>
+
+            <!-- Education -->
+            <div class="form-section">
+              <div class="section-header">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M22 10v6M2 10l10-5 10 5-10 5z"/>
+                  <path d="M6 12v5c3 3 9 3 12 0v-5"/>
+                </svg>
+                <h3>Education</h3>
+              </div>
+              <div id="educationContainer"></div>
+              <button type="button" id="addEducationBtn" class="btn-add-section">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="12" y1="5" x2="12" y2="19"/>
+                  <line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+                Add Education
+              </button>
+            </div>
+
+            <!-- Certifications -->
+            <div class="form-section">
+              <div class="section-header">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                </svg>
+                <h3>Certifications</h3>
+              </div>
+              <div id="certificationsContainer"></div>
+              <button type="button" id="addCertificationBtn" class="btn-add-section">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="12" y1="5" x2="12" y2="19"/>
+                  <line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+                Add Certification
+              </button>
+            </div>
+
+            <div class="form-actions">
+              <button type="submit" class="btn-primary">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+                </svg>
+                Save Profile
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Settings Tab -->
+      <div id="settingsTab" class="tab-content hidden" role="tabpanel" aria-labelledby="settings-tab">
+        <div class="content-wrapper">
+          <div class="section-header">
+            <h2>Settings</h2>
+            <p>Manage your preferences</p>
+          </div>
+
+          <div class="settings-grid">
+            <!-- Preferences Section -->
+            <div class="setting-card">
+              <div class="setting-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>
+                </svg>
+              </div>
+              <div class="setting-content">
+                <h3>Preferences</h3>
+                <p>Customize your experience</p>
+                <div class="setting-controls">
+                  <label class="toggle-setting">
+                    <span>Auto-save work</span>
+                    <label class="toggle">
+                      <input type="checkbox" id="autoSave" checked>
+                      <span class="toggle-slider"></span>
+                    </label>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <!-- Export Data Section -->
+            <div class="setting-card">
+              <div class="setting-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/>
+                  <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+              </div>
+              <div class="setting-content">
+                <h3>Export Data</h3>
+                <p>Download all your information</p>
+              </div>
+              <button id="exportBtn" class="btn-secondary">
+                <span>Export</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="m9 18 6-6-6-6"/>
+                </svg>
+              </button>
+            </div>
+
+            <!-- Upgrade Plan Section -->
+            <div class="setting-card upgrade">
+              <div class="setting-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                </svg>
+              </div>
+              <div class="setting-content">
+                <h3>Upgrade Plan</h3>
+                <p>Get unlimited resumes and premium features</p>
+              </div>
+              <button id="upgradePlanBtn" class="btn-upgrade">
+                <span>Upgrade</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="m9 18 6-6-6-6"/>
+                </svg>
+              </button>
+            </div>
+
+            <!-- Delete Account Section -->
+            <div class="setting-card danger">
+              <div class="setting-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M3 6h18"/>
+                  <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
+                  <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+                  <line x1="10" y1="11" x2="10" y2="17"/>
+                  <line x1="14" y1="11" x2="14" y2="17"/>
+                </svg>
+              </div>
+              <div class="setting-content">
+                <h3>Delete Account</h3>
+                <p>Permanently remove your account and all data</p>
+              </div>
+              <button id="deleteBtn" class="btn-danger">
+                <span>Delete</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="m9 18 6-6-6-6"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay hidden" role="status" aria-live="polite" aria-busy="true">
+      <div class="loading-content">
+        <div class="spinner-modern">
+          <div class="spinner-ring"></div>
+        </div>
+        <p class="loading-text">Optimizing your resume...</p>
+      </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toastContainer" class="toast-container" role="alert" aria-live="assertive" aria-atomic="true"></div>
+  </div>
+
+  <!-- Load modules in correct order -->
+  <script src="lib/data-loader.js"></script>
+  <script src="lib/extract.js"></script>
+  <script src="lib/ai-analyzer.js"></script>
+  <script src="lib/latex.js"></script>
+  <script src="sidepanel_new.js"></script>
+</body>
+</html>
