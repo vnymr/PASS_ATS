@@ -24,7 +24,7 @@ COPY server/prisma ./server/prisma/
 
 # Install dependencies and generate Prisma client
 WORKDIR /app/server
-RUN npm ci --only=production && \
+RUN npm install --production && \
     npx prisma generate && \
     npm cache clean --force
 
