@@ -1,19 +1,56 @@
-node_modules
-npm-debug.log
+# Version control
 .git
 .gitignore
-README.md
+
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Environment files
 .env
-.nyc_output
-coverage
-.nyc_output
-.coverage
-.vscode
-.idea
-*.log
+.env.*
+*.env
+server/.env.local
+
+# Test files
 test/
 tests/
+server/tests/
 *.test.js
 *.spec.js
+jest.config.js
+coverage/
+.nyc_output/
+
+# Documentation
+*.md
+README.md
+DEPLOYMENT_STATUS.md
+
+# Development files
+.vscode/
+.idea/
+*.log
+npm-debug.log*
 .DS_Store
 Thumbs.db
+
+# Extension source (we only need the built version)
+extension/
+build-extension.sh
+
+# Test data
+test_*.json
+test_*.txt
+test_*.md
+
+# Local scripts
+start-local.sh
+
+# Claude AI configs
+.claude/
+
+# Temporary files
+*.tmp
+temp/
+tmp/
