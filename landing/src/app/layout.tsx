@@ -27,8 +27,17 @@ const instrumentSerif = Instrument_Serif({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://getresume.us'),
   title: "Resume - AI-Powered Resume Generator | GetResume.us",
   description: "Turn your profile + any job post into a one-page, ATS-ready resume. Every time in under 20 seconds. Chrome extension for LinkedIn, Indeed, and other job sites.",
+  icons: {
+    icon: [
+      { url: '/logo.png', sizes: '32x32', type: 'image/png' },
+      { url: '/logo.png', sizes: '16x16', type: 'image/png' },
+    ],
+    apple: '/apple-touch-icon.png',
+    shortcut: '/logo.png',
+  },
   keywords: [
     "resume generator",
     "AI resume",
@@ -102,8 +111,6 @@ export default function RootLayout({
     <html lang="en">
       <head>
         <StructuredData />
-        <link rel="icon" href="/favicon.ico" sizes="any" />
-        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
         <meta name="theme-color" content="#000000" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </head>
