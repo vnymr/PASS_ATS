@@ -137,13 +137,13 @@ async function callAIModel(systemPrompt, userPrompt) {
       'Authorization': `Bearer ${await getAPIKey()}`
     },
     body: JSON.stringify({
-      model: 'gpt-4',
+      model: 'gpt-5-mini',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
       ],
-      temperature: 0.3,
-      max_tokens: 4000
+      // gpt-5-mini doesn't support temperature
+      max_completion_tokens: 4000
     })
   });
 

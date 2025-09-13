@@ -18,7 +18,7 @@ async function init() {
     `;
     
     document.getElementById('signInBtn').addEventListener('click', () => {
-      chrome.tabs.create({ url: chrome.runtime.getURL('auth.html') });
+      chrome.tabs.create({ url: chrome.runtime.getURL('onboarding.html') });
       window.close();
     });
     return;
@@ -34,7 +34,7 @@ async function init() {
     `;
     
     document.getElementById('setupBtn').addEventListener('click', () => {
-      chrome.tabs.create({ url: chrome.runtime.getURL('onboarding_new.html') });
+      chrome.tabs.create({ url: chrome.runtime.getURL('onboarding.html') });
       window.close();
     });
     return;
@@ -65,7 +65,7 @@ async function init() {
         await chrome.sidePanel.open({ windowId: (await chrome.windows.getCurrent()).id });
       } catch (e) {
         // Open in new tab as fallback
-        chrome.tabs.create({ url: chrome.runtime.getURL('sidepanel_new.html') });
+        chrome.tabs.create({ url: chrome.runtime.getURL('sidepanel.html') });
       }
       window.close();
     });

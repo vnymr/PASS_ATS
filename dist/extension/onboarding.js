@@ -78,7 +78,7 @@ async function handleFile(file) {
       fd.append('resume', file);
       let resp = null;
       const { serverUrl } = await chrome.storage.local.get('serverUrl');
-      const API_BASE = (serverUrl || 'https://passats-production.up.railway.app').replace(/\/$/, '');
+      const API_BASE = (serverUrl || 'http://localhost:3001').replace(/\/$/, '');
       resp = await fetch(`${API_BASE}/onboarding/parse`, { method: 'POST', body: fd });
       if (resp.ok) {
         const data = await resp.json();
@@ -125,7 +125,7 @@ function tryPrefillFromText(text) {
   } catch {}
 }
 
-async function analyzeAndPreview() {
+async function analyzeAndPreview(retryCount = 0) {
   // Call AI analyzer to structure and preview
   if (!profileData.resumeText || profileData.resumeText.length < 80) {
     // Show placeholder message if no resume text
@@ -141,19 +141,26 @@ async function analyzeAndPreview() {
   try { 
     if (loading) loading.style.display = 'block'; 
     if (nextBtn) nextBtn.disabled = true;
-    summaryDiv.textContent = 'AI is analyzing your resume...';
+    summaryDiv.innerHTML = '🔄 AI is analyzing your resume...<br><small style="color:#999;">This may take a few seconds</small>';
   } catch {}
   
   try {
     const { serverUrl: serverUrl2 } = await chrome.storage.local.get('serverUrl');
-    const API_BASE2 = (serverUrl2 || 'https://passats-production.up.railway.app').replace(/\/$/, '');
+    const API_BASE2 = (serverUrl2 || 'http://localhost:3001').replace(/\/$/, '');
     
-    console.log('Sending resume for analysis...');
-    const resp = await fetch(`${API_BASE2}/onboarding/analyze`, {
+    console.log('Sending resume for analysis to:', API_BASE2);
+    
+    // Add timeout for fetch
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+    
+    const resp = await fetch(`${API_BASE2}/onboarding/analyze-public`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: profileData.resumeText })
+      body: JSON.stringify({ resumeText: profileData.resumeText }),
+      signal: controller.signal
     });
+    clearTimeout(timeoutId);
     
     if (resp.ok) {
       const { structured } = await resp.json();
@@ -161,7 +168,9 @@ async function analyzeAndPreview() {
       
       // Display summary
       if (structured?.summary) {
-        summaryDiv.innerHTML = `<strong style="color: #fff;">📝 AI Summary:</strong><br>${structured.summary}`;
+        const isDemoMode = resp.headers.get('X-Demo-Mode') === 'true' || structured.demo;
+        const prefix = isDemoMode ? '📝 Summary (Demo Mode):' : '📝 AI Summary:';
+        summaryDiv.innerHTML = `<strong style="color: #fff;">${prefix}</strong><br>${structured.summary}`;
       } else {
         // No AI summary available - wait for server
         summaryDiv.innerHTML = `<strong style="color: #ffa500;">⚠️ AI Analysis Pending:</strong><br>Summary will be generated when you proceed. Server may be starting up.`;
@@ -201,19 +210,42 @@ async function analyzeAndPreview() {
       if (Array.isArray(structured?.projects)) profileData.projects = structured.projects;
       if (Array.isArray(structured?.education)) profileData.education = structured.education;
     } else {
-      // Server error - NO hardcoded fallback, wait for AI
-      console.warn('Server AI analysis not available yet');
-      summaryDiv.innerHTML = `<strong style="color: #ffa500;">⚠️ Waiting for AI:</strong><br>The AI server is starting up. Your resume will be analyzed when you click Next.`;
+      // Server might be starting up - try again
+      if (retryCount < 3) {
+        console.log(`AI server not ready, retrying... (${retryCount + 1}/3)`);
+        summaryDiv.innerHTML = `<strong style="color: #4285f4;">🔄 Connecting to AI server...</strong><br>Attempt ${retryCount + 1} of 3`;
+        
+        // Retry after delay
+        setTimeout(() => {
+          analyzeAndPreview(retryCount + 1);
+        }, 2000);
+        return;
+      }
+      
+      // After retries, show manual fallback
+      console.warn('Server AI analysis not available after retries');
+      summaryDiv.innerHTML = `<strong style="color: #ffa500;">⚠️ AI Server Offline:</strong><br>The AI analysis is temporarily unavailable. You can continue and add details manually.`;
       
       // Show placeholders
-      document.getElementById('previewSkills').innerHTML = '<span style="color:#999;font-size:12px;">AI analysis required...</span>';
-      document.getElementById('previewExpCount').textContent = 'Pending AI analysis...';
+      document.getElementById('previewSkills').innerHTML = '<span style="color:#999;font-size:12px;">Please add skills manually below</span>';
+      document.getElementById('previewExpCount').textContent = 'Add experience below';
     }
   } catch (e) {
     console.warn('Analyze preview failed:', e.message);
-    // Show error but still let user continue
+    
+    // Retry on network errors
+    if (retryCount < 3 && (e.name === 'AbortError' || e.message.includes('Failed to fetch'))) {
+      console.log(`Network error, retrying... (${retryCount + 1}/3)`);
+      summaryDiv.innerHTML = `<strong style="color: #4285f4;">🔄 Network issue, retrying...</strong><br>Attempt ${retryCount + 1} of 3`;
+      setTimeout(() => {
+        analyzeAndPreview(retryCount + 1);
+      }, 2000);
+      return;
+    }
+    
+    // Final error
     const summaryDiv = document.getElementById('previewSummary');
-    summaryDiv.innerHTML = `<strong style="color: #ffa500;">⚠️ Analysis Error:</strong><br>Could not analyze resume automatically. You can still continue and add details manually.`;
+    summaryDiv.innerHTML = `<strong style="color: #ffa500;">⚠️ Connection Error:</strong><br>Please check your connection. You can continue and add details manually.`;
   } finally {
     try { if (loading) loading.style.display = 'none'; if (nextBtn) nextBtn.disabled = false; } catch {}
   }
@@ -296,11 +328,11 @@ document.getElementById('nextStep2').addEventListener('click', async () => {
     if ((profileData.resumeText || '').length > 80) {
       try {
         const { serverUrl: serverUrl4 } = await chrome.storage.local.get('serverUrl');
-        const API_BASE4 = (serverUrl4 || 'https://passats-production.up.railway.app').replace(/\/$/, '');
-        const resp = await fetch(`${API_BASE4}/onboarding/analyze`, {
+        const API_BASE4 = (serverUrl4 || 'http://localhost:3001').replace(/\/$/, '');
+        const resp = await fetch(`${API_BASE4}/onboarding/analyze-public`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: profileData.resumeText })
+          body: JSON.stringify({ resumeText: profileData.resumeText })
         });
         if (resp.ok) {
           const { structured } = await resp.json();
@@ -345,38 +377,158 @@ document.getElementById('nextStep2').addEventListener('click', async () => {
   })();
 });
 
+// Global login button handler
+document.getElementById('globalLoginBtn').addEventListener('click', () => {
+  // Hide current step
+  document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+  // Show step 3 with login section
+  document.getElementById('step3').classList.add('active');
+  document.getElementById('createAccountSection').style.display = 'none';
+  document.getElementById('loginSection').style.display = 'block';
+  // Hide the login header when on login page
+  document.getElementById('loginHeader').style.display = 'none';
+});
+
+// Toggle between login and create account (kept for compatibility)
+const loginInsteadBtn = document.getElementById('loginInstead');
+if (loginInsteadBtn) {
+  loginInsteadBtn.addEventListener('click', () => {
+    document.getElementById('createAccountSection').style.display = 'none';
+    document.getElementById('loginSection').style.display = 'block';
+  });
+}
+
+document.getElementById('backToCreate').addEventListener('click', () => {
+  document.getElementById('loginSection').style.display = 'none';
+  document.getElementById('createAccountSection').style.display = 'block';
+  document.getElementById('loginError').style.display = 'none';
+  // Show login header again
+  document.getElementById('loginHeader').style.display = 'block';
+});
+
+// Login functionality
+document.getElementById('loginButton').addEventListener('click', async () => {
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value.trim();
+  const errorDiv = document.getElementById('loginError');
+  
+  if (!email || !password) {
+    errorDiv.textContent = 'Please enter email and password';
+    errorDiv.style.display = 'block';
+    return;
+  }
+  
+  const btn = document.getElementById('loginButton');
+  const originalText = btn.textContent;
+  btn.textContent = 'Logging in...';
+  btn.disabled = true;
+  errorDiv.style.display = 'none';
+  
+  try {
+    const auth = await chrome.runtime.sendMessage({ action: 'authenticate', credentials: { email, password } });
+    if (auth?.token) {
+      // Mark as authenticated
+      await chrome.storage.local.set({ 
+        isAuthenticated: true,
+        hasCompletedOnboarding: true,
+        authToken: auth.token
+      });
+      
+      // Save current profile to server
+      const result = await chrome.runtime.sendMessage({ action: 'saveProfile', profile: { ...profileData, email } });
+      
+      // Show success
+      document.getElementById('loginSection').style.display = 'none';
+      document.getElementById('accountSuccess').style.display = 'block';
+      document.querySelector('#accountSuccess p').textContent = '✓ Logged in successfully!';
+      
+      // Open sidepanel and close onboarding
+      setTimeout(async () => {
+        // Open the sidepanel
+        await chrome.runtime.sendMessage({ action: 'openSidepanel' });
+        // Close this tab
+        window.close();
+      }, 1000);
+    } else {
+      errorDiv.textContent = auth?.error || 'Login failed. Please check your credentials.';
+      errorDiv.style.display = 'block';
+    }
+  } catch (e) {
+    errorDiv.textContent = 'Error: ' + e.message;
+    errorDiv.style.display = 'block';
+  } finally {
+    btn.textContent = originalText;
+    btn.disabled = false;
+  }
+});
+
 // Create account
 document.getElementById('createAccount').addEventListener('click', async () => {
   const email = document.getElementById('acctEmail').value.trim() || profileData.email;
   const password = document.getElementById('acctPassword').value.trim();
+  
   if (!email || !password) {
     alert('Please enter email and password');
     return;
   }
+  
+  if (password.length < 6) {
+    alert('Password must be at least 6 characters');
+    return;
+  }
+  
+  const btn = document.getElementById('createAccount');
+  const originalText = btn.textContent;
+  btn.textContent = 'Creating account...';
+  btn.disabled = true;
+  
   try {
     const auth = await chrome.runtime.sendMessage({ action: 'authenticate', credentials: { email, password } });
     if (auth?.token) {
+      // Mark as authenticated
+      await chrome.storage.local.set({ 
+        isAuthenticated: true,
+        hasCompletedOnboarding: true,
+        authToken: auth.token
+      });
+      
       // Save profile to server
       const result = await chrome.runtime.sendMessage({ action: 'saveProfile', profile: { ...profileData, email } });
-      if (!result?.success) {
-        alert('Account created, but profile sync failed. You can try saving again from the side panel.');
-      } else {
-        // Open sidepanel dashboard
-        try {
-          await chrome.sidePanel.open({ windowId: (await chrome.windows.getCurrent()).id });
-        } catch {}
-        // Fallback: open sidepanel_new.html in a new tab if sidePanel API not available
-        try { chrome.tabs.create({ url: chrome.runtime.getURL('sidepanel_new.html') }); } catch {}
-      }
+      
+      // Show success
+      document.getElementById('createAccountSection').style.display = 'none';
+      document.getElementById('accountSuccess').style.display = 'block';
+      
+      // Open sidepanel and close onboarding
+      setTimeout(async () => {
+        // Open the sidepanel
+        await chrome.runtime.sendMessage({ action: 'openSidepanel' });
+        // Close this tab
+        window.close();
+      }, 1000);
     } else {
-      alert('Account creation failed. Please try again.');
+      alert(auth?.error || 'Account creation failed. Please try again.');
     }
   } catch (e) {
     alert('Error creating account: ' + e.message);
+  } finally {
+    btn.textContent = originalText;
+    btn.disabled = false;
   }
 });
 
-// Start generating
-document.getElementById('startGenerating').addEventListener('click', () => {
+// Continue to app button
+document.getElementById('continueToApp').addEventListener('click', async () => {
+  // Close this tab and user can start using the extension
+  window.close();
+});
+
+// Start generating (skip account creation)
+document.getElementById('startGenerating').addEventListener('click', async () => {
+  // Mark onboarding as complete but not authenticated
+  await chrome.storage.local.set({ 
+    hasCompletedOnboarding: true,
+    isAuthenticated: false
+  });
   window.close();
 });

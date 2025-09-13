@@ -38,18 +38,16 @@
     "default_popup": "popup.html"
   },
   "side_panel": {
-    "default_path": "sidepanel_new.html"
+    "default_path": "sidepanel.html"
   },
   "web_accessible_resources": [
     {
       "resources": [
-        "auth.html",
-        "auth.css",
-        "auth.js",
-        "onboarding_new.html",
-        "onboarding_new.css",
-        "onboarding_new.js",
-        "sidepanel_new.html",
+        "onboarding.html",
+        "onboarding.js",
+        "sidepanel.html",
+        "sidepanel.css",
+        "sidepanel.js",
         "lib/*.js"
       ],
       "matches": ["<all_urls>"]

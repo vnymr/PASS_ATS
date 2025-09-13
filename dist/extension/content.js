@@ -18,8 +18,79 @@ if (!window.__quick_resume_injected) {
 async function injectGenerateButton() {
   if (buttonInjected) return;
   
-  // Check authentication status
-  const storage = await chrome.storage.local.get(['isAuthenticated', 'hasCompletedOnboarding']);
+  // Inject CSS styles
+  if (!document.getElementById('qr-styles')) {
+    const style = document.createElement('style');
+    style.id = 'qr-styles';
+    style.textContent = `
+      @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+      
+      #quick-resume-btn {
+        position: fixed;
+        bottom: 30px;
+        right: 30px;
+        z-index: 99998;
+        background: black;
+        color: white;
+        border-radius: 12px;
+        padding: 12px 20px;
+        cursor: pointer;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        transition: all 0.3s ease;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      }
+      
+      #quick-resume-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 25px rgba(0,0,0,0.4);
+      }
+      
+      #quick-resume-btn.qr-loading {
+        pointer-events: none;
+        opacity: 0.8;
+      }
+      
+      #quick-resume-btn.qr-success {
+        background: #4CAF50;
+      }
+      
+      #quick-resume-btn.qr-error {
+        background: #f44336;
+      }
+      
+      .qr-button {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      
+      .qr-icon {
+        width: 24px;
+        height: 24px;
+      }
+      
+      .qr-icon svg {
+        width: 100%;
+        height: 100%;
+      }
+      
+      .qr-text {
+        font-size: 14px;
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      
+      .qr-spinner {
+        animation: spin 1s linear infinite;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+  
+  // Check authentication status later in the click handler
   
   const button = document.createElement('div');
   button.id = 'quick-resume-btn';
@@ -39,17 +110,11 @@ async function injectGenerateButton() {
   
   // Click handler with detailed progress
   button.addEventListener('click', async () => {
-    // Check authentication
-    const { isAuthenticated, hasCompletedOnboarding } = await chrome.storage.local.get(['isAuthenticated', 'hasCompletedOnboarding']);
-    
-    if (!isAuthenticated) {
-      // Open authentication page
-      chrome.runtime.sendMessage({ action: 'openAuthPage' });
-      return;
-    }
+    // Check if onboarding completed
+    const { hasCompletedOnboarding } = await chrome.storage.local.get(['hasCompletedOnboarding']);
     
     if (!hasCompletedOnboarding) {
-      // Open onboarding page
+      // Open onboarding page (handles both signup and login)
       chrome.runtime.sendMessage({ action: 'openOnboardingPage' });
       return;
     }
@@ -144,9 +209,8 @@ async function injectGenerateButton() {
     await new Promise(resolve => setTimeout(resolve, 800));
     
     const jobData = extractJobData();
-    if (!jobData.jdText) {
-      jobData.jdText = jobData.text || '';
-    }
+    // Ensure jdText is set for backend compatibility
+    jobData.jdText = jobData.text || '';
     
     completeStep(step1);
     updateProgress(15, 'Job details extracted');
@@ -169,16 +233,35 @@ async function injectGenerateButton() {
     completeStep(step4);
     updateProgress(45, 'Skills matched');
     
-    // Step 5: AI optimization
+    // Step 5: AI optimization - THIS IS THE REAL AI CALL
     const step5 = addStep('🤖', 'AI optimizing content for ATS');
+    updateProgress(50, 'Calling AI...');
     
-    // Send to background with error handling
+    // Send to background for REAL AI processing
     let response;
     try {
+      // This triggers the actual AI generation in background.js
       response = await chrome.runtime.sendMessage({
         action: 'generateResume',
         jobData: jobData
       });
+      
+      // Wait for real response with timeout
+      let waitTime = 0;
+      const maxWait = 30000; // 30 seconds max
+      while (waitTime < maxWait) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        waitTime += 1000;
+        
+        // Update progress based on actual time
+        const progress = Math.min(90, 50 + (waitTime / maxWait * 40));
+        updateProgress(progress, `Processing... ${Math.round(waitTime/1000)}s`);
+        
+        // Check if job completed
+        if (response?.success || response?.correlationId) {
+          break;
+        }
+      }
     } catch (error) {
       console.error('Communication error:', error);
       
@@ -224,25 +307,12 @@ async function injectGenerateButton() {
     
     if (!response?.error) {
       completeStep(step5);
-      updateProgress(60, 'AI optimization complete');
+      updateProgress(95, 'AI processing complete!');
       
-      // Step 6: Generate LaTeX
-      const step6 = addStep('📝', 'Generating professional format');
-      await new Promise(resolve => setTimeout(resolve, 1200));
-      completeStep(step6);
-      updateProgress(75, 'Format generated');
+      // The actual PDF generation and download happens in background.js
+      // via SSE streaming, so we just show success here
       
-      // Step 7: Compile PDF
-      const step7 = addStep('📄', 'Compiling to PDF');
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      completeStep(step7);
-      updateProgress(90, 'PDF ready');
-      
-      // Step 8: Download
-      const step8 = addStep('✅', 'Downloading your resume', true);
-      updateProgress(100, 'Complete! Check downloads');
-      
-      // Success message
+      // Success message after brief delay to let download start
       setTimeout(() => {
         progressDisplay.innerHTML = `
           <div style="text-align: center; padding: 20px;">
@@ -274,14 +344,6 @@ async function injectGenerateButton() {
         }, 5000);
       }, 2000);
       
-      // Open generating page for actual processing with error handling
-      try {
-        await chrome.runtime.sendMessage({ action: 'openGeneratingPage' });
-      } catch (error) {
-        console.log('Could not open generating page:', error);
-        // Continue anyway - the PDF generation might still work
-      }
-      
     } else {
       // Error handling
       progressDisplay.innerHTML = `
@@ -311,6 +373,7 @@ function extractJobData() {
     url: window.location.href,
     title: document.title,
     text: '',
+    jdText: '', // Add jdText property for backend compatibility
     company: '',
     role: ''
   };
@@ -379,11 +442,14 @@ function extractJobData() {
     data.text = document.body.innerText.substring(0, 10000);
   }
   
+  // Ensure jdText matches text for backend
+  data.jdText = data.text;
+  
   return data;
 }
 
 // Listen for status updates from background with error handling
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
   try {
     if (request.action === 'statusUpdate') {
       const button = document.getElementById('quick-resume-btn');
@@ -427,15 +493,41 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 // Check if on job page and inject button
 function checkJobPage() {
-  const isJobPage = 
-    window.location.pathname.includes('/jobs/') ||
-    window.location.pathname.includes('/viewjob') ||
-    window.location.pathname.includes('/job/') ||
-    document.querySelector('.jobs-unified-top-card') || // LinkedIn
-    document.querySelector('[data-testid="job-title"]') || // Indeed
-    document.querySelector('.css-17x2pwl'); // Glassdoor
+  // More strict job page detection
+  const hostname = window.location.hostname;
+  const pathname = window.location.pathname;
+  let isJobPage = false;
+  
+  // LinkedIn job pages
+  if (hostname.includes('linkedin.com')) {
+    // Must be on jobs/view path AND have job content
+    isJobPage = pathname.includes('/jobs/view/') && 
+                (document.querySelector('.jobs-unified-top-card__job-title, h1.t-24, .jobs-description__content') !== null);
+  }
+  // Indeed job pages  
+  else if (hostname.includes('indeed.com')) {
+    // Must be on viewjob path AND have job content
+    isJobPage = pathname.includes('/viewjob') && 
+                (document.querySelector('[data-testid="job-title"], #jobDescriptionText') !== null);
+  }
+  // Glassdoor job pages
+  else if (hostname.includes('glassdoor.com')) {
+    // Must have job identifier in path AND job content
+    isJobPage = (pathname.includes('/job-listing/') || pathname.includes('/Job/')) &&
+                (document.querySelector('.css-17x2pwl, .desc') !== null);
+  }
+  // Other job boards - be very strict
+  else {
+    // Only show if we find strong job page indicators
+    const hasJobTitle = document.querySelector('h1')?.textContent?.toLowerCase().includes('engineer') ||
+                       document.querySelector('h1')?.textContent?.toLowerCase().includes('developer') ||
+                       document.querySelector('h1')?.textContent?.toLowerCase().includes('manager') ||
+                       document.querySelector('h1')?.textContent?.toLowerCase().includes('analyst');
+    const hasJobDescription = document.querySelector('.job-description, .description, [class*="job-desc"], [id*="job-desc"]');
+    isJobPage = hasJobTitle && hasJobDescription;
+  }
     
-  if (isJobPage) {
+  if (isJobPage && !buttonInjected) {
     setTimeout(injectGenerateButton, 1000);
   }
 }

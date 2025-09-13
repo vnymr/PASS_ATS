@@ -1,0 +1,17 @@
+{
+  "name": "resume-generator",
+  "version": "1.0.0",
+  "description": "Resume Generator with Chrome Extension and Backend Server",
+  "scripts": {
+    "start": "cd server && npm start",
+    "start:local": "./start-local.sh",
+    "dev": "cd server && npm run dev",
+    "install:server": "cd server && npm install",
+    "build:extension": "./build-extension.sh",
+    "setup": "npm run install:server"
+  },
+  "keywords": ["resume", "generator", "chrome-extension"],
+  "author": "",
+  "license": "MIT"
+}
+

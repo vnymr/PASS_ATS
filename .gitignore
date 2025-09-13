@@ -31,14 +31,16 @@ Thumbs.db
 server/db.json
 
 # Test files
-test_*
-*test.js
-*.test.js
-*.spec.js
+test_resume.pdf
+cookies.txt
+session.json
 
-# Documentation
-*.md
-!README.md
+# Keep test files in repo
+# *.test.js
+# *.spec.js
+
+# Documentation - keep all markdown files
+# *.md
 
 # Logs
 logs

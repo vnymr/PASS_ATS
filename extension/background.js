@@ -1,8 +1,17 @@
 // Background service worker with error handling
 console.log('Quick Resume: Background service worker started');
 
-let API_BASE = 'https://passats-production.up.railway.app';
-chrome.storage.local.get('serverUrl').then(({ serverUrl }) => { if (serverUrl) API_BASE = serverUrl.replace(/\/$/, ''); });
+// Use local server for development
+let API_BASE = 'http://localhost:3001';
+// Allow override from storage
+chrome.storage.local.get('serverUrl').then(({ serverUrl }) => { 
+  if (serverUrl) {
+    API_BASE = serverUrl.replace(/\/$/, '');
+  } else {
+    // Set default to local for development
+    chrome.storage.local.set({ serverUrl: 'http://localhost:3001' });
+  }
+});
 let authToken = null;
 
 // Background job tracking
@@ -31,15 +40,23 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return false;
   }
   
-  // Handle authentication page opening
+  // Open sidepanel
+  if (request.action === 'openSidepanel') {
+    chrome.sidePanel.open({ windowId: sender.tab?.windowId })
+      .then(() => sendResponse({ success: true }))
+      .catch((error) => sendResponse({ success: false, error: error.message }));
+    return true;
+  }
+  
+  // Auth is now handled in onboarding
   if (request.action === 'openAuthPage') {
-    chrome.tabs.create({ url: chrome.runtime.getURL('auth.html') });
+    chrome.tabs.create({ url: chrome.runtime.getURL('onboarding.html') });
     return false;
   }
   
   // Handle onboarding page opening
   if (request.action === 'openOnboardingPage') {
-    chrome.tabs.create({ url: chrome.runtime.getURL('onboarding_new.html') });
+    chrome.tabs.create({ url: chrome.runtime.getURL('onboarding.html') });
     return false;
   }
   
@@ -58,7 +75,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
   
   if (request.action === 'openGeneratingPage') {
-    chrome.tabs.create({ url: chrome.runtime.getURL('generating.html') });
+    // Skip opening generating page - handle directly
     sendResponse({ success: true });
     return false;
   }
@@ -229,44 +246,111 @@ async function startBackgroundGeneration(jobId, profile, jobData, tempId, tabId)
     job.message = 'Extracting job keywords...';
     broadcastStatus(tabId, job.message, job.progress);
 
-    // Call server generation endpoint
-    const payload = { profile, jobData, tempId };
-    const response = await fetch(`${API_BASE}/generate`, {
+    // Start SSE job for real-time progress
+    const { serverUrl } = await chrome.storage.local.get('serverUrl');
+    const apiBase = (serverUrl || API_BASE).replace(/\/$/, '');
+    
+    // Start the job
+    const startResponse = await fetch(`${apiBase}/generate/job`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify({ profile, jobData, tempId })
     });
 
-    if (!response.ok) {
-      throw new Error(`Server error: ${response.status}`);
+    if (!startResponse.ok) {
+      if (startResponse.status === 429) {
+        throw new Error('AI rate limit reached. Please wait a minute and try again.');
+      }
+      const errorText = await startResponse.text().catch(() => '');
+      throw new Error(`Server error: ${startResponse.status} ${errorText}`);
     }
 
-    const result = await response.json();
+    const { jobId: serverJobId } = await startResponse.json();
+    job.serverJobId = serverJobId;
     
-    if (result.success) {
-      // Job completed successfully
-      job.status = 'completed';
-      job.progress = 100;
-      job.message = 'Resume generated successfully!';
-      job.result = result;
-      job.completedTime = Date.now();
+    // Connect to SSE stream
+    const eventSource = new EventSource(`${apiBase}/generate/stream/${serverJobId}`);
+    
+    eventSource.addEventListener('status', (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.message) {
+          job.message = data.message;
+          broadcastStatus(tabId, data.message, data.progress);
+        }
+        if (typeof data.progress === 'number') {
+          job.progress = data.progress;
+        }
+      } catch (e) {
+        console.error('Error parsing status:', e);
+      }
+    });
+    
+    eventSource.addEventListener('complete', async (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        
+        // Download the PDF directly
+        if (data.pdfUrl) {
+          const filename = data.fileName || `resume_${job.jobData.company}_${Date.now()}.pdf`;
+          
+          // Use Chrome downloads API
+          chrome.downloads.download({
+            url: data.pdfUrl,
+            filename: filename,
+            saveAs: true
+          }, (downloadId) => {
+            if (chrome.runtime.lastError) {
+              console.error('Download error:', chrome.runtime.lastError);
+              job.status = 'failed';
+              job.message = 'Download failed';
+            } else {
+              job.status = 'completed';
+              job.message = 'Resume downloaded successfully!';
+              job.downloadId = downloadId;
+            }
+            
+            job.progress = 100;
+            job.completedTime = Date.now();
+            broadcastStatus(tabId, job.message, job.progress);
+            
+            // Move to recent jobs
+            activeJobs.delete(jobId);
+            recentJobs.unshift(job);
+            if (recentJobs.length > 10) recentJobs.pop();
+          });
+        }
+        
+        eventSource.close();
+      } catch (e) {
+        console.error('Error handling complete:', e);
+        eventSource.close();
+      }
+    });
+    
+    eventSource.addEventListener('error', (event) => {
+      if (event.data) {
+        try {
+          const data = JSON.parse(event.data);
+          throw new Error(data.error || 'Generation failed');
+        } catch (e) {
+          console.error('SSE error:', e);
+        }
+      }
+      eventSource.close();
+    });
+    
+    eventSource.onerror = (error) => {
+      console.error('EventSource error:', error);
+      job.status = 'failed';
+      job.message = 'Connection lost';
+      broadcastStatus(tabId, job.message, 0);
+      eventSource.close();
       
       // Move to recent jobs
       activeJobs.delete(jobId);
       recentJobs.unshift(job);
-      if (recentJobs.length > 10) recentJobs.pop();
-      
-      broadcastStatus(tabId, job.message, job.progress);
-      
-      // Store result for UI access
-      await chrome.storage.local.set({ 
-        [`job_result_${jobId}`]: result,
-        lastGeneratedResume: result
-      });
-      
-    } else {
-      throw new Error(result.error || 'Generation failed');
-    }
+    };
     
   } catch (error) {
     console.error('Background generation error:', error);

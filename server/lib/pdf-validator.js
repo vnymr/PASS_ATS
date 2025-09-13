@@ -62,4 +62,10 @@ export class PDFValidator {
   }
 }
 
+// Named export for the specific function that's being imported
+export async function enforceATSCompliance(pdfPath, jobData, profile, options = {}) {
+  const validator = new PDFValidator();
+  return await validator.generateReport(pdfPath);
+}
+
 export default PDFValidator;

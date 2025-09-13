@@ -166,9 +166,9 @@ Generate a compelling 2-3 line summary.`;
         body: JSON.stringify({
           systemPrompt,
           userPrompt,
-          model: 'gpt-4',
-          temperature: 0.3,
-          max_tokens: 2000
+          model: 'gpt-5-mini',
+          // gpt-5-mini doesn't support temperature
+          max_completion_tokens: 2000
         })
       });
 

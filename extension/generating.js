@@ -11,7 +11,7 @@ const RETRY_DELAY = 2000;
     appendLog('Starting generation job...');
 
     const { serverUrl } = await chrome.storage.local.get('serverUrl');
-    const API_BASE = (serverUrl || 'https://passats-production.up.railway.app').replace(/\/$/, '');
+    const API_BASE = (serverUrl || 'http://localhost:3001').replace(/\/$/, '');
     const resp = await fetch(`${API_BASE}/generate/job`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
