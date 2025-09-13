@@ -129,23 +129,25 @@ const Navbar: React.FC = () => {
 
 export const Component: React.FC = () => {
   return (
-    <section className="relative min-h-screen flex flex-col items-center px-6 sm:px-8 md:px-12 overflow-hidden">
+    <main className="relative min-h-screen flex flex-col items-center px-6 sm:px-8 md:px-12 overflow-hidden" role="main">
       <div className="absolute inset-0 bg-gray-950"></div>
       <GradientBars />
       <Navbar />
       
       <div className="relative z-10 text-center w-full max-w-4xl mx-auto flex flex-col items-center justify-center min-h-screen py-8 sm:py-16">
-        <h1 className="w-full text-white leading-tight tracking-tight mb-6 sm:mb-8 animate-fadeIn px-4">
-          <span className="block font-instrument italic text-[clamp(1.5rem,6vw,3.75rem)] whitespace-nowrap">
-            Make Every Application Count
-          </span>
-        </h1>
+        <header className="w-full text-center mb-6 sm:mb-8 px-4">
+          <h1 className="text-white leading-tight tracking-tight animate-fadeIn">
+            <span className="block font-instrument italic text-[clamp(1.5rem,6vw,3.75rem)] whitespace-nowrap">
+              Make Every Application Count
+            </span>
+          </h1>
+        </header>
         
-        <div className="mb-6 sm:mb-10 px-4">
-          <p className="text-sm sm:text-base text-gray-400 leading-relaxed animate-fadeIn animation-delay-200 font-space max-w-2xl mx-auto">
+        <section className="mb-6 sm:mb-10 px-4" aria-labelledby="description">
+          <p id="description" className="text-sm sm:text-base text-gray-400 leading-relaxed animate-fadeIn animation-delay-200 font-space max-w-2xl mx-auto">
           Turn your profile + any job post into a one-page, ATS-ready resume. Every time in under 20 seconds.
           </p>
-        </div>
+        </section>
         
         <div className="mb-6 sm:mb-8 px-4">
           <GetExtensionButton />
@@ -163,6 +165,6 @@ export const Component: React.FC = () => {
           </a>
         </div>
       </div>
-    </section>
+    </main>
   );
 };
