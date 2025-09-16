@@ -10,6 +10,7 @@ import crypto from 'crypto';
 import dotenv from 'dotenv';
 import { createRequire } from 'module';
 import multer from 'multer';
+import client from 'prom-client';
 // Observability will be added later - keeping it simple for now
 // import observability from './lib/observability.js';
 
@@ -84,6 +85,11 @@ validateEnvironment();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// --- Metrics (Prometheus) ---
+// Create a dedicated registry and collect default metrics
+const metricsRegistry = new client.Registry();
+client.collectDefaultMetrics({ register: metricsRegistry });
 
 // Fallback text extraction functions for when AI is unavailable
 function extractSummary(text) {
@@ -555,9 +561,10 @@ app.post('/auth/signup', async (req, res) => {
     // Generate JWT token
     const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
     
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       token,
+      onboardingCompleted: false,
       user: { id: user.id, email: user.email }
     });
   } catch (error) {
@@ -581,7 +588,7 @@ app.post('/auth/login', async (req, res) => {
     await dbCreateUser(email, hashedPassword);
 
     const token = jwt.sign({ email }, JWT_SECRET, { expiresIn: '7d' });
-    return res.json({ token, isNew: true });
+    return res.json({ token, isNew: true, onboardingCompleted: false });
   }
 
   const validPassword = await bcrypt.compare(password, user.password);
@@ -590,7 +597,12 @@ app.post('/auth/login', async (req, res) => {
   }
 
   const token = jwt.sign({ email }, JWT_SECRET, { expiresIn: '7d' });
-  res.json({ token });
+
+  // Check if user has completed onboarding
+  const profile = await dbGetProfile(email);
+  const onboardingCompleted = !!(profile && profile.onboardingCompleted);
+
+  res.json({ token, onboardingCompleted });
 });
 
 app.get('/me', authenticateToken, async (req, res) => {
@@ -688,9 +700,25 @@ app.post('/profile', authenticateToken, async (req, res) => {
 
 app.put('/profile', authenticateToken, async (req, res) => {
   try {
-    const profileData = req.body;
-    await dbSaveProfile(req.user.email, profileData);
-    res.json({ success: true });
+    const updates = req.body;
+
+    // Get existing profile first
+    const existingProfile = await dbGetProfile(req.user.email) || {};
+
+    // Merge updates with existing profile data
+    const mergedProfile = {
+      ...existingProfile,
+      ...updates,
+      // Preserve certain fields from being overwritten accidentally
+      email: req.user.email,
+      updatedAt: new Date().toISOString()
+    };
+
+    // Save the merged profile
+    await dbSaveProfile(req.user.email, mergedProfile);
+
+    console.log(`[PROFILE-UPDATE] Updated profile for ${req.user.email}`);
+    res.json({ success: true, profile: mergedProfile });
   } catch (error) {
     console.error('Update profile error:', error);
     res.status(500).json({ error: 'Failed to update profile' });
@@ -836,7 +864,15 @@ app.post('/compile', async (req, res) => {
 // Generate endpoint: creates LaTeX (placeholder AI), compiles to PDF, returns URL
 app.post('/generate', async (req, res) => {
   try {
-    let { profile = {}, jobData = {}, tempId = 'TMP' } = req.body || {};
+    let { profile = {}, jobData = {}, jobDetails = {}, tempId = 'TMP' } = req.body || {};
+
+  // Support both jobData and jobDetails formats
+  if (!jobData || Object.keys(jobData).length === 0) {
+    jobData = jobDetails;
+  }
+
+  // Extract company and role if provided
+  const { company = '', role = '', description = '' } = jobData;
     
     // Check if user is authenticated and load their profile
     const authHeader = req.headers['authorization'];
@@ -1024,7 +1060,26 @@ function closeJob(jobId) {
 }
 
 app.post('/generate/job', async (req, res) => {
-  const { profile = {}, jobData = {}, tempId = 'TMP' } = req.body || {};
+  let { profile = {}, jobData = {}, tempId = 'TMP' } = req.body || {};
+
+  // Check if user is authenticated and load their profile
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (token) {
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      const userProfile = await dbGetProfile(decoded.email);
+      if (userProfile) {
+        // Use the authenticated user's profile data
+        profile = userProfile;
+        console.log(`[GENERATE/JOB] Authenticated user: ${decoded.email}`);
+      }
+    } catch (err) {
+      console.log(`[GENERATE/JOB] Invalid token, proceeding as anonymous`);
+    }
+  }
+
   const jobId = crypto.randomBytes(8).toString('hex');
   jobs.set(jobId, { listeners: new Set(), last: null, startedAt: Date.now(), stage: 'queued' });
   console.log(`[JOB] start jobId=${jobId} email=${profile.email || 'anon'} role=${jobData.role || ''} company=${jobData.company || ''}`);
@@ -1360,9 +1415,9 @@ app.post('/onboarding/analyze-public', async (req, res) => {
         const system = 'You extract structured resume data as strict JSON. Create a professional summary if one does not exist. Always return valid JSON only.';
         const user = `Resume text:\n\n${resumeText}\n\nSchema:\n{\n  "summary": string,\n  "skills": string[],\n  "experience": [{ "company": string, "role": string, "location": string, "dates": string, "bullets": string[] }],\n  "projects": [{ "name": string, "summary": string, "bullets": string[] }],\n  "education": [{ "institution": string, "degree": string, "location": string, "dates": string }]\n}`;
         const completion = await openai.chat.completions.create({
-          model: 'gpt-5-mini',
+          model: 'gpt-4-turbo-preview',
           messages: [ { role: 'system', content: system }, { role: 'user', content: user } ],
-          // gpt-5-mini doesn't support temperature parameter
+          temperature: 0.3,
           max_completion_tokens: 2000
         });
         let content = completion.choices?.[0]?.message?.content || '{}';
@@ -1438,25 +1493,48 @@ app.post('/onboarding/analyze-public', async (req, res) => {
 });
 
 // AI-based resume analysis: structure profile from text (authenticated)
-app.post('/onboarding/analyze', authenticateToken, async (req, res) => {
+// Public endpoint for onboarding - no auth required
+app.post('/onboarding/analyze', async (req, res) => {
   try {
-    const { text = '', saveToProfile = false } = req.body || {};
-    if (!text || text.length < 50) return res.status(400).json({ error: 'Insufficient text' });
+    const { resumeText = '', text = '', saveToProfile = false } = req.body || {};
+    const textToAnalyze = resumeText || text;
+    if (!textToAnalyze || textToAnalyze.length < 50) return res.status(400).json({ error: 'Insufficient text' });
+
+    let structured = {};
     const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) return res.status(501).json({ error: 'OPENAI_API_KEY not configured' });
-    const { default: OpenAI } = await import('openai');
-    const openai = new OpenAI({ apiKey });
-    const system = 'You extract structured resume data as strict JSON. Create a professional summary if one does not exist. Always return valid JSON only.';
-    const user = `Resume text:\n\n${text}\n\nSchema:\n{\n  "summary": string,\n  "skills": string[],\n  "experience": [{ "company": string, "role": string, "location": string, "dates": string, "bullets": string[] }],\n  "projects": [{ "name": string, "summary": string, "bullets": string[] }],\n  "education": [{ "institution": string, "degree": string, "location": string, "dates": string }]\n}`;
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [ { role: 'system', content: system }, { role: 'user', content: user } ],
-      // gpt-5-mini doesn't support temperature
-      max_completion_tokens: 2000
-    });
-    let content = completion.choices?.[0]?.message?.content || '{}';
-    try { content = content.replace(/^```json|```$/g, '').trim(); } catch {}
-    const structured = JSON.parse(content);
+
+    // Try AI analysis first if available
+    if (apiKey && apiKey.startsWith('sk-') && apiKey.length > 20) {
+      try {
+        const { default: OpenAI } = await import('openai');
+        const openai = new OpenAI({ apiKey });
+        const system = 'You extract structured resume data as strict JSON. Create a professional summary if one does not exist. Always return valid JSON only.';
+        const user = `Resume text:\n\n${textToAnalyze}\n\nSchema:\n{\n  "summary": string,\n  "skills": string[],\n  "experience": [{ "company": string, "role": string, "location": string, "dates": string, "bullets": string[] }],\n  "projects": [{ "name": string, "summary": string, "bullets": string[] }],\n  "education": [{ "institution": string, "degree": string, "location": string, "dates": string }]\n}`;
+        const completion = await openai.chat.completions.create({
+          model: 'gpt-4-turbo-preview',
+          messages: [ { role: 'system', content: system }, { role: 'user', content: user } ],
+          temperature: 0.3,
+          max_completion_tokens: 2000
+        });
+        let content = completion.choices?.[0]?.message?.content || '{}';
+        try { content = content.replace(/^```json|```$/g, '').trim(); } catch {}
+        structured = JSON.parse(content);
+      } catch (aiError) {
+        console.error('[AI-ANALYZE] OpenAI error, using fallback:', aiError.message);
+        // Fall through to basic parsing
+      }
+    }
+
+    // Fallback to basic extraction if AI fails or is not configured
+    if (!structured.summary) {
+      structured = {
+        summary: extractSummary(textToAnalyze) || "Experienced professional with a proven track record of delivering high-quality solutions.",
+        skills: extractSkills(textToAnalyze),
+        experience: extractExperience(textToAnalyze),
+        education: extractEducation(textToAnalyze),
+        projects: []
+      };
+    }
     
     // If requested, save the AI-parsed profile to database
     if (saveToProfile && req.user?.email) {
@@ -1473,7 +1551,8 @@ app.post('/onboarding/analyze', authenticateToken, async (req, res) => {
       console.log(`[AI-PARSE] Saved profile for ${req.user.email}`);
     }
     
-    res.json({ structured });
+    // Return the structured data directly as Profile format
+    res.json(structured);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -1482,7 +1561,7 @@ app.post('/onboarding/analyze', authenticateToken, async (req, res) => {
 // AI analysis endpoint for extension (secure server-side OpenAI calls)
 app.post('/api/ai-analyze', async (req, res) => {
   try {
-    const { systemPrompt, userPrompt, model = 'gpt-5-mini', temperature = 0.3, max_completion_tokens = 2000 } = req.body;
+    const { systemPrompt, userPrompt, model = 'gpt-4-turbo-preview', temperature = 0.3, max_completion_tokens = 2000 } = req.body;
     
     if (!systemPrompt || !userPrompt) {
       return res.status(400).json({ error: 'Missing required prompts' });
@@ -1502,7 +1581,7 @@ app.post('/api/ai-analyze', async (req, res) => {
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
       ],
-      // gpt-5-mini doesn't support temperature parameter
+      temperature: 0.3,
       max_completion_tokens,
       response_format: { type: "json_object" }
     });
@@ -1794,12 +1873,12 @@ Generate LaTeX body content between the markers exactly as specified in the syst
     const { default: OpenAI } = await import('openai');
     const openai = new OpenAI({ apiKey });
     const completion = await openai.chat.completions.create({
-      model: 'gpt-5-mini',
+      model: 'gpt-4-turbo-preview',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
       ],
-      // gpt-5-mini doesn't support temperature
+      temperature: 0.3,
       max_completion_tokens: 4000
     });
     let latex = completion.choices?.[0]?.message?.content || '';
@@ -2484,9 +2563,9 @@ ${(jobData.text || '').slice(0, 5000)}
 Transform the candidate's experience to match this job while staying truthful.`;
 
     const completion = await openai.chat.completions.create({
-      model: 'gpt-5-mini',
+      model: 'gpt-4-turbo-preview',
       messages: [ { role: 'system', content: system }, { role: 'user', content: user } ],
-      // gpt-5-mini doesn't support temperature
+      temperature: 0.3,
       max_completion_tokens: 2500
     });
     
@@ -2521,9 +2600,9 @@ async function refineStructuredWithAI(structured, missingKeywords, lockedFacts) 
     const system = 'You revise ONLY bullets/summary to add missing keywords naturally. Output valid minified JSON, same schema. Do not change employers/roles/dates. Preserve numbers as-is. Do not add irrelevant content.';
     const user = `Current structured resume JSON:\n${JSON.stringify(structured)}\n\nAdd these missing keywords naturally (no fluff): ${missingKeywords.join(', ')}\nPreserve numeric facts verbatim: ${lockedFacts.join(' | ')}\nReturn only JSON.`;
     const completion = await openai.chat.completions.create({
-      model: 'gpt-5-mini',
+      model: 'gpt-4-turbo-preview',
       messages: [ { role: 'system', content: system }, { role: 'user', content: user } ],
-      // gpt-5-mini doesn't support temperature
+      temperature: 0.3,
       max_completion_tokens: 1000
     });
     let content = completion.choices?.[0]?.message?.content || '{}';
@@ -2604,9 +2683,9 @@ async function generateKeywordsWithAI(jdText = '', profile = {}, synonyms = {}) 
     const system = 'Extract 15-25 PRIORITY KEYWORDS/PHRASES for resume tailoring. Return a JSON array of strings only. No code fences.';
     const user = `Job description:\n${jdText.slice(0,4000)}\n\nProfile skills (bias toward these): ${(Array.isArray(profile.skills)?profile.skills.join(', '):'')}`;
     const completion = await openai.chat.completions.create({
-      model: 'gpt-5-mini',
+      model: 'gpt-4-turbo-preview',
       messages: [ { role: 'system', content: system }, { role: 'user', content: user } ],
-      temperature: 0,
+      temperature: 0.3,
       max_completion_tokens: 400
     });
     let content = completion.choices?.[0]?.message?.content || '[]';
@@ -2891,12 +2970,12 @@ Base all recommendations on actual job requirements and candidate background. No
     const userPrompt = `Job Description:\n${jdText}\n\nCandidate Profile:\n${JSON.stringify(profile, null, 2)}`;
 
     const completion = await openai.chat.completions.create({
-      model: 'gpt-5-mini',
+      model: 'gpt-4-turbo-preview',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
       ],
-      // gpt-5-mini doesn't support temperature
+      temperature: 0.3,
       max_completion_tokens: 2000
     });
 

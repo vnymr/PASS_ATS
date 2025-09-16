@@ -68,4 +68,58 @@ export async function enforceATSCompliance(pdfPath, jobData, profile, options = 
   return await validator.generateReport(pdfPath);
 }
 
+// Compatibility wrapper expected by server.js: returns a richer ATS-style object
+export async function validatePDFForATS(pdfPath, metadata = {}) {
+  const validator = new PDFValidator();
+  const report = await validator.generateReport(pdfPath);
+
+  const issues_found = [
+    ...(Array.isArray(report.errors) ? report.errors : []),
+    ...(Array.isArray(report.warnings) ? report.warnings : [])
+  ];
+
+  // Map to the structure server/server.js expects
+  return {
+    validation_status: report.valid ? 'PASS' : 'FAIL',
+    corrected_path: null,
+    issues_found,
+    recommendations: report.recommendations || [],
+    metadata_report: {
+      ...(metadata || {}),
+      file: report.file,
+      timestamp: report.timestamp
+    },
+    ats_parse_check: {
+      parseability_score: typeof report.atsScore === 'number' ? report.atsScore : (report.valid ? 90 : 0),
+      text_selectable: !!(report.checks && report.checks.textSelectable),
+    },
+    checks: report.checks || {}
+  };
+}
+
+// Quick validation wrapper with minimal metadata
+export async function quickValidatePDF(pdfPath) {
+  const validator = new PDFValidator();
+  const validation = await validator.validate(pdfPath);
+
+  const issues_found = [
+    ...(Array.isArray(validation.errors) ? validation.errors : []),
+    ...(Array.isArray(validation.warnings) ? validation.warnings : [])
+  ];
+
+  return {
+    validation_status: validation.valid ? 'PASS' : 'FAIL',
+    checks: validation.checks || {},
+    issues_found,
+    recommendations: [
+      'Prefer simple, single-column layout',
+      'Ensure copyable, selectable text (no scanned images)',
+      'Use common fonts and avoid tables'
+    ],
+    ats_parse_check: {
+      parseability_score: typeof validation.atsScore === 'number' ? validation.atsScore : (validation.valid ? 90 : 0)
+    }
+  };
+}
+
 export default PDFValidator;
