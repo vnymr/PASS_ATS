@@ -1,3 +1,4 @@
+<!-- Trigger redeploy: minor doc update -->
 # Quick Resume AI - Production-Ready ATS Resume Generator
 
 A full-stack Chrome extension and web service for instant AI-powered resume generation optimized for Applicant Tracking Systems (ATS).
