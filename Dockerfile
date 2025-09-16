@@ -31,10 +31,6 @@ RUN npm install --production && \
 # Copy server code
 COPY server/ ./
 
-# Copy built extension
-WORKDIR /app
-COPY dist/ ./dist/
-
 # Create required directories
 RUN mkdir -p server/temp server/generated && \
     chmod 755 server/temp server/generated
