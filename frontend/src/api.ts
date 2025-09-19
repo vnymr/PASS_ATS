@@ -77,7 +77,7 @@ export const api = {
     return result.jobs.map((job: any) => ({
       fileName: `resume_${job.id}.pdf`,
       pdfUrl: `${API_URL}/api/job/${job.id}/download/pdf`,
-      texUrl: `${API_URL}/api/job/${job.id}/download/tex`,
+      texUrl: `${API_URL}/api/job/${job.id}/download/latex`,
       createdAt: job.createdAt
     }));
   },

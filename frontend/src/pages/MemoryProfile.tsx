@@ -22,7 +22,7 @@ export default function MemoryProfile() {
     website: '',
     summary: '',
     skills: [] as string[],
-    experience: [] as any[],
+    experiences: [] as any[],
     projects: [] as any[],
     education: [] as any[]
   });
@@ -65,7 +65,7 @@ export default function MemoryProfile() {
           website: data.website || '',
           summary: data.summary || '',
           skills: extractSkills(data.skills),
-          experience: Array.isArray(data.experience) ? data.experience : [],
+          experiences: Array.isArray(data.experiences) ? data.experiences : [],
           projects: Array.isArray(data.projects) ? data.projects : [],
           education: Array.isArray(data.education) ? data.education : []
         };
@@ -108,7 +108,7 @@ export default function MemoryProfile() {
       updatedProfile.website = formData.website;
       updatedProfile.summary = formData.summary;
       updatedProfile.skills = formData.skills;
-      updatedProfile.experience = formData.experience;
+      updatedProfile.experiences = formData.experiences;
       updatedProfile.projects = formData.projects;
       updatedProfile.education = formData.education;
 
@@ -387,14 +387,14 @@ export default function MemoryProfile() {
               </div>
               <div className="form-card-content">
                 <div className="experience-list">
-                  {formData.experience.map((exp, index) => (
+                  {formData.experiences.map((exp, index) => (
                     <div key={index} className="experience-item">
                       <div className="experience-item-header">
                         <h4 className="experience-item-title">Experience #{index + 1}</h4>
                         <button
                           onClick={() => setFormData({
                             ...formData,
-                            experience: formData.experience.filter((_, i) => i !== index)
+                            experiences: formData.experiences.filter((_, i) => i !== index)
                           })}
                           className="btn btn-ghost btn-sm experience-remove"
                           type="button"
@@ -411,9 +411,9 @@ export default function MemoryProfile() {
                             className="form-input"
                             value={exp.role || ''}
                             onChange={(e) => {
-                              const newExp = [...formData.experience];
+                              const newExp = [...formData.experiences];
                               newExp[index] = {...newExp[index], role: e.target.value};
-                              setFormData({...formData, experience: newExp});
+                              setFormData({...formData, experiences: newExp});
                             }}
                             placeholder="e.g. Software Engineer"
                           />
@@ -425,9 +425,9 @@ export default function MemoryProfile() {
                             className="form-input"
                             value={exp.company || ''}
                             onChange={(e) => {
-                              const newExp = [...formData.experience];
+                              const newExp = [...formData.experiences];
                               newExp[index] = {...newExp[index], company: e.target.value};
-                              setFormData({...formData, experience: newExp});
+                              setFormData({...formData, experiences: newExp});
                             }}
                             placeholder="e.g. Tech Corp"
                           />
@@ -439,9 +439,9 @@ export default function MemoryProfile() {
                             className="form-input"
                             value={exp.dates || ''}
                             onChange={(e) => {
-                              const newExp = [...formData.experience];
+                              const newExp = [...formData.experiences];
                               newExp[index] = {...newExp[index], dates: e.target.value};
-                              setFormData({...formData, experience: newExp});
+                              setFormData({...formData, experiences: newExp});
                             }}
                             placeholder="e.g. Jan 2020 - Present"
                           />
@@ -453,7 +453,7 @@ export default function MemoryProfile() {
                 <button
                   onClick={() => setFormData({
                     ...formData,
-                    experience: [...formData.experience, {role: '', company: '', dates: ''}]
+                    experiences: [...formData.experiences, {role: '', company: '', dates: ''}]
                   })}
                   className="btn btn-outline btn-add-experience"
                   type="button"

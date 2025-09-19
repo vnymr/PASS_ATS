@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api } from '../api';
+import { api } from '../api-adapter';
 import Icons from '../components/ui/icons';
 
 export default function GenerateResume() {
@@ -42,9 +42,15 @@ export default function GenerateResume() {
     setSuccess(false);
 
     try {
-      const result = await api.generateResume(resumeText, jobDescription, '', '');
+      // Use api-adapter.ts signature: generateResume(jobUrl, jobDetails)
+      const result = await api.generateResume('', {
+        description: jobDescription,
+        role: '',
+        company: '',
+        matchMode: 'balanced'
+      });
 
-      if (result.success || result.jobId) {
+      if (result.jobId) {
         setSuccess(true);
         // Clear the job description for next generation
         setJobDescription('');
@@ -52,7 +58,7 @@ export default function GenerateResume() {
         // Show success message
         setTimeout(() => setSuccess(false), 5000);
       } else {
-        setError(result.error || 'Failed to generate resume');
+        setError('Failed to generate resume');
       }
     } catch (err: any) {
       setError(err.message || 'Failed to generate resume');

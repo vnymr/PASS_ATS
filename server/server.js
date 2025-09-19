@@ -12,9 +12,10 @@ import OpenAI from 'openai';
 import mammoth from 'mammoth';
 import pdfParse from 'pdf-parse/lib/pdf-parse.js';
 import fs from 'fs';
-// Using new micro-prompt pipeline system (100% replacement for pre-launch testing)
-import { runPipeline, getMetrics } from './lib/pipeline/runPipeline.js';
+// Import AI Resume Generator
+import AIResumeGenerator from './lib/ai-resume-generator.js';
 import { config, getOpenAIModel } from './lib/config.js';
+import dataValidator from './lib/utils/dataValidator.js';
 
 // Load environment variables
 if (process.env.NODE_ENV !== 'production') {
@@ -149,6 +150,102 @@ app.post('/api/register', async (req, res) => {
   }
 });
 
+/**
+ * Merge processedAdditionalInfo and fullData into top-level arrays with deduplication
+ */
+function mergeIntoTopLevel(profileData) {
+  // Ensure arrays exist at the top level
+  profileData.experiences = profileData.experiences || [];
+  profileData.skills = profileData.skills || [];
+  profileData.education = profileData.education || [];
+  profileData.projects = profileData.projects || [];
+  profileData.certifications = profileData.certifications || [];
+
+  // Merge from processedAdditionalInfo if present
+  if (profileData.processedAdditionalInfo) {
+    const processed = profileData.processedAdditionalInfo;
+
+    if (processed.newSkills) {
+      profileData.skills = dataValidator.mergeArraysWithDedupe(
+        profileData.skills,
+        processed.newSkills,
+        dataValidator.dedupeSkills
+      );
+    }
+
+    if (processed.newExperiences) {
+      profileData.experiences = dataValidator.mergeArraysWithDedupe(
+        profileData.experiences,
+        processed.newExperiences,
+        dataValidator.dedupeExperiences
+      );
+    }
+
+    if (processed.newProjects) {
+      profileData.projects = dataValidator.mergeArraysWithDedupe(
+        profileData.projects,
+        processed.newProjects,
+        dataValidator.dedupeProjects
+      );
+    }
+
+    if (processed.newCertifications) {
+      profileData.certifications = dataValidator.mergeArraysWithDedupe(
+        profileData.certifications,
+        processed.newCertifications,
+        dataValidator.dedupeCertifications
+      );
+    }
+  }
+
+  // Merge from fullData if present
+  if (profileData.fullData) {
+    const full = profileData.fullData;
+
+    if (full.skills) {
+      profileData.skills = dataValidator.mergeArraysWithDedupe(
+        profileData.skills,
+        full.skills,
+        dataValidator.dedupeSkills
+      );
+    }
+
+    if (full.experiences) {
+      profileData.experiences = dataValidator.mergeArraysWithDedupe(
+        profileData.experiences,
+        full.experiences,
+        dataValidator.dedupeExperiences
+      );
+    }
+
+    if (full.education && !profileData.education.length) {
+      // For education, only add if top-level is empty (no dedupe logic implemented)
+      profileData.education = full.education;
+    }
+
+    if (full.projects) {
+      profileData.projects = dataValidator.mergeArraysWithDedupe(
+        profileData.projects,
+        full.projects,
+        dataValidator.dedupeProjects
+      );
+    }
+
+    if (full.certifications) {
+      profileData.certifications = dataValidator.mergeArraysWithDedupe(
+        profileData.certifications,
+        full.certifications,
+        dataValidator.dedupeCertifications
+      );
+    }
+  }
+
+  // Keep resumeText and additionalInfo as raw fields for traceability
+  // They are already in profileData, so we don't need to modify them
+
+  return profileData;
+}
+
 app.post('/api/login', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -236,19 +333,50 @@ app.put('/api/profile', authenticateToken, async (req, res) => {
     const cleanedBody = cleanData(req.body);
     console.log('✨ Cleaned profile data:', JSON.stringify(cleanedBody, null, 2));
 
+    // Process additional information if present
+    let processedData = cleanedBody;
+    if (cleanedBody.additionalInfo && typeof cleanedBody.additionalInfo === 'string' && cleanedBody.additionalInfo.trim().length > 0) {
+      try {
+        console.log('🤖 Processing additional information...');
+        console.log(`   - Additional info length: ${cleanedBody.additionalInfo.length} characters`);
+        // processedData = await processAdditionalInformation(cleanedBody);
+        // For now, just pass through the data as-is
+        processedData = cleanedBody;
+        console.log('✅ Additional information stored');
+
+        // Log what was extracted
+        if (processedData.processedAdditionalInfo) {
+          const { newSkills, newExperiences, newProjects, newCertifications } = processedData.processedAdditionalInfo;
+          console.log(`   - Extracted: ${newSkills?.length || 0} skills, ${newExperiences?.length || 0} experiences, ${newProjects?.length || 0} projects, ${newCertifications?.length || 0} certifications`);
+        }
+      } catch (aiError) {
+        console.error('⚠️ Failed to process additional information:', aiError.message);
+        // Keep the cleaned data even if AI processing fails
+        processedData = cleanedBody;
+        processedData._processingError = aiError.message;
+      }
+    }
+
+    // Validate the profile structure
+    // processedData = validateProfileStructure(processedData);
+    // Skip validation for now - just use the data as-is
+
+    // Merge processedAdditionalInfo and fullData into top-level arrays
+    processedData = mergeIntoTopLevel(processedData);
+
     const profile = await prisma.profile.upsert({
       where: { userId: req.user.id },
       update: {
-        data: cleanedBody,
+        data: processedData,
         updatedAt: new Date()
       },
       create: {
         userId: req.user.id,
-        data: cleanedBody
+        data: processedData
       }
     });
 
-    console.log('✅ Profile updated successfully');
+    console.log('✅ Profile updated successfully with processed data');
     res.json(profile);
   } catch (error) {
     console.error('Profile update error:', error);
@@ -361,7 +489,72 @@ app.post('/api/analyze/public', async (req, res) => {
 
     console.log('🔍 Analyzing resume text (public)...');
 
-    // Use OpenAI to analyze the resume
+    // Import candidateDigestPrompt for structured extraction
+    const { candidateDigestPrompt } = await import('./lib/prompts/candidateDigestPrompt.js');
+
+    try {
+      // Get structured data using the same prompt used in pipeline
+      const structuredData = await candidateDigestPrompt(resumeText);
+
+      console.log('✅ Resume analysis complete with structured data');
+      console.log(`   - Extracted ${structuredData.skills?.length || 0} skills`);
+      console.log(`   - Extracted ${structuredData.experiences?.length || 0} experiences`);
+      console.log(`   - Extracted ${structuredData.education?.length || 0} education entries`);
+      console.log(`   - Extracted ${structuredData.projects?.length || 0} projects`);
+
+      // Create a summary from the structured data
+      let summary = '';
+      if (structuredData.experiences && structuredData.experiences.length > 0) {
+        const currentExp = structuredData.experiences[0];
+        const totalExperiences = structuredData.experiences.length;
+        summary = `${currentExp.title} at ${currentExp.company}`;
+        if (totalExperiences > 1) {
+          summary += ` with experience across ${totalExperiences} organizations`;
+        }
+        if (structuredData.skills && structuredData.skills.length > 3) {
+          const topSkills = structuredData.skills.slice(0, 3).join(', ');
+          summary += `. Skilled in ${topSkills} and more.`;
+        }
+      } else if (structuredData.education && structuredData.education.length > 0) {
+        const edu = structuredData.education[0];
+        summary = `${edu.degree} in ${edu.field} from ${edu.school}`;
+        if (structuredData.skills && structuredData.skills.length > 3) {
+          const topSkills = structuredData.skills.slice(0, 3).join(', ');
+          summary += `. Skilled in ${topSkills}.`;
+        }
+      } else {
+        summary = 'Professional with diverse experience and technical skills';
+      }
+
+      // Return structured data compatible with frontend expectations
+      res.json({
+        structured: {
+          // Basic fields for immediate display
+          name: structuredData.name || '',
+          email: structuredData.email || '',
+          phone: structuredData.phone || '',
+          location: structuredData.location || '',
+          summary: summary,
+          skills: structuredData.skills || [],
+          resumeText,
+          isComplete: true,
+
+          // Full structured data for profile storage
+          fullData: {
+            ...structuredData,
+            additionalInfo: '',  // Empty initially, user can add later
+            processedAdditionalInfo: {},
+            summary: summary
+          }
+        }
+      });
+      return;
+
+    } catch (parseError) {
+      console.error('Structured parsing failed, falling back to OpenAI basic extraction:', parseError);
+    }
+
+    // Fallback to existing OpenAI parsing
     const openai = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY
     });
@@ -524,8 +717,8 @@ app.post('/api/generate', authenticateToken, async (req, res) => {
       matchMode = 'balanced'
     } = req.body;
 
-    if (!resumeText || !jobDescription) {
-      return res.status(400).json({ error: 'Resume text and job description required' });
+    if (!jobDescription) {
+      return res.status(400).json({ error: 'Job description required' });
     }
 
     // Generate a unique job ID
@@ -534,37 +727,140 @@ app.post('/api/generate', authenticateToken, async (req, res) => {
     console.log(`[API] Starting new pipeline generation for job ${jobId}`);
     console.log(`[API] Parameters: aiMode=${aiMode}, company=${company}, role=${role}`);
 
-    // Get relevant content if user has profile
-    let relevantContent = null;
+    // Get structured profile data if user has profile
+    let profileData = null;
+    let useStructuredData = false;
+
     try {
       const profile = await prisma.profile.findUnique({
         where: { userId: req.user.id }
       });
-      if (profile) {
-        relevantContent = JSON.stringify({
-          skills: profile.skills,
-          experience: profile.experience
-        });
+
+      if (profile && profile.data) {
+        profileData = profile.data;
+
+        // Check if profile data has the new structure directly OR under fullData
+        if (profileData.experiences || profileData.skills || profileData.education ||
+            profileData.fullData?.experiences || profileData.fullData?.skills || profileData.fullData?.education) {
+
+          // If structured data is under fullData, lift it up (non-destructively)
+          if (!profileData.experiences && profileData.fullData) {
+            const structuredProfile = {
+              ...profileData,
+              experiences: profileData.fullData.experiences || profileData.experiences,
+              skills: profileData.fullData.skills || profileData.skills,
+              education: profileData.fullData.education || profileData.education,
+              projects: profileData.fullData.projects || profileData.projects,
+              certifications: profileData.fullData.certifications || profileData.certifications
+            };
+            profileData = structuredProfile;
+          }
+
+          // Check if structured data is sufficient
+          if (dataValidator.hassufficientStructuredData(profileData)) {
+            useStructuredData = true;
+            console.log(`[API] Using structured profile data for user ${req.user.id}`);
+            console.log(`[API] Profile has ${profileData.skills?.length || 0} skills, ${profileData.experiences?.length || 0} experiences`);
+          } else {
+            console.log(`[API] Structured data insufficient, will use fallback to combined raw text`);
+            useStructuredData = false;
+          }
+        } else {
+          console.log(`[API] Profile exists but has no structured data, will use fallback`);
+          useStructuredData = false;
+        }
       }
     } catch (err) {
-      console.log('Could not fetch profile for relevant content:', err.message);
+      console.error('[API] Could not fetch profile:', err.message);
+      // Continue with resume text if profile fetch fails
+      useStructuredData = false;
     }
 
-    // === NEW MICRO-PROMPT PIPELINE SYSTEM ===
-    // Using 100% new system for pre-launch testing
-    console.log(`[API] Calling new runPipeline for job ${jobId}`);
+    // Validation: Require either structured profile OR resumeText
+    if (!useStructuredData && !resumeText) {
+      // Try to use raw fields from profile as fallback
+      if (profileData?.resumeText) {
+        const combinedRawText = profileData.additionalInfo
+          ? `${profileData.resumeText}\n\nADDITIONAL INFORMATION:\n${profileData.additionalInfo}`
+          : profileData.resumeText;
+
+        console.log(`[API] Using combined resumeText + additionalInfo from profile as fallback`);
+        // Override resumeText for pipeline
+        req.body.resumeText = combinedRawText;
+      } else {
+        return res.status(400).json({ error: 'Resume text or structured profile required' });
+      }
+    }
+
+    // If not using structured data but have additionalInfo, combine with resumeText
+    let pipelineResumeText = null;
+    if (!useStructuredData) {
+      if (profileData?.additionalInfo && resumeText) {
+        pipelineResumeText = `${resumeText}\n\nADDITIONAL INFORMATION:\n${profileData.additionalInfo}`;
+        console.log(`[API] Combined resumeText with additionalInfo for fallback parsing`);
+      } else {
+        pipelineResumeText = resumeText || req.body.resumeText;
+      }
+    }
+
+    // === AI RESUME GENERATOR ===
+    console.log(`[API] Using AI Resume Generator for job ${jobId}`);
     const pipelineStartTime = Date.now();
 
-    const result = await runPipeline({
+    // Initialize generator
+    const generator = new AIResumeGenerator(process.env.OPENAI_API_KEY);
+
+    // Prepare user data - ensure all fields are included
+    const userData = useStructuredData ? {
+      ...profileData,
+      // Map field names correctly
+      fullName: profileData.name || profileData.fullName || 'Candidate',
+      email: profileData.email || '',
+      phone: profileData.phone || '',
+      location: profileData.location || '',
+      linkedin: profileData.linkedin || '',
+      website: profileData.website || '',
+      summary: profileData.summary || '',
+      skills: profileData.skills || [],
+      experiences: profileData.experiences || [],
+      education: profileData.education || [],
+      projects: profileData.projects || [],
+      certifications: profileData.certifications || [],
+      // Ensure additionalInfo is included
+      additionalInfo: profileData.additionalInfo || '',
+      resumeText: profileData.resumeText || ''
+    } : {
+      resumeText: pipelineResumeText,
+      fullName: profileData?.name || profileData?.fullName || 'Candidate',
+      email: profileData?.email || '',
+      phone: profileData?.phone || '',
+      location: profileData?.location || '',
+      // Include additionalInfo even in fallback mode
+      additionalInfo: profileData?.additionalInfo || ''
+    };
+
+    // Generate resume with PDF
+    const generatedResult = await generator.generateWithPDF(
+      userData,
       jobDescription,
-      resumeText,
-      companyContext: company || '',  // Map company to companyContext
-      aiMode,
-      templateId: null,  // Auto-select template based on job
-      useCache: true,    // Enable JD digest caching
-      fallbackToCurrent: false,  // No fallback - 100% new system
-      jobId
-    });
+      {
+        style: 'auto',
+        model: aiMode === 'gpt-5-mini' ? 'gpt-4' : aiMode,
+        preferences: { company, role }
+      }
+    );
+
+    // Create result object compatible with existing code
+    const result = {
+      success: true,
+      artifacts: {
+        pdfBuffer: generatedResult.pdf,
+        latexSource: generatedResult.latex,
+        templateUsed: 'ai-generated',
+        generationType: 'ai-generator',
+        metrics: {}
+      }
+    };
 
     const pipelineDuration = Date.now() - pipelineStartTime;
     console.log(`[API] Pipeline completed in ${pipelineDuration}ms`);
@@ -579,30 +875,43 @@ app.post('/api/generate', authenticateToken, async (req, res) => {
 
     if (result.success) {
       // Save to database for history
-      const job = await prisma.job.create({
-        data: {
-          id: jobId,
-          userId: req.user.id,
-          status: 'COMPLETED',
-          resumeText,
-          jobDescription,
-          company: company || null,
-          role: role || null,
-          jobUrl: jobUrl || null,
-          aiMode,
-          matchMode,
-          diagnostics: {
-            generationType: result.artifacts.generationType || 'pipeline',
-            templateUsed: result.artifacts.templateUsed || 'unknown',
-            pipelineMetrics: result.artifacts.metrics || {},
-            processingTime: pipelineDuration,
-            timestamp: Date.now()
+      let job;
+      try {
+        job = await prisma.job.create({
+          data: {
+            id: jobId,
+            userId: req.user.id,
+            status: 'COMPLETED',
+            resumeText: resumeText || '',  // Handle null resumeText when using profile data
+            jobDescription,
+            company: company || null,
+            role: role || null,
+            jobUrl: jobUrl || null,
+            aiMode,
+            matchMode,
+            diagnostics: {
+              generationType: result.artifacts.generationType || 'pipeline',
+              templateUsed: result.artifacts.templateUsed || 'unknown',
+              pipelineMetrics: result.artifacts.metrics || {},
+              processingTime: pipelineDuration,
+              dataSource: useStructuredData ? 'profile' : 'resumeText_fallback',
+              timestamp: Date.now()
+            }
           }
-        }
-      });
+        });
+      } catch (dbError) {
+        console.error(`[API] Failed to save job to database:`, dbError);
+        // Continue even if database save fails - user still gets their PDF
+      }
 
-      // Save artifacts
+      // Save artifacts - with detailed logging
+      console.log(`[API] Saving artifacts for job ${jobId}`);
+      console.log(`[API] PDF Buffer exists: ${!!result.artifacts.pdfBuffer}`);
+      console.log(`[API] PDF Buffer size: ${result.artifacts.pdfBuffer ? result.artifacts.pdfBuffer.length : 0}`);
+      console.log(`[API] LaTeX Source exists: ${!!result.artifacts.latexSource}`);
+
       if (result.artifacts.pdfBuffer) {
+        console.log(`[API] Saving PDF artifact (${result.artifacts.pdfBuffer.length} bytes)`);
         await prisma.artifact.create({
           data: {
             jobId,
@@ -612,9 +921,13 @@ app.post('/api/generate', authenticateToken, async (req, res) => {
             metadata: result.artifacts.pdfMetadata || {}
           }
         });
+        console.log(`[API] PDF artifact saved successfully`);
+      } else {
+        console.error(`[API] ❌ NO PDF BUFFER FOUND - PDF will not be downloadable!`);
       }
 
       if (result.artifacts.latexSource) {
+        console.log(`[API] Saving LaTeX artifact`);
         await prisma.artifact.create({
           data: {
             jobId,
@@ -624,6 +937,7 @@ app.post('/api/generate', authenticateToken, async (req, res) => {
             metadata: {}
           }
         });
+        console.log(`[API] LaTeX artifact saved successfully`);
       }
 
       // Include additional pipeline data for debugging
@@ -979,6 +1293,12 @@ app.use((err, req, res, next) => {
     message: process.env.NODE_ENV === 'development' ? err.message : undefined
   });
 });
+
+// NEW SIMPLIFIED AI GENERATION ENDPOINT
+import { generateResumeEndpoint, checkCompilersEndpoint } from './lib/simplified-api.js';
+
+app.post('/api/generate-ai', authenticateToken, generateResumeEndpoint);
+app.get('/api/check-compilers', authenticateToken, checkCompilersEndpoint);
 
 // Start server
 const PORT = config.server.port;

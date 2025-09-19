@@ -1,0 +1,43 @@
+{
+  "roleFamily": "Sales Representative",
+  "seniority": "Entry",
+  "industry": "Real Estate Tech",
+  "companySize": "Startup",
+  "companyThemes": [
+    "Innovative",
+    "Client-focused",
+    "Fast-scaling",
+    "Collaborative",
+    "Entrepreneurial"
+  ],
+  "keywords": [
+    "Salesforce",
+    "Pardot",
+    "Snov.io",
+    "LinkedIn",
+    "Email outreach",
+    "Cold calling",
+    "Zoom",
+    "Microsoft Teams",
+    "Demo presentation",
+    "CRM",
+    "Pipeline management",
+    "Lead qualification",
+    "Quota attainment",
+    "SaaS sales",
+    "Upselling",
+    "Enterprise sales",
+    "Marketing collateral",
+    "Conference networking"
+  ],
+  "responsibilities": [
+    "Prospect and qualify leads via email and LinkedIn",
+    "Run engaging TSM AI demos over Zoom/Teams",
+    "Follow up inbound leads and nurture pipeline",
+    "Manage CRM, track activity, and hit quotas",
+    "Arrange qualified meetings for 3E Management",
+    "Attend industry conferences and network prospects",
+    "Collaborate with leadership on sales strategy",
+    "Assist with marketing materials and one-pagers"
+  ]
+}

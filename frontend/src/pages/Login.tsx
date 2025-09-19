@@ -23,12 +23,19 @@ export default function Login() {
 
       if (response.token) {
         setToken(response.token);
-        console.log('Token set, checking onboarding status');
+        console.log('Token set, checking profile status');
 
-        if (response.onboardingCompleted === false) {
+        // Check if profile exists (onboarding completed)
+        try {
+          const profile = await api.getProfile();
+          if (profile) {
+            navigate('/dashboard');
+          } else {
+            navigate('/onboarding');
+          }
+        } catch (profileErr) {
+          // If profile fetch fails with 404, redirect to onboarding
           navigate('/onboarding');
-        } else {
-          navigate('/dashboard');
         }
       } else {
         setError('Invalid response from server');

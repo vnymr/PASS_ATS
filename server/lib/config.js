@@ -55,9 +55,16 @@ export const config = {
   // PDF Generation Configuration
   pdf: {
     keepTempDirOnFail: true, // Keep for debugging
+    engine: process.env.PDF_ENGINE || 'pdflatex', // Primary engine
+    pdflatex: {
+      command: process.env.PDFLATEX_COMMAND || 'pdflatex',
+      timeout: parseInt(process.env.PDFLATEX_TIMEOUT || '5000', 10),
+      args: ['-interaction=nonstopmode', '-halt-on-error', '-file-line-error', '-no-shell-escape', 'resume.tex']
+    },
     tectonic: {
       command: process.env.TECTONIC_COMMAND || 'tectonic',
-      timeout: parseInt(process.env.TECTONIC_TIMEOUT || '60000'),
+      timeout: parseInt(process.env.TECTONIC_TIMEOUT || '5000', 10),
+      args: ['--chatter', 'minimal', '--keep-logs', 'resume.tex']
     },
   },
 

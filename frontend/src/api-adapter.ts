@@ -19,7 +19,7 @@ export type Profile = {
   summary?: string;
   summary_narrative?: string;
   skills?: string[];
-  experience?: Array<{ company?: string; role?: string; location?: string; dates?: string; bullets?: string[] }>;
+  experiences?: Array<{ company?: string; role?: string; location?: string; dates?: string; bullets?: string[] }>;
   projects?: Array<{ name?: string; summary?: string; bullets?: string[] }>;
   education?: Array<{ institution?: string; degree?: string; location?: string; dates?: string }>;
   jobsAppliedThisMonth?: number;
@@ -279,7 +279,10 @@ export const api = {
       phone: (result.structured as any).phone || '',
       location: (result.structured as any).location || '',
       summary: result.structured.summary,
-      skills: result.structured.skills,
+      skills: result.structured.skills || [],
+      experiences: (result.structured as any).experiences || (result.structured as any).experience || [],
+      education: (result.structured as any).education || [],
+      projects: (result.structured as any).projects || [],
       resumeText,
       isComplete: true
     };

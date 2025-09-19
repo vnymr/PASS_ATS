@@ -258,11 +258,11 @@ export default function Onboarding() {
                 </div>
               )}
 
-              {parsedData.experience && parsedData.experience.length > 0 && (
+              {parsedData.experiences && parsedData.experiences.length > 0 && (
                 <div className="info-section">
                   <Icons.briefcase size={18} className="section-icon" />
-                  <h3>Experience ({parsedData.experience.length} positions)</h3>
-                  {parsedData.experience.slice(0, 2).map((exp, idx) => (
+                  <h3>Experience ({parsedData.experiences.length} positions)</h3>
+                  {parsedData.experiences.slice(0, 2).map((exp, idx) => (
                     <div key={idx} className="experience-item">
                       <p className="exp-role">{exp.role}</p>
                       <p className="exp-company">{exp.company} • {exp.dates}</p>
