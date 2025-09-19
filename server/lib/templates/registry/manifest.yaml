@@ -1,0 +1,253 @@
+# Template Registry Manifest
+# Defines all available LaTeX resume templates for the micro-prompt pipeline
+# Based on 2025 ATS best practices and research
+
+# Global settings
+version: "1.0.0"
+last_updated: "2025-01-18"
+
+# Default capacity limits (can be overridden per template)
+default_capacity:
+  bullets_per_role: 4
+  roles_max: 5
+  bullet_max_words: 25
+  summary_max_words: 35
+  skills_max_items: 30
+  education_entries_max: 3
+
+# Template definitions
+templates:
+  # General Professional Template - Most versatile
+  - id: "General-Readable-1col"
+    version: "1.0.0"
+    metadata:
+      name: "General Professional"
+      description: "Clean, professional single-column template optimized for ATS and readability"
+      category: "professional"
+      style: "clean"
+      best_for:
+        - "Most roles"
+        - "Corporate positions"
+        - "Mid-level professionals"
+        - "Career changers"
+        - "General applications"
+      features:
+        - "ATS-optimized single column"
+        - "Helvetica font for modern look"
+        - "Clear section hierarchy"
+        - "1-inch margins for readability"
+        - "11pt body text"
+        - "Professional summary section"
+      ats_score: 95
+      readability_score: 90
+    files:
+      preamble: "General-Readable-1col/preamble.tex"
+      wireframe: "General-Readable-1col/wireframe.tex"
+    capacity:
+      bullets_per_role: 4
+      roles_max: 5
+      bullet_max_words: 25
+      summary_max_words: 35
+      skills_max_items: 25
+      education_entries_max: 2
+
+  # Product Owner / Business Template - Compact and metrics-focused
+  - id: "PO-Compact-1col"
+    version: "1.0.0"
+    metadata:
+      name: "Business Compact"
+      description: "Compact template emphasizing metrics and business achievements"
+      category: "business"
+      style: "compact"
+      best_for:
+        - "Product Owners"
+        - "Product Managers"
+        - "Business Analysts"
+        - "Operations Managers"
+        - "Program Managers"
+        - "Account Managers"
+        - "Marketing Managers"
+        - "Sales Leaders"
+      features:
+        - "Compact 10pt font for content density"
+        - "Metrics highlighting"
+        - "Key achievement callouts"
+        - "Tighter margins (0.75in)"
+        - "Executive summary section"
+        - "ROI and business impact focus"
+      ats_score: 92
+      readability_score: 85
+    files:
+      preamble: "PO-Compact-1col/preamble.tex"
+      wireframe: "PO-Compact-1col/wireframe.tex"
+    capacity:
+      bullets_per_role: 4
+      roles_max: 6  # More roles for experienced business professionals
+      bullet_max_words: 28  # Slightly longer for metrics
+      summary_max_words: 40  # Executive summary can be longer
+      skills_max_items: 20
+      education_entries_max: 2
+
+  # Engineering / Technical Template - Tech-focused
+  - id: "Eng-Technical-1col"
+    version: "1.0.0"
+    metadata:
+      name: "Technical Professional"
+      description: "Technical template with prominent skills section and code-friendly formatting"
+      category: "technical"
+      style: "technical"
+      best_for:
+        - "Software Engineers"
+        - "DevOps Engineers"
+        - "Data Engineers"
+        - "Data Scientists"
+        - "Full Stack Developers"
+        - "Backend Engineers"
+        - "Frontend Engineers"
+        - "Site Reliability Engineers"
+        - "Security Engineers"
+        - "QA Engineers"
+      features:
+        - "Technical skills at top"
+        - "Code-style formatting for technologies"
+        - "Project section support"
+        - "GitHub/portfolio links"
+        - "Technical achievement highlights"
+        - "10.5pt font for balance"
+        - "Monospace-friendly design"
+      ats_score: 93
+      readability_score: 88
+    files:
+      preamble: "Eng-Technical-1col/preamble.tex"
+      wireframe: "Eng-Technical-1col/wireframe.tex"
+    capacity:
+      bullets_per_role: 4
+      roles_max: 4  # Fewer roles but more technical detail
+      bullet_max_words: 25
+      summary_max_words: 30  # Shorter, more technical summary
+      skills_max_items: 35  # More skills for technical roles
+      education_entries_max: 2
+
+# Template selection rules (for automatic template selection)
+template_selection_rules:
+  keywords_to_template:
+    # Business roles
+    - keywords: ["product owner", "product manager", "PO", "PM", "business analyst", "BA"]
+      template: "PO-Compact-1col"
+      confidence: 0.9
+
+    # Technical roles
+    - keywords: ["software engineer", "developer", "SWE", "DevOps", "data engineer", "backend", "frontend", "full stack"]
+      template: "Eng-Technical-1col"
+      confidence: 0.9
+
+    # Operations roles
+    - keywords: ["operations", "ops", "support", "coordinator", "analyst"]
+      template: "PO-Compact-1col"
+      confidence: 0.7
+
+    # Sales/Marketing roles
+    - keywords: ["sales", "marketing", "account", "customer success", "business development"]
+      template: "PO-Compact-1col"
+      confidence: 0.8
+
+    # Default fallback
+    - keywords: ["*"]
+      template: "General-Readable-1col"
+      confidence: 0.5
+
+  experience_level_rules:
+    entry_level:
+      years_experience: [0, 2]
+      preferred_template: "General-Readable-1col"
+
+    mid_level:
+      years_experience: [3, 7]
+      preferred_template: "General-Readable-1col"
+
+    senior_level:
+      years_experience: [8, 15]
+      preferred_template: "PO-Compact-1col"  # More compact for extensive experience
+
+    executive_level:
+      years_experience: [16, null]
+      preferred_template: "PO-Compact-1col"
+
+# Placeholder definitions (common across all templates)
+placeholders:
+  - name: "NAME"
+    description: "Full name of the candidate"
+    max_length: 50
+    required: true
+
+  - name: "LOCATION"
+    description: "City, State or City, Country"
+    max_length: 30
+    required: true
+
+  - name: "PHONE"
+    description: "Phone number with country code"
+    max_length: 20
+    required: true
+
+  - name: "EMAIL"
+    description: "Professional email address"
+    max_length: 50
+    required: true
+
+  - name: "LINKEDIN"
+    description: "LinkedIn profile URL"
+    max_length: 60
+    required: false
+
+  - name: "SUMMARY"
+    description: "Professional summary paragraph"
+    max_words: 35
+    required: true
+
+  - name: "EXPERIENCES"
+    description: "Work experience entries with bullet points"
+    required: true
+
+  - name: "SKILLS"
+    description: "Skills organized by category"
+    required: true
+
+  - name: "EDUCATION"
+    description: "Education entries"
+    required: true
+
+# LaTeX special character escaping rules
+latex_escaping:
+  replacements:
+    "&": "\\&"
+    "%": "\\%"
+    "$": "\\$"
+    "#": "\\#"
+    "_": "\\_"
+    "{": "\\{"
+    "}": "\\}"
+    "~": "\\textasciitilde{}"
+    "^": "\\textasciicircum{}"
+    "\\": "\\textbackslash{}"
+
+  preserve_in_tech:
+    # Don't escape these in technical contexts
+    - "C++"
+    - "C#"
+    - ".NET"
+    - "Node.js"
+
+# Quality checks
+quality_requirements:
+  min_bullets_per_role: 2
+  max_bullets_per_role: 5
+  min_words_per_bullet: 10
+  max_words_per_bullet: 30
+  min_summary_words: 15
+  max_summary_words: 40
+  required_sections:
+    - "Professional Summary"
+    - "Professional Experience"
+    - "Skills"
+    - "Education"

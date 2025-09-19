@@ -2,3121 +2,1011 @@ import express from 'express';
 import cors from 'cors';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
-import { spawn } from 'child_process';
-import fs from 'fs/promises';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import crypto from 'crypto';
+import { prisma } from './lib/prisma-client.js';
 import dotenv from 'dotenv';
-import { createRequire } from 'module';
+import { fileURLToPath } from 'url';
+import path from 'path';
 import multer from 'multer';
-import client from 'prom-client';
-// Observability will be added later - keeping it simple for now
-// import observability from './lib/observability.js';
+import OpenAI from 'openai';
+// Import parse libraries
+import mammoth from 'mammoth';
+import pdfParse from 'pdf-parse/lib/pdf-parse.js';
+import fs from 'fs';
+// Using new micro-prompt pipeline system (100% replacement for pre-launch testing)
+import { runPipeline, getMetrics } from './lib/pipeline/runPipeline.js';
+import { config, getOpenAIModel } from './lib/config.js';
 
 // Load environment variables
-// Try .env.local first (for local development), then .env
 if (process.env.NODE_ENV !== 'production') {
-  // Load .env.local first if it exists
   dotenv.config({ path: '.env.local' });
-  // Then load .env as fallback
   dotenv.config();
 } else {
-  // In production, only load .env if DATABASE_URL isn't already set
   if (!process.env.DATABASE_URL) {
     dotenv.config();
   }
 }
 
-// Utility function for log redaction
-function redactSensitive(obj, message = '') {
-  const sensitiveKeys = ['password', 'token', 'key', 'secret', 'api_key', 'authorization', 'bearer'];
-  
-  if (typeof obj === 'string') {
-    // Redact JWT tokens and API keys
-    return obj.replace(/sk-[a-zA-Z0-9-]{20,}/g, 'sk-***REDACTED***')
-              .replace(/ey[A-Za-z0-9+/=]+\.[A-Za-z0-9+/=]+\.[A-Za-z0-9+/=_-]+/g, 'jwt-***REDACTED***');
-  }
-  
-  if (typeof obj === 'object' && obj !== null) {
-    const redacted = { ...obj };
-    Object.keys(redacted).forEach(key => {
-      if (sensitiveKeys.some(sk => key.toLowerCase().includes(sk))) {
-        redacted[key] = '***REDACTED***';
-      }
-    });
-    return redacted;
-  }
-  
-  return obj;
-}
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-// Environment validation and logging
+const app = express();
+const upload = multer({ storage: multer.memoryStorage() });
+
+
+// Environment validation
 function validateEnvironment() {
-  const required = ['JWT_SECRET', 'OPENAI_API_KEY'];
+  const required = ['JWT_SECRET', 'OPENAI_API_KEY', 'DATABASE_URL'];
   const missing = required.filter(key => !process.env[key]);
-  
-  if (process.env.NODE_ENV === 'production') {
-    required.push('DATABASE_URL');
-    if (!process.env.DATABASE_URL) {
-      missing.push('DATABASE_URL');
-    }
-  }
-  
+
   if (missing.length > 0) {
     console.error('❌ Missing required environment variables:', missing);
     process.exit(1);
   }
-  
-  // Safe logging without sensitive data
+
   console.log('🚀 Environment validated successfully');
   console.log('   - Node Environment:', process.env.NODE_ENV || 'development');
   console.log('   - Port:', process.env.PORT || '3000');
-  console.log('   - OpenAI API Key:', process.env.OPENAI_API_KEY ? '✅ Present' : '❌ Missing');
-  console.log('   - Database URL:', process.env.DATABASE_URL ? '✅ Present' : '⚠️ Missing (development mode)');
-  console.log('   - JWT Secret:', process.env.JWT_SECRET ? '✅ Present' : '❌ Missing');
-  console.log('   - CORS Origins:', process.env.ALLOWED_ORIGINS ? '✅ Configured' : '⚠️ Using defaults');
+  console.log('   - OpenAI API Key:', '✅ Present');
+  console.log('   - Database URL:', '✅ Present');
 }
 
 validateEnvironment();
 
-// Initialize observability
-// initializeObservability('pass-ats-server'); // Disabled for simple production readiness
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// --- Metrics (Prometheus) ---
-// Create a dedicated registry and collect default metrics
-const metricsRegistry = new client.Registry();
-client.collectDefaultMetrics({ register: metricsRegistry });
-
-// Fallback text extraction functions for when AI is unavailable
-function extractSummary(text) {
-  // Look for summary section or create from first paragraph
-  const summaryMatch = text.match(/(?:summary|profile|objective|about)[\s:]*([^\n]{50,500})/i);
-  if (summaryMatch) return summaryMatch[1].trim();
-  
-  // Use first substantial paragraph as summary
-  const paragraphs = text.split(/\n\n+/).filter(p => p.length > 50);
-  return paragraphs[0]?.substring(0, 300) || 'Experienced professional seeking new opportunities.';
-}
-
-function extractSkills(text) {
-  const skills = [];
-  // Common programming languages and tools
-  const techPatterns = /\b(JavaScript|TypeScript|Python|Java|C\+\+|React|Angular|Vue|Node\.js|Express|Django|Flask|Spring|Docker|Kubernetes|AWS|Azure|GCP|Git|SQL|MongoDB|PostgreSQL|MySQL|Redis|GraphQL|REST|API|HTML|CSS|SASS|webpack|CI\/CD|Agile|Scrum)\b/gi;
-  const matches = text.match(techPatterns) || [];
-  matches.forEach(skill => {
-    const normalized = skill.charAt(0).toUpperCase() + skill.slice(1);
-    if (!skills.includes(normalized)) skills.push(normalized);
-  });
-  return skills.slice(0, 20);
-}
-
-function extractExperience(text) {
-  const experiences = [];
-  
-  // Look for experience section
-  const expSection = text.match(/(?:experience|employment|work history)[\s:]*([^]*?)(?:\n\n|\neducation|$)/i);
-  const searchText = expSection ? expSection[1] : text;
-  
-  // Common job title patterns
-  const jobTitles = /(Software Engineer|Developer|Manager|Analyst|Designer|Consultant|Director|Lead|Senior|Junior|Intern)/gi;
-  const lines = searchText.split('\n');
-  
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    if (jobTitles.test(line) && line.length < 100) {
-      // Extract company and dates
-      const parts = line.split(/\s+at\s+|\s*,\s*|\s*-\s*/);
-      if (parts.length >= 2) {
-        experiences.push({
-          role: parts[0].trim(),
-          company: parts[1].trim(),
-          location: '',
-          dates: parts[2] || '',
-          bullets: []
-        });
-      }
-    }
-  }
-  
-  return experiences.length > 0 ? experiences : [{
-    role: 'Professional Role',
-    company: 'Company Name',
-    location: '',
-    dates: '',
-    bullets: []
-  }];
-}
-
-function extractProjects(text) {
-  // Basic project extraction
-  const projectSection = text.match(/projects?[\s:]+([^]*?)(?:\n\n|\neducation|\nexperience|$)/i);
-  if (!projectSection) return [];
-  
-  return [{
-    name: 'Project',
-    summary: 'Project description',
-    bullets: []
-  }];
-}
-
-function extractEducation(text) {
-  const education = [];
-  // Look for degrees and universities
-  const eduPattern = /\b(Bachelor|Master|PhD|B\.S\.|M\.S\.|MBA|B\.A\.|M\.A\.)[^,\n]*(?:[,\s]+([^,\n]+?))?(?:[,\s]+(\d{4}))?/gi;
-  const matches = Array.from(text.matchAll(eduPattern)).slice(0, 3);
-  
-  matches.forEach(match => {
-    education.push({
-      degree: match[0].trim(),
-      institution: match[1] || 'University',
-      location: '',
-      dates: match[2] || ''
-    });
-  });
-  
-  return education;
-}
-
-const app = express();
-const PORT = process.env.PORT || 3000;
-const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '');
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
-
-// CORS configuration from environment
-function getCorsOptions() {
-  const allowedOrigins = process.env.ALLOWED_ORIGINS 
-    ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
-    : ['http://localhost:3000', 'http://localhost:3001', 'chrome-extension://*'];
-  
-  const corsOptions = {
-    origin: function (origin, callback) {
-      // Allow requests with no origin (like mobile apps or curl requests)
-      if (!origin) {
-        console.log('✅ Allowing request with no origin');
-        return callback(null, true);
-      }
-      
-      // Check if the origin matches any allowed origins (including wildcard patterns)
-      const isAllowed = allowedOrigins.some(allowedOrigin => {
-        if (allowedOrigin === '*') return true;
-        if (allowedOrigin.endsWith('*')) {
-          const base = allowedOrigin.slice(0, -1);
-          return origin.startsWith(base);
-        }
-        return origin === allowedOrigin;
-      });
-      
-      if (isAllowed) {
-        console.log(`✅ Allowing origin: ${origin}`);
-        callback(null, true);
-      } else {
-        console.warn(`❌ Blocking origin: ${origin} (allowed: ${allowedOrigins.join(', ')})`);
-        callback(new Error('Not allowed by CORS'));
-      }
-    },
-    credentials: true,
-    optionsSuccessStatus: 200
-  };
-  
-  return corsOptions;
-}
-
-// Add observability middleware first
-// app.use(observabilityMiddleware()); // Disabled for simple production readiness
-app.use(cors(getCorsOptions()));
-// JSON parsing middleware with better error handling
-app.use(express.json({ 
-  limit: '10mb',
-  verify: (req, res, buf, encoding) => {
-    // Store raw body for verification if needed
-    req.rawBody = buf;
-  }
+// Middleware
+app.use(cors({
+  origin: config.server.allowedOrigins,
+  credentials: true
 }));
 
-// Global JSON parsing error handler
-app.use((err, req, res, next) => {
-  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
-    console.error(`🚨 JSON parsing error from ${redactSensitive(req.ip)}:`, err.message);
-    return res.status(400).json({ 
-      error: 'Invalid JSON format',
-      message: 'Request body contains malformed JSON'
-    });
-  }
-  next(err);
-});
-app.options('*', cors(getCorsOptions()));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Rate limiting from environment variables
-const requestCounts = new Map();
-const RATE_LIMIT = parseInt(process.env.RATE_LIMIT_REQUESTS) || 100;
-const RATE_WINDOW = parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 60000;
-
-// Cleanup old rate limit entries every 5 minutes
-setInterval(() => {
-  const now = Date.now();
-  for (const [ip, data] of requestCounts.entries()) {
-    if (now > data.resetTime + RATE_WINDOW) {
-      requestCounts.delete(ip);
-    }
-  }
-}, 5 * 60 * 1000);
-
-function rateLimit(req, res, next) {
-  const ip = req.ip || req.connection.remoteAddress || 'unknown';
-  const now = Date.now();
-  
-  if (!requestCounts.has(ip)) {
-    requestCounts.set(ip, { count: 1, resetTime: now + RATE_WINDOW });
-    res.set({
-      'X-RateLimit-Limit': RATE_LIMIT,
-      'X-RateLimit-Remaining': RATE_LIMIT - 1,
-      'X-RateLimit-Reset': Math.ceil((now + RATE_WINDOW) / 1000)
-    });
-    return next();
-  }
-  
-  const userData = requestCounts.get(ip);
-  
-  if (now > userData.resetTime) {
-    userData.count = 1;
-    userData.resetTime = now + RATE_WINDOW;
-    res.set({
-      'X-RateLimit-Limit': RATE_LIMIT,
-      'X-RateLimit-Remaining': RATE_LIMIT - 1,
-      'X-RateLimit-Reset': Math.ceil(userData.resetTime / 1000)
-    });
-    return next();
-  }
-  
-  const remaining = Math.max(0, RATE_LIMIT - userData.count);
-  res.set({
-    'X-RateLimit-Limit': RATE_LIMIT,
-    'X-RateLimit-Remaining': remaining,
-    'X-RateLimit-Reset': Math.ceil(userData.resetTime / 1000)
-  });
-  
-  if (userData.count >= RATE_LIMIT) {
-    const retryAfter = Math.ceil((userData.resetTime - now) / 1000);
-    console.warn(`🚫 Rate limit exceeded for IP: ${redactSensitive(ip)}, retry after: ${retryAfter}s`);
-    return res.status(429).json({ 
-      error: 'Too many requests. Please try again later.',
-      retryAfter,
-      limit: RATE_LIMIT,
-      window: RATE_WINDOW
-    });
-  }
-  
-  userData.count++;
-  next();
-}
-
-app.use(rateLimit);
-console.log(`🛡️ Rate limiting: ${RATE_LIMIT} requests per ${RATE_WINDOW}ms`);
-
-// Simple JSON file persistence (upgradeable to a real DB)
-const dataDir = path.join(path.dirname(fileURLToPath(import.meta.url)));
-const dbFile = path.join(dataDir, 'db.json');
-
-async function loadDB() {
+// Health check
+app.get('/health', async (req, res) => {
   try {
-    const raw = await fs.readFile(dbFile, 'utf-8');
-    const parsed = JSON.parse(raw);
-    return {
-      users: parsed.users || {},
-      profiles: parsed.profiles || {}
-    };
-  } catch (e) {
-    // Initialize empty DB if not exists or invalid
-    return { users: {}, profiles: {} };
-  }
-}
+    await prisma.$queryRaw`SELECT 1`;
 
-async function saveDB(db) {
-  const serialized = JSON.stringify(db, null, 2);
-  await fs.writeFile(dbFile, serialized, 'utf-8');
-}
-
-let db = await loadDB();
-
-// Optional: Prisma (Postgres) integration with graceful fallback
-let prisma = null;
-let dbHealthy = false;
-
-async function getPrisma() {
-  if (prisma) return prisma;
-  
-  if (!process.env.DATABASE_URL) {
-    if (process.env.NODE_ENV === 'production') {
-      console.error('🚨 DATABASE_URL required in production mode');
-      throw new Error('DATABASE_URL is required in production');
-    }
-    console.warn('⚠️ No DATABASE_URL provided, using JSON fallback in development mode');
-    return null;
-  }
-  
-  try {
-    const { PrismaClient } = await import('@prisma/client');
-    prisma = new PrismaClient({
-      log: process.env.NODE_ENV === 'development' ? ['query', 'info', 'warn', 'error'] : ['warn', 'error'],
-    });
-    
-    // Test database connection
-    await prisma.$connect();
-    dbHealthy = true;
-    console.log('✅ Database connection established');
-    
-    // Run migrations in production
-    if (process.env.NODE_ENV === 'production') {
-      try {
-        console.log('🔄 Running database migrations...');
-        const { exec } = await import('child_process');
-        await new Promise((resolve, reject) => {
-          exec('npx prisma migrate deploy', (error, stdout, stderr) => {
-            if (error) {
-              console.error('❌ Migration failed:', error);
-              reject(error);
-            } else {
-              console.log('✅ Migrations completed successfully');
-              resolve(stdout);
-            }
-          });
-        });
-      } catch (migrationError) {
-        console.error('⚠️ Migration warning:', migrationError.message);
-        // Don't fail startup for migration issues in production
+    res.json({
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      services: {
+        database: 'connected'
       }
-    }
-    
-    return prisma;
-  } catch (e) {
-    dbHealthy = false;
-    console.error('🚨 Database connection failed:', redactSensitive(e.message));
-    
-    if (process.env.NODE_ENV === 'production') {
-      throw new Error('Database connection required in production mode');
-    }
-    
-    console.warn('⚠️ Falling back to JSON DB in development mode');
-    return null;
-  }
-}
-
-// Health check for database
-async function checkDatabaseHealth() {
-  if (!process.env.DATABASE_URL) {
-    return { healthy: false, error: 'No DATABASE_URL configured' };
-  }
-  
-  try {
-    const p = await getPrisma();
-    if (!p) {
-      return { healthy: false, error: 'Prisma client not initialized' };
-    }
-    
-    // Simple query to test connection
-    await p.$queryRaw`SELECT 1`;
-    return { healthy: true };
-  } catch (error) {
-    return { healthy: false, error: redactSensitive(error.message) };
-  }
-}
-
-async function dbGetUser(email) {
-  const p = await getPrisma();
-  if (p) {
-    return p.user.findUnique({ where: { email } });
-  }
-  return db.users[email];
-}
-
-async function dbCreateUser(email, hashedPassword) {
-  const p = await getPrisma();
-  if (p) {
-    return p.user.create({ data: { email, password: hashedPassword } });
-  }
-  const userId = Date.now().toString();
-  db.users[email] = { id: userId, email, password: hashedPassword, createdAt: new Date().toISOString() };
-  await saveDB(db);
-  return db.users[email];
-}
-
-async function dbGetProfile(email) {
-  const p = await getPrisma();
-  if (p) {
-    const user = await p.user.findUnique({ where: { email }, include: { profile: true } });
-    if (!user || !user.profile) return null;
-    return { ...user.profile.data, email, updatedAt: user.profile.updatedAt.toISOString?.() || user.profile.updatedAt };
-  }
-  return db.profiles[email] || null;
-}
-
-async function dbSaveProfile(email, profile) {
-  const p = await getPrisma();
-  if (p) {
-    const user = await p.user.findUnique({ where: { email } });
-    if (!user) throw new Error('User not found');
-    await p.profile.upsert({
-      where: { userId: user.id },
-      update: { data: profile, updatedAt: new Date() },
-      create: { userId: user.id, data: profile }
     });
-    return;
+  } catch (error) {
+    res.status(503).json({
+      status: 'unhealthy',
+      error: error.message
+    });
   }
-  db.profiles[email] = profile;
-  await saveDB(db);
-}
+});
 
-// Store generated resume metadata (JSON or Prisma profile.data)
-async function dbAddResume(email, entry) {
-  const p = await getPrisma();
-  if (p) {
-    const user = await p.user.findUnique({ where: { email }, include: { profile: true } });
-    if (!user) return;
-    const data = (user.profile?.data || {});
-    data.resumes = Array.isArray(data.resumes) ? data.resumes : [];
-    data.resumes.unshift(entry);
-    if (data.resumes.length > 50) data.resumes.length = 50;
-    await p.profile.upsert({ where: { userId: user.id }, update: { data }, create: { userId: user.id, data } });
-    return;
-  }
-  db.resumes = db.resumes || {};
-  db.resumes[email] = Array.isArray(db.resumes[email]) ? db.resumes[email] : [];
-  db.resumes[email].unshift(entry);
-  if (db.resumes[email].length > 50) db.resumes[email].length = 50;
-  await saveDB(db);
-}
-
-async function dbGetResumes(email) {
-  const p = await getPrisma();
-  if (p) {
-    const user = await p.user.findUnique({ where: { email }, include: { profile: true } });
-    const data = (user?.profile?.data || {});
-    return Array.isArray(data.resumes) ? data.resumes : [];
-  }
-  return (db.resumes?.[email]) || [];
-}
-
-const tempDir = path.join(__dirname, 'temp');
-await fs.mkdir(tempDir, { recursive: true });
-const generatedDir = path.join(__dirname, 'generated');
-await fs.mkdir(generatedDir, { recursive: true });
-await fs.mkdir(path.join(tempDir, 'uploads'), { recursive: true });
-
-// Serve generated PDFs
-app.use('/pdfs', express.static(generatedDir));
-app.use('/tex', express.static(generatedDir));
-
-// --- In-memory caches to speed up generation ---
-const keywordCache = new Map(); // jdHash -> [keywords]
-const structuredCache = new Map(); // profileHash:jdHash -> structured JSON
-const MAX_CACHE = 100;
-function sha(input) { return crypto.createHash('sha1').update(String(input)).digest('hex'); }
-function cacheSet(map, key, val) {
-  if (map.size >= MAX_CACHE) {
-    const firstKey = map.keys().next().value; map.delete(firstKey);
-  }
-  map.set(key, val);
-}
-
-function authenticateToken(req, res, next) {
+// Authentication middleware
+const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
   if (!token) {
-    return res.sendStatus(401);
+    return res.status(401).json({ error: 'Access token required' });
   }
 
-  jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) return res.sendStatus(403);
+  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+    if (err) {
+      return res.status(403).json({ error: 'Invalid or expired token' });
+    }
     req.user = user;
+    req.userId = user.id; // Use 'id' from JWT payload
     next();
   });
-}
+};
 
-// Authentication endpoints
-app.post('/auth/signup', async (req, res) => {
+
+// Auth endpoints
+app.post('/api/register', async (req, res) => {
+  console.log('📝 Registration request received:', req.body.email);
   try {
     const { email, password } = req.body;
-    
+
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password required' });
     }
-    
-    // Check if user already exists
-    const existingUser = await dbGetUser(email);
+
+    const existingUser = await prisma.user.findUnique({
+      where: { email }
+    });
+
     if (existingUser) {
       return res.status(409).json({ error: 'User already exists' });
     }
-    
-    // Hash password
+
     const hashedPassword = await bcrypt.hash(password, 10);
-    
-    // Create user
-    const user = await dbCreateUser(email, hashedPassword);
-    
-    // Generate JWT token
-    const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
-    
-    res.json({
-      success: true,
+
+    const user = await prisma.user.create({
+      data: {
+        email,
+        password: hashedPassword
+      }
+    });
+
+    const token = jwt.sign(
+      { id: user.id, email: user.email },
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    console.log('✅ User registered successfully:', user.email);
+    res.status(201).json({
       token,
-      onboardingCompleted: false,
-      user: { id: user.id, email: user.email }
+      user: {
+        id: user.id,
+        email: user.email
+      }
     });
   } catch (error) {
-    console.error('Signup error:', error);
+    console.error('❌ Registration error:', error);
+    console.error('Registration error:', error);
     res.status(500).json({ error: 'Registration failed' });
   }
 });
 
-app.post('/auth/login', async (req, res) => {
-  const { email, password } = req.body;
+app.post('/api/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
 
-  if (!email || !password) {
-    return res.status(400).json({ error: 'Email and password required' });
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password required' });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email }
+    });
+
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const validPassword = await bcrypt.compare(password, user.password);
+    if (!validPassword) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const token = jwt.sign(
+      { id: user.id, email: user.email },
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    res.json({
+      token,
+      user: {
+        id: user.id,
+        email: user.email
+      }
+    });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ error: 'Login failed' });
   }
-
-  const user = await dbGetUser(email);
-  console.log(`[AUTH] login ${email} (exists=${!!user})`);
-
-  if (!user) {
-    const hashedPassword = await bcrypt.hash(password, 10);
-    await dbCreateUser(email, hashedPassword);
-
-    const token = jwt.sign({ email }, JWT_SECRET, { expiresIn: '7d' });
-    return res.json({ token, isNew: true, onboardingCompleted: false });
-  }
-
-  const validPassword = await bcrypt.compare(password, user.password);
-  if (!validPassword) {
-    return res.status(401).json({ error: 'Invalid credentials' });
-  }
-
-  const token = jwt.sign({ email }, JWT_SECRET, { expiresIn: '7d' });
-
-  // Check if user has completed onboarding
-  const profile = await dbGetProfile(email);
-  const onboardingCompleted = !!(profile && profile.onboardingCompleted);
-
-  res.json({ token, onboardingCompleted });
-});
-
-app.get('/me', authenticateToken, async (req, res) => {
-  const profile = await dbGetProfile(req.user.email);
-  console.log(`[PROFILE:GET] ${req.user.email} -> ${profile ? '200' : '404'}`);
-  
-  if (!profile) {
-    return res.status(404).json({ error: 'Profile not found' });
-  }
-  
-  res.json(profile);
-});
-
-app.put('/me', authenticateToken, async (req, res) => {
-  const profile = {
-    ...req.body,
-    email: req.user.email,
-    updatedAt: new Date().toISOString()
-  };
-  await dbSaveProfile(req.user.email, profile);
-  console.log(`[PROFILE:PUT] ${req.user.email} keys=[${Object.keys(req.body)}]`);
-  res.sendStatus(200);
-});
-
-// List generated resumes
-app.get('/me/resumes', authenticateToken, async (req, res) => {
-  const list = await dbGetResumes(req.user.email);
-  res.json(list);
 });
 
 // Profile endpoints
-app.get('/profile', authenticateToken, async (req, res) => {
+app.get('/api/profile', authenticateToken, async (req, res) => {
   try {
-    const profile = await dbGetProfile(req.user.email);
-    if (!profile) {
-      return res.status(404).json({ error: 'Profile not found' });
-    }
-    res.json(profile);
-  } catch (error) {
-    console.error('Get profile error:', error);
-    res.status(500).json({ error: 'Failed to get profile' });
-  }
-});
-
-// Get profile by email (for admin or specific use cases)
-app.get('/profile/:email', authenticateToken, async (req, res) => {
-  try {
-    const { email } = req.params;
-    
-    // Security check: users can only access their own profile unless admin
-    if (req.user.email !== email) {
-      return res.status(403).json({ error: 'Access denied' });
-    }
-    
-    const profile = await dbGetProfile(email);
-    if (!profile) {
-      return res.status(404).json({ error: 'Profile not found' });
-    }
-    
-    console.log(`[PROFILE:GET] ${email} -> 200`);
-    res.json(profile);
-  } catch (error) {
-    console.error('Get profile by email error:', error);
-    res.status(500).json({ error: 'Failed to get profile' });
-  }
-});
-
-app.post('/profile', authenticateToken, async (req, res) => {
-  try {
-    const profileData = {
-      ...req.body,
-      email: req.user.email, // Ensure email is always set
-      updatedAt: new Date().toISOString(),
-      isComplete: true // Mark profile as complete after onboarding
-    };
-    
-    // Log what's being saved for debugging
-    console.log(`[PROFILE:SAVE] User ${req.user.email} saving profile with:`, {
-      hasName: !!profileData.name,
-      hasEmail: !!profileData.email,
-      hasPhone: !!profileData.phone,
-      hasSummary: !!profileData.summary,
-      skillsCount: profileData.skills?.length || 0,
-      experienceCount: profileData.experience?.length || 0,
-      educationCount: profileData.education?.length || 0
+    const profile = await prisma.profile.findUnique({
+      where: { userId: req.user.id }
     });
-    
-    await dbSaveProfile(req.user.email, profileData);
-    res.json({ success: true, profile: profileData });
+
+    if (!profile) {
+      return res.status(404).json({ error: 'Profile not found' });
+    }
+
+    // Return the profile data directly, not wrapped in a profile object
+    console.log('📤 Returning profile data:', JSON.stringify(profile.data, null, 2));
+    res.json(profile.data);
   } catch (error) {
-    console.error('Save profile error:', error);
-    res.status(500).json({ error: 'Failed to save profile' });
+    console.error('Profile fetch error:', error);
+    res.status(500).json({ error: 'Failed to fetch profile' });
   }
 });
 
-app.put('/profile', authenticateToken, async (req, res) => {
+app.put('/api/profile', authenticateToken, async (req, res) => {
   try {
-    const updates = req.body;
+    console.log('📝 Profile update request:', req.user.email);
 
-    // Get existing profile first
-    const existingProfile = await dbGetProfile(req.user.email) || {};
-
-    // Merge updates with existing profile data
-    const mergedProfile = {
-      ...existingProfile,
-      ...updates,
-      // Preserve certain fields from being overwritten accidentally
-      email: req.user.email,
-      updatedAt: new Date().toISOString()
+    // Clean and sanitize the data - remove null characters and undefined values
+    const cleanData = (obj) => {
+      if (typeof obj === 'string') {
+        return obj.replace(/\u0000/g, '').trim();
+      }
+      if (Array.isArray(obj)) {
+        return obj.map(cleanData).filter(item => item !== null && item !== undefined);
+      }
+      if (obj && typeof obj === 'object') {
+        const cleaned = {};
+        for (const [key, value] of Object.entries(obj)) {
+          if (value !== null && value !== undefined) {
+            cleaned[key] = cleanData(value);
+          }
+        }
+        return cleaned;
+      }
+      return obj;
     };
 
-    // Save the merged profile
-    await dbSaveProfile(req.user.email, mergedProfile);
+    const cleanedBody = cleanData(req.body);
+    console.log('✨ Cleaned profile data:', JSON.stringify(cleanedBody, null, 2));
 
-    console.log(`[PROFILE-UPDATE] Updated profile for ${req.user.email}`);
-    res.json({ success: true, profile: mergedProfile });
+    const profile = await prisma.profile.upsert({
+      where: { userId: req.user.id },
+      update: {
+        data: cleanedBody,
+        updatedAt: new Date()
+      },
+      create: {
+        userId: req.user.id,
+        data: cleanedBody
+      }
+    });
+
+    console.log('✅ Profile updated successfully');
+    res.json(profile);
   } catch (error) {
-    console.error('Update profile error:', error);
+    console.error('Profile update error:', error);
     res.status(500).json({ error: 'Failed to update profile' });
   }
 });
 
-app.delete('/profile', authenticateToken, async (req, res) => {
-  try {
-    // Delete user profile and account
-    const p = await getPrisma();
-    if (p) {
-      await p.profile.deleteMany({ where: { user: { email: req.user.email } } });
-      await p.user.deleteMany({ where: { email: req.user.email } });
+// Configure multer for resume file upload
+const resumeUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = [
+      'application/pdf',
+      'text/plain',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
     } else {
-      // JSON fallback - just acknowledge the request
+      cb(new Error('Invalid file type. Only PDF, TXT, DOC, and DOCX are allowed.'));
     }
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Delete profile error:', error);
-    res.status(500).json({ error: 'Failed to delete profile' });
   }
 });
 
-// Quota helpers: 10 free per month
-const MONTHLY_LIMIT = 10;
-function monthKey(date = new Date()) {
-  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
-}
-async function checkAndIncrementQuota(email) {
-  if (!email) return { allowed: true, used: 0, remaining: Infinity };
-  const p = await getPrisma();
-  const key = monthKey();
-  if (p) {
-    // Prisma path: store in Profile.data.usage
-    const user = await p.user.findUnique({ where: { email }, include: { profile: true } });
-    if (!user) return { allowed: true, used: 0, remaining: MONTHLY_LIMIT };
-    const data = (user.profile?.data || {});
-    data.usage = data.usage || {};
-    const used = data.usage[key] || 0;
-    if (used >= MONTHLY_LIMIT) return { allowed: false, used, remaining: 0 };
-    data.usage[key] = used + 1;
-    await p.profile.upsert({ where: { userId: user.id }, update: { data }, create: { userId: user.id, data } });
-    return { allowed: true, used: used + 1, remaining: Math.max(0, MONTHLY_LIMIT - (used + 1)) };
-  }
-  // JSON path
-  db.usage = db.usage || {};
-  db.usage[email] = db.usage[email] || {};
-  const used = db.usage[email][key] || 0;
-  if (used >= MONTHLY_LIMIT) return { allowed: false, used, remaining: 0 };
-  db.usage[email][key] = used + 1;
-  await saveDB(db);
-  return { allowed: true, used: used + 1, remaining: Math.max(0, MONTHLY_LIMIT - (used + 1)) };
-}
-
-app.get('/quota', authenticateToken, async (req, res) => {
-  const key = monthKey();
-  const email = req.user.email;
-  const p = await getPrisma();
-  if (p) {
-    const user = await p.user.findUnique({ where: { email }, include: { profile: true } });
-    const data = (user?.profile?.data || {});
-    const used = (data.usage?.[key] || 0);
-    return res.json({ month: key, used, remaining: Math.max(0, MONTHLY_LIMIT - used), limit: MONTHLY_LIMIT });
-  }
-  const used = db.usage?.[email]?.[key] || 0;
-  res.json({ month: key, used, remaining: Math.max(0, MONTHLY_LIMIT - used), limit: MONTHLY_LIMIT });
-});
-
-app.post('/compile', async (req, res) => {
-  const { tex } = req.body;
-  console.log(`[COMPILE] request bytes=${tex ? tex.length : 0}`);
-  
-  if (!tex) {
-    return res.status(400).json({ error: 'LaTeX content required' });
-  }
-
-  const jobId = crypto.randomBytes(16).toString('hex');
-  const texFile = path.join(tempDir, `${jobId}.tex`);
-  const pdfFile = path.join(tempDir, `${jobId}.pdf`);
-
+// File upload and parse endpoint
+app.post('/api/upload/resume', resumeUpload.single('resume'), async (req, res) => {
   try {
-    await fs.writeFile(texFile, tex, 'utf-8');
-
-    const tectonicPath = process.env.TECTONIC_PATH || 'tectonic';
-    
-    await new Promise((resolve, reject) => {
-      const tectonic = spawn(tectonicPath, [
-        '--untrusted',
-        '--keep-logs',
-        '-o', tempDir,
-        texFile
-      ]);
-
-      let stderr = '';
-      
-      tectonic.stderr.on('data', (data) => {
-        stderr += data.toString();
-      });
-
-      tectonic.on('close', (code) => {
-        if (code !== 0) {
-          reject(new Error(`Tectonic failed: ${stderr}`));
-        } else {
-          resolve();
-        }
-      });
-
-      tectonic.on('error', (err) => {
-        reject(err);
-      });
-    });
-
-    const pdfBuffer = await fs.readFile(pdfFile);
-    
-    await fs.unlink(texFile).catch(() => {});
-    await fs.unlink(pdfFile).catch(() => {});
-    
-    res.set({
-      'Content-Type': 'application/pdf',
-      'Content-Disposition': 'attachment; filename="resume.pdf"'
-    });
-    res.send(pdfBuffer);
-
-  } catch (error) {
-    console.error('Compilation error:', error);
-    
-    await fs.unlink(texFile).catch(() => {});
-    await fs.unlink(pdfFile).catch(() => {});
-    
-    if (error.message.includes('ENOENT') && error.message.includes('tectonic')) {
-      return res.status(500).json({ 
-        error: 'Tectonic not installed. Please install: cargo install tectonic' 
-      });
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
     }
-    
-    res.status(500).json({ 
-      error: 'PDF compilation failed',
-      details: error.message
-    });
-  }
-});
 
-// Generate endpoint: creates LaTeX (placeholder AI), compiles to PDF, returns URL
-app.post('/generate', async (req, res) => {
-  try {
-    let { profile = {}, jobData = {}, jobDetails = {}, tempId = 'TMP' } = req.body || {};
+    console.log('📄 Processing uploaded file:', req.file.originalname);
+    let extractedText = '';
 
-  // Support both jobData and jobDetails formats
-  if (!jobData || Object.keys(jobData).length === 0) {
-    jobData = jobDetails;
-  }
-
-  // Extract company and role if provided
-  const { company = '', role = '', description = '' } = jobData;
-    
-    // Check if user is authenticated and load their profile
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
-    
-    if (token) {
+    // Extract text based on file type
+    if (req.file.mimetype === 'application/pdf') {
+      // Parse PDF
       try {
-        const decoded = jwt.verify(token, JWT_SECRET);
-        const userProfile = await dbGetProfile(decoded.email);
-        if (userProfile) {
-          // Use the authenticated user's profile data
-          profile = userProfile;
-          console.log(`[GENERATE] Authenticated user: ${decoded.email}`);
-        }
+        const pdfData = await pdfParse(req.file.buffer);
+        extractedText = pdfData.text;
+        console.log('✅ PDF parsed, extracted', extractedText.length, 'characters');
       } catch (err) {
-        console.log(`[GENERATE] Invalid token, proceeding as anonymous`);
-      }
-    }
-    
-    console.log(`[GENERATE] email=${profile.email || 'anon'} role=${jobData.role || ''} company=${jobData.company || ''} tempId=${tempId}`);
-    if (profile.email) {
-      const quota = await checkAndIncrementQuota(profile.email);
-      if (!quota.allowed) return res.status(429).json({ error: 'Monthly limit reached', limit: MONTHLY_LIMIT });
-    }
-
-    // Prefer AI-generated LaTeX if available; fallback to transformation template
-    const latex = await generateLatexWithAI(
-      profile,
-      jobData,
-      (msg, p) => console.log('[GENERATE]', msg || 'render', p ?? '')
-    );
-
-    // 2) Write .tex and compile via tectonic
-    const ts = Date.now();
-    const base = `resume_${tempId}_${ts}`;
-    const texPath = path.join(generatedDir, `${base}.tex`);
-    const pdfPath = path.join(generatedDir, `${base}.pdf`);
-
-    await fs.writeFile(texPath, latex, 'utf-8');
-
-    try {
-    await new Promise((resolve, reject) => {
-      const tectonicPath = process.env.TECTONIC_PATH || 'tectonic';
-      const proc = spawn(tectonicPath, [texPath], { cwd: generatedDir });
-      let stderr = '';
-      proc.stderr.on('data', d => { stderr += d.toString(); });
-      proc.on('close', code => {
-        if (code !== 0) return reject(new Error(`LaTeX compilation failed: ${stderr}`));
-        resolve();
-      });
-      proc.on('error', err => reject(err));
-    });
-    } catch (latexError) {
-      console.warn('[GENERATE] LaTeX compilation failed, retrying with fallback template');
-      // Use the reliable fallback template
-      const fallbackLatex = buildOnePageTemplateWithTransformation(profile, jobData);
-      await fs.writeFile(texPath, fallbackLatex, 'utf-8');
-      await new Promise((resolve, reject) => {
-        const tectonicPath = process.env.TECTONIC_PATH || 'tectonic';
-        const proc = spawn(tectonicPath, [texPath], { cwd: generatedDir });
-        let stderr = '';
-        proc.stderr.on('data', d => { stderr += d.toString(); });
-        proc.on('close', code => {
-          if (code !== 0) return reject(new Error(`Fallback LaTeX also failed: ${stderr}`));
-          resolve();
-        });
-        proc.on('error', err => reject(err));
-      });
-    }
-
-    // 3) Ensure output exists and return URL
-    await fs.access(pdfPath);
-    
-    // 4) Validate PDF for ATS compatibility
-    try {
-      const { enforceATSCompliance } = await import('./lib/pdf-validator.js');
-      const validationResult = await enforceATSCompliance(
-        pdfPath,
-        jobData,
-        profile,
-        { skill_analysis: { matched_skills: [] } } // Basic coverage data
-      );
-      
-      if (validationResult.success) {
-        console.log(`✅ PDF validated successfully. ATS Score: ${validationResult.ats_score}/100`);
-      } else {
-        console.warn('⚠️ PDF validation issues:', validationResult.validation_report?.issues_found || 'Unknown issues');
-      }
-    } catch (validationError) {
-      console.error('PDF validation error:', validationError);
-      // Continue even if validation fails - don't block the response
-    }
-    
-    const origin = PUBLIC_BASE_URL || `${req.protocol}://${req.get('host')}` || `http://localhost:${PORT}`;
-    const pdfUrl = `${origin}/pdfs/${base}.pdf`;
-    const texUrl = `${origin}/tex/${base}.tex`;
-
-    if (profile.email) {
-      await dbAddResume(profile.email, {
-        fileName: `${base}.pdf`,
-        pdfUrl,
-        texUrl,
-        role: jobData.role || '',
-        company: jobData.company || '',
-        createdAt: new Date().toISOString()
-      });
-    }
-
-    res.json({ success: true, pdfUrl, texUrl, fileName: `${base}.pdf` });
-  } catch (error) {
-    console.error('Generate error:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// --- Streaming job-based generation (SSE) ---
-const jobs = new Map(); // jobId -> { listeners:Set<res>, last: any, startedAt: number, stage: string }
-
-// Job cleanup to prevent memory leaks - cleanup after 5 minutes
-setInterval(() => {
-  const now = Date.now();
-  const CLEANUP_AGE = 5 * 60 * 1000; // 5 minutes
-  
-  for (const [jobId, job] of jobs.entries()) {
-    if (now - job.startedAt > CLEANUP_AGE) {
-      console.log(`🧹 Cleaning up stale job: ${jobId} (age: ${Math.round((now - job.startedAt) / 1000)}s)`);
-      // Close any lingering SSE connections
-      for (const res of job.listeners) {
-        try {
-          res.write('event: cleanup\ndata: {"message":"Job expired","error":true}\n\n');
-          res.end();
-        } catch (_) {}
-      }
-      jobs.delete(jobId);
-    }
-  }
-}, 60 * 1000); // Run cleanup every minute
-
-function sendEvent(jobId, type, data, stage) {
-  const job = jobs.get(jobId);
-  if (!job) return;
-  
-  // Update job stage if provided
-  if (stage) {
-    job.stage = stage;
-  }
-  
-  // Add timestamp and job info to data
-  const enhancedData = {
-    ...data,
-    timestamp: Date.now(),
-    jobId,
-    stage: job.stage || 'unknown'
-  };
-  
-  const payload = `event: ${type}\ndata: ${JSON.stringify(enhancedData)}\n\n`;
-  job.last = { type, data: enhancedData };
-  
-  // Send to all active listeners with error handling
-  const deadConnections = new Set();
-  for (const res of job.listeners) {
-    try {
-      res.write(payload);
-    } catch (error) {
-      console.warn(`🔌 Dead SSE connection detected for job ${jobId}`);
-      deadConnections.add(res);
-    }
-  }
-  
-  // Clean up dead connections
-  for (const deadRes of deadConnections) {
-    job.listeners.delete(deadRes);
-  }
-  
-  console.log(`[SSE] ${jobId} -> ${type} (${job.listeners.size} listeners): ${data.message || JSON.stringify(data).substring(0, 100)}`);
-}
-
-function closeJob(jobId) {
-  const job = jobs.get(jobId);
-  if (!job) return;
-  for (const res of job.listeners) {
-    try { res.end(); } catch (_) {}
-  }
-  jobs.delete(jobId);
-}
-
-app.post('/generate/job', async (req, res) => {
-  let { profile = {}, jobData = {}, tempId = 'TMP' } = req.body || {};
-
-  // Check if user is authenticated and load their profile
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-
-  if (token) {
-    try {
-      const decoded = jwt.verify(token, JWT_SECRET);
-      const userProfile = await dbGetProfile(decoded.email);
-      if (userProfile) {
-        // Use the authenticated user's profile data
-        profile = userProfile;
-        console.log(`[GENERATE/JOB] Authenticated user: ${decoded.email}`);
-      }
-    } catch (err) {
-      console.log(`[GENERATE/JOB] Invalid token, proceeding as anonymous`);
-    }
-  }
-
-  const jobId = crypto.randomBytes(8).toString('hex');
-  jobs.set(jobId, { listeners: new Set(), last: null, startedAt: Date.now(), stage: 'queued' });
-  console.log(`[JOB] start jobId=${jobId} email=${profile.email || 'anon'} role=${jobData.role || ''} company=${jobData.company || ''}`);
-  res.json({ jobId });
-
-  // start async process
-  (async () => {
-    try {
-      // Quota check if email present
-      if (profile.email) {
-        const quota = await checkAndIncrementQuota(profile.email);
-        if (!quota.allowed) {
-          sendEvent(jobId, 'error', { error: 'Monthly limit reached' });
-          return setTimeout(() => closeJob(jobId), 500);
-        }
-      }
-      sendEvent(jobId, 'status', { message: 'Extracting job description keywords...', progress: 10 }, 'extract');
-      const synonyms = await loadSynonyms();
-      const jdText = jobData.text || '';
-      const jdKey = sha(jdText);
-      let priority = keywordCache.get(jdKey);
-      if (!priority) {
-        priority = await generateKeywordsWithAI(jdText, profile, synonyms);
-        cacheSet(keywordCache, jdKey, priority);
-      }
-      const locked = extractNumericFacts(profile);
-      sendEvent(jobId, 'analysis', { matchedSkills: (profile.skills||[]).slice(0,10), missingSkills: priority.filter(k => !(profile.skills||[]).map(s=>String(s).toUpperCase()).includes(k)).slice(0,10) });
-
-      // Stage 1: get structured JSON
-      sendEvent(jobId, 'status', { message: 'Analyzing user profile and experience...', progress: 20 }, 'analyze');
-      const profileKey = sha(JSON.stringify(profileToStructured(profile)));
-      const structKey = `${profileKey}:${jdKey}`;
-      let structured1 = structuredCache.get(structKey);
-      if (!structured1) {
-        structured1 = await generateStructuredWithAI(profile, jobData, priority, locked, (msg, p) => sendEvent(jobId, 'status', { message: msg, progress: p }, 'compose'));
-        cacheSet(structuredCache, structKey, structured1);
-      }
-
-      // Stage 2: coverage check and refine if needed
-      sendEvent(jobId, 'status', { message: 'Checking keyword coverage and optimization...', progress: 45 }, 'analyze');
-      const cov = computeCoverage(structured1, priority, synonyms);
-      let structured = structured1;
-      let tries = 0;
-      const threshold = 0.7; // require 70% of priority keywords present
-      while (tries < 1) {
-        const ratio = (cov.present.length) / (priority.length || 1);
-        if (ratio >= threshold || cov.missing.length === 0) break;
-        sendEvent(jobId, 'status', { message: `Refining resume content to improve coverage (${Math.round(ratio*100)}%)...`, progress: 50 + tries*5 }, 'compose');
-        structured = await refineStructuredWithAI(structured, cov.missing.slice(0,8), locked);
-        const cov2 = computeCoverage(structured, priority, synonyms);
-        if (cov2.present.length > cov.present.length) {
-          cov.present = cov2.present; cov.missing = cov2.missing;
-          cacheSet(structuredCache, structKey, structured);
-        }
-        tries++;
-      }
-
-      // Stage 3: render LaTeX deterministically
-      sendEvent(jobId, 'status', { message: 'Generating LaTeX document structure...', progress: 60 }, 'latex');
-      // Prefer direct AI LaTeX when possible; fallback to structured->template
-      let latex = null;
-      try {
-        latex = await generateLatexWithAI(profile, jobData, (m, pr) => sendEvent(jobId, 'status', { message: m, progress: pr || 60 }, 'latex'));
-      } catch (_) {
-        latex = renderLatexFromStructured(structured, jobData);
-      }
-
-      sendEvent(jobId, 'status', { message: 'Compiling LaTeX to PDF using Tectonic...', progress: 70 }, 'compile');
-      const ts = Date.now();
-      const base = `resume_${tempId}_${ts}`;
-      const texPath = path.join(generatedDir, `${base}.tex`);
-      const pdfPath = path.join(generatedDir, `${base}.pdf`);
-      await fs.writeFile(texPath, latex, 'utf-8');
-
-      await new Promise((resolve, reject) => {
-        const tectonicPath = process.env.TECTONIC_PATH || 'tectonic';
-        const proc = spawn(tectonicPath, [texPath], { cwd: generatedDir });
-        let stderr = '';
-        proc.stderr.on('data', d => { stderr += d.toString(); });
-        proc.on('close', code => {
-          if (code !== 0) return reject(new Error(`LaTeX compilation failed: ${stderr}`));
-          resolve();
-        });
-        proc.on('error', err => reject(err));
-      });
-
-      await fs.access(pdfPath);
-      
-      // Validate PDF for ATS compatibility
-      sendEvent(jobId, 'status', { message: 'Validating PDF for ATS compliance...', progress: 80 }, 'validate');
-      try {
-        const { enforceATSCompliance } = await import('./lib/pdf-validator.js');
-        const validationResult = await enforceATSCompliance(
-          pdfPath,
-          jobData,
-          profile,
-          { 
-            skill_analysis: { 
-              matched_skills: cov.present?.map(s => ({ skill: s })) || [] 
-            },
-            requirement_coverage: {
-              matched: priority?.slice(0, 5).map(p => ({ keywords: [p] })) || []
-            }
-          }
-        );
-        
-        if (validationResult.success) {
-          sendEvent(jobId, 'status', { 
-            message: `PDF validated! ATS Score: ${validationResult.ats_score}/100`, 
-            progress: 85,
-            atsScore: validationResult.ats_score
-          }, 'validate');
-        } else {
-          sendEvent(jobId, 'status', { 
-            message: 'PDF has validation warnings', 
-            progress: 85,
-            warnings: validationResult.validation_report.issues_found
-          }, 'validate');
-        }
-      } catch (validationError) {
-        console.error('PDF validation error:', validationError);
-        sendEvent(jobId, 'status', { 
-          message: 'PDF validation skipped', 
-          progress: 85 
-        }, 'validate');
-      }
-      
-      const origin = PUBLIC_BASE_URL || `${req.protocol}://${req.get('host')}` || `http://localhost:${PORT}`;
-      const pdfUrl = `${origin}/pdfs/${base}.pdf`;
-      const texUrl = `${origin}/tex/${base}.tex`;
-      if (profile.email) {
-        await dbAddResume(profile.email, {
-          fileName: `${base}.pdf`,
-          pdfUrl,
-          texUrl,
-          role: jobData.role || '',
-          company: jobData.company || '',
-          createdAt: new Date().toISOString(),
-          meta: {
-            priorityKeywords: priority,
-            coverage: { present: cov.present, missing: cov.missing }
-          }
+        console.error('PDF parse error:', err);
+        return res.status(400).json({
+          error: 'Failed to parse PDF. Please try uploading as TXT or DOCX.'
         });
       }
-      sendEvent(jobId, 'complete', { 
-        pdfUrl, 
-        texUrl, 
-        fileName: `${base}.pdf`,
-        message: 'Resume generation completed successfully!',
-        progress: 100,
-        totalTime: Date.now() - jobs.get(jobId)?.startedAt
-      }, 'done');
-      setTimeout(() => closeJob(jobId), 500);
-    } catch (err) {
-      console.error('Generate job error:', err);
-      sendEvent(jobId, 'error', { 
-        error: redactSensitive(err.message),
-        message: 'Resume generation failed',
-        stage: jobs.get(jobId)?.stage || 'unknown',
-        totalTime: Date.now() - (jobs.get(jobId)?.startedAt || Date.now())
-      }, 'error');
-      setTimeout(() => closeJob(jobId), 500);
     }
-  })();
-});
-
-// SSE endpoint for job status streaming - main implementation
-function handleSSERequest(req, res) {
-  const { jobId } = req.params;
-  const job = jobs.get(jobId);
-  
-  if (!job) {
-    console.warn(`🚫 SSE request for unknown job: ${jobId}`);
-    return res.status(404).json({ error: 'Job not found' });
-  }
-  
-  const clientId = `${req.ip}_${Date.now()}`;
-  console.log(`🔗 [SSE] Connection opened for job ${jobId} from client ${redactSensitive(clientId)} (${job.listeners.size} total)`);
-
-  // Set proper SSE headers with CORS support
-  res.writeHead(200, {
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache, no-transform',
-    'Connection': 'keep-alive',
-    'Access-Control-Allow-Origin': req.headers.origin || '*',
-    'Access-Control-Allow-Credentials': 'true',
-    'X-Accel-Buffering': 'no', // Disable proxy buffering
-    'Transfer-Encoding': 'chunked'
-  });
-  
-  // Send initial SSE setup
-  res.write(`retry: 5000\n\n`);
-  
-  // Add this connection to the job's listeners
-  job.listeners.add(res);
-  
-  // Send current status
-  if (job.last) {
-    const { type, data } = job.last;
-    res.write(`event: ${type}\ndata: ${JSON.stringify(data)}\n\n`);
-  } else {
-    // Send initial queued status with enhanced information
-    const initialData = {
-      message: `Job queued (${job.stage || 'unknown'} stage)`,
-      progress: 5,
-      stage: job.stage || 'queued',
-      jobId,
-      timestamp: Date.now(),
-      listeners: job.listeners.size
-    };
-    res.write(`event: status\ndata: ${JSON.stringify(initialData)}\n\n`);
-  }
-  
-  // Send periodic heartbeat to keep connection alive
-  const heartbeat = setInterval(() => {
-    try {
-      res.write(`event: heartbeat\ndata: {"timestamp":${Date.now()}}\n\n`);
-    } catch (error) {
-      clearInterval(heartbeat);
-      job.listeners.delete(res);
+    else if (req.file.mimetype === 'text/plain') {
+      // Plain text
+      extractedText = req.file.buffer.toString('utf-8');
+      console.log('✅ Text file read, extracted', extractedText.length, 'characters');
     }
-  }, 30000); // Every 30 seconds
-
-  // Handle connection cleanup
-  const cleanup = () => {
-    clearInterval(heartbeat);
-    job.listeners.delete(res);
-    console.log(`🔗 [SSE] Connection closed for job ${jobId} from client ${redactSensitive(clientId)} (${job.listeners.size} remaining)`);
-  };
-  
-  req.on('close', cleanup);
-  req.on('end', cleanup);
-  res.on('close', cleanup);
-  res.on('error', (error) => {
-    console.error(`🚨 [SSE] Connection error for job ${jobId}:`, redactSensitive(error.message));
-    cleanup();
-  });
-}
-
-// Register SSE routes with the same handler
-app.get('/generate/stream/:jobId', handleSSERequest);
-app.get('/generate/job/:id', (req, res) => {
-  // Map :id parameter to :jobId for consistency
-  req.params.jobId = req.params.id;
-  handleSSERequest(req, res);
-});
-
-// Onboarding resume parsing endpoint
-const upload = multer({ dest: path.join(tempDir, 'uploads') });
-app.post('/onboarding/parse', upload.single('resume'), async (req, res) => {
-  try {
-    console.log(`[PARSE] inbound file=${req.file?.originalname} type=${req.file?.mimetype}`);
-    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-    const filePath = req.file.path;
-    const mimetype = req.file.mimetype || '';
-    let text = '';
-
-    if (mimetype.includes('text/plain')) {
-      text = await fs.readFile(filePath, 'utf-8');
-    } else if (mimetype.includes('pdf')) {
+    else if (req.file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+      // Parse DOCX
+      const result = await mammoth.extractRawText({ buffer: req.file.buffer });
+      extractedText = result.value;
+      console.log('✅ DOCX parsed, extracted', extractedText.length, 'characters');
+    }
+    else if (req.file.mimetype === 'application/msword') {
+      // For old .doc files, try mammoth (it might work) or return error
       try {
-        const require = createRequire(import.meta.url);
-        const pdfParse = require('pdf-parse');
-        const nfs = await import('fs');
-        const buf = await nfs.promises.readFile(filePath);
-        const data = await pdfParse(buf);
-        text = data.text || '';
+        const result = await mammoth.extractRawText({ buffer: req.file.buffer });
+        extractedText = result.value;
+        console.log('✅ DOC parsed, extracted', extractedText.length, 'characters');
       } catch (e) {
-        console.warn('pdf-parse failed:', e.message);
-      }
-    } else if (mimetype.includes('officedocument') || mimetype.includes('word')) {
-      try {
-        const require = createRequire(import.meta.url);
-        const mammoth = require('mammoth');
-        const nfs = await import('fs');
-        const buf = await nfs.promises.readFile(filePath);
-        const result = await mammoth.extractRawText({ buffer: buf });
-        text = result.value || '';
-      } catch (e) {
-        console.warn('mammoth failed:', e.message);
+        return res.status(400).json({
+          error: 'Cannot parse old .doc format. Please save as .docx or .pdf'
+        });
       }
     }
 
-    const emailMatch = text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
-    const phoneMatch = text.match(/\+?\d[\d\s().-]{7,}\d/g);
-    const lines = (text || '').split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-    const nameGuess = (lines[0] && lines[0].length < 60) ? lines[0].replace(/[^A-Za-z\s.-]/g,'').trim() : '';
-    // Extract URLs
-    const urlMatches = Array.from(new Set((text.match(/https?:\/\/[^\s)]+/g) || []).slice(0, 20)));
-    // Extract skills using synonyms/skills dictionary
-    let skills = [];
-    try {
-      const skillsPath = path.join(__dirname, '..', 'extension', 'lib', 'skills.json');
-      const skillsJson = JSON.parse(await fs.readFile(skillsPath, 'utf-8'));
-      const docLower = text.toLowerCase();
-      const found = new Set();
-      for (const s of skillsJson) {
-        const key = String(s).toLowerCase();
-        if (docLower.includes(key)) found.add(s);
-      }
-      skills = Array.from(found).slice(0, 50);
-    } catch {}
+    // Clean up the text
+    extractedText = extractedText
+      .replace(/\s+/g, ' ')  // Replace multiple spaces with single space
+      .replace(/\n{3,}/g, '\n\n')  // Replace multiple newlines with double newline
+      .trim();
+
+    if (!extractedText || extractedText.length < 50) {
+      return res.status(400).json({
+        error: 'Could not extract meaningful text from the file'
+      });
+    }
 
     res.json({
-      text,
-      fields: {
-        name: nameGuess || '',
-        email: emailMatch ? emailMatch[0] : '',
-        phone: phoneMatch ? phoneMatch[0] : ''
-      },
-      urls: urlMatches,
-      skills
+      success: true,
+      text: extractedText,
+      filename: req.file.originalname,
+      size: req.file.size
     });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  } finally {
-    if (req.file) { try { await fs.unlink(req.file.path); } catch {} }
+
+  } catch (error) {
+    console.error('File upload error:', error);
+    res.status(500).json({
+      error: error.message || 'Failed to process file'
+    });
   }
 });
 
-// Public AI-based resume analysis for onboarding (no auth required)
-app.post('/onboarding/analyze-public', async (req, res) => {
+// Resume analysis endpoint (for onboarding)
+app.post('/api/analyze/public', async (req, res) => {
   try {
-    const { resumeText = '' } = req.body || {};
-    if (!resumeText || resumeText.length < 50) return res.status(400).json({ error: 'Insufficient text' });
-    const apiKey = process.env.OPENAI_API_KEY;
-    
-    // Try AI analysis first
-    if (apiKey && apiKey.startsWith('sk-') && apiKey.length > 20) {
-      try {
-        const { default: OpenAI } = await import('openai');
-        const openai = new OpenAI({ apiKey });
-        const system = 'You extract structured resume data as strict JSON. Create a professional summary if one does not exist. Always return valid JSON only.';
-        const user = `Resume text:\n\n${resumeText}\n\nSchema:\n{\n  "summary": string,\n  "skills": string[],\n  "experience": [{ "company": string, "role": string, "location": string, "dates": string, "bullets": string[] }],\n  "projects": [{ "name": string, "summary": string, "bullets": string[] }],\n  "education": [{ "institution": string, "degree": string, "location": string, "dates": string }]\n}`;
-        const completion = await openai.chat.completions.create({
-          model: 'gpt-4-turbo-preview',
-          messages: [ { role: 'system', content: system }, { role: 'user', content: user } ],
-          temperature: 0.3,
-          max_completion_tokens: 2000
-        });
-        let content = completion.choices?.[0]?.message?.content || '{}';
-        try { content = content.replace(/^```json|```$/g, '').trim(); } catch {}
-        const structured = JSON.parse(content);
-        return res.json({ structured });
-      } catch (aiError) {
-        console.error('[AI-ANALYZE] OpenAI error:', aiError.message);
-        // Fall through to basic parsing
-      }
+    const { resumeText } = req.body;
+
+    if (!resumeText || resumeText.trim().length === 0) {
+      return res.status(400).json({ error: 'Resume text is required' });
     }
-    
-    // Fallback: Enhanced text parsing when AI is unavailable
-    console.log('[AI-ANALYZE] Using enhanced fallback parser (AI unavailable)');
-    
-    // For demo/testing: Create a realistic structured response
-    const structured = {
-      summary: extractSummary(resumeText) || "Experienced professional with a proven track record of delivering high-quality solutions and driving team success.",
-      skills: extractSkills(resumeText).length > 0 ? extractSkills(resumeText) : [
-        "JavaScript", "React", "Node.js", "Python", "SQL", "Git", 
-        "Agile", "REST APIs", "Docker", "AWS"
-      ],
-      experience: extractExperience(resumeText).length > 0 ? extractExperience(resumeText) : [
+
+    console.log('🔍 Analyzing resume text (public)...');
+
+    // Use OpenAI to analyze the resume
+    const openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY
+    });
+
+    const modelName = config.openai.textModels.default;
+    const requestParams = {
+      model: modelName,
+      messages: [
         {
-          company: "Tech Solutions Inc",
-          role: "Senior Software Engineer",
-          location: "San Francisco, CA",
-          dates: "2020 - Present",
-          bullets: [
-            "Led development of microservices architecture serving 1M+ users",
-            "Improved system performance by 40% through optimization",
-            "Mentored team of 5 junior developers"
-          ]
+          role: 'system',
+          content: modelName.includes('gpt-5-mini')
+            ? 'Resume parser. Extract info from resume. Return JSON only.'
+            : 'You are a precise resume parser. Extract ONLY information that is explicitly stated in the resume. If information is not found, return null for that field. Do not make up or infer information.'
         },
         {
-          company: "StartupCo",
-          role: "Full Stack Developer",
-          location: "Remote",
-          dates: "2018 - 2020",
-          bullets: [
-            "Built RESTful APIs and React frontend for SaaS platform",
-            "Implemented CI/CD pipeline reducing deployment time by 60%",
-            "Collaborated with product team to deliver features"
-          ]
+          role: 'user',
+          content: `Parse this resume and extract ONLY the information that is explicitly mentioned. Return a JSON object.
+
+Resume:
+"""
+${resumeText.substring(0, 4000)}
+"""
+
+Instructions:
+1. Extract ONLY information that is clearly stated in the resume
+2. For name: Look for the person's full name (usually at the top)
+3. For email: Look for an email address (contains @)
+4. For phone: Look for a phone number
+5. For location: Look for city/state information
+6. For summary: Create a 2-3 sentence summary based ONLY on the actual experience and roles mentioned
+7. For skills: Extract ONLY technical skills, tools, and technologies that are explicitly mentioned (e.g., Python, React, AWS, etc.)
+8. Do NOT include generic skills like "problem-solving" or "collaboration"
+9. Return null for any field that cannot be found
+
+Return ONLY a valid JSON object, no other text.`
         }
       ],
-      projects: [
-        {
-          name: "E-Commerce Platform",
-          summary: "Full-stack web application for online retail",
-          bullets: [
-            "Implemented payment processing with Stripe API",
-            "Built responsive UI with React and Material-UI",
-            "Deployed on AWS with auto-scaling"
-          ]
-        }
-      ],
-      education: extractEducation(resumeText).length > 0 ? extractEducation(resumeText) : [
-        {
-          institution: "University of California",
-          degree: "Bachelor of Science in Computer Science",
-          location: "Berkeley, CA",
-          dates: "2014 - 2018"
-        }
-      ]
+      max_completion_tokens: 800
     };
-    
-    res.json({ structured, fallback: true, demo: true });
-  } catch (e) {
-    console.error('[AI-PUBLIC-ANALYZE] Error:', e.message);
-    res.status(e.status || 500).json({ error: e.message });
+
+    // Temperature handling for different models
+    if (!modelName.includes('gpt-5')) {
+      requestParams.temperature = 0.1; // Lower temperature for more precise extraction
+    } else if (modelName === 'gpt-5' || modelName === 'gpt-5-nano') {
+      requestParams.temperature = 0.1;
+    }
+    // Skip temperature for GPT-5-mini
+
+    const response = await openai.chat.completions.create(requestParams);
+
+    const analysisText = response.choices[0].message.content;
+
+    // Try to parse as JSON
+    let parsedData;
+    try {
+      parsedData = JSON.parse(analysisText);
+    } catch (e) {
+      // Fallback to regex parsing if not valid JSON
+      const skills = analysisText.match(/(?:Skills?|Technologies|Tools?)[\s:]*([^\n]+)/i)?.[1]
+        ?.split(/[,;]/)
+        .map(s => s.trim())
+        .filter(s => s.length > 0) || [];
+
+      parsedData = {
+        summary: analysisText.match(/(?:Summary|Overview)[\s:]*([^\n]+(?:\n[^\n]+)?)/i)?.[1] || resumeText.substring(0, 200) + '...',
+        skills: skills.slice(0, 10)
+      };
+    }
+
+    console.log('✅ Resume analysis complete');
+
+    // Clean up AI responses - remove any placeholder or generic text
+    const cleanValue = (value) => {
+      if (value === null || value === undefined) return '';
+      if (typeof value !== 'string') return value;
+      const lowerValue = value.toLowerCase();
+
+      // Remove any placeholder responses
+      if (lowerValue.includes('not provided') ||
+          lowerValue.includes('not extractable') ||
+          lowerValue.includes('not found') ||
+          lowerValue.includes('not available') ||
+          lowerValue.includes('not mentioned') ||
+          value === 'null' ||
+          value === 'N/A') {
+        return '';
+      }
+      return value.trim();
+    };
+
+    // Filter out generic or placeholder skills
+    const filterSkills = (skills) => {
+      if (!Array.isArray(skills)) return [];
+
+      const genericSkills = [
+        'problem-solving', 'collaboration', 'communication', 'teamwork',
+        'leadership', 'skill1', 'skill2', 'skill3', 'technical skills',
+        'soft skills', 'analytical skills'
+      ];
+
+      return skills
+        .filter(skill => {
+          if (!skill) return false;
+          const lower = skill.toLowerCase();
+          return !genericSkills.includes(lower) &&
+                 !lower.includes('skill') &&
+                 skill.length > 1;
+        })
+        .slice(0, 15);
+    };
+
+    // Only use the summary if it's actually based on the resume content
+    const summary = parsedData.summary &&
+                   parsedData.summary.length > 20 &&
+                   !parsedData.summary.toLowerCase().includes('experienced professional') &&
+                   !parsedData.summary.toLowerCase().includes('diverse experience')
+                   ? parsedData.summary
+                   : '';
+
+    res.json({
+      structured: {
+        name: cleanValue(parsedData.name),
+        email: cleanValue(parsedData.email),
+        phone: cleanValue(parsedData.phone),
+        location: cleanValue(parsedData.location),
+        summary: summary,
+        skills: filterSkills(parsedData.skills),
+        resumeText,
+        isComplete: true
+      }
+    });
+  } catch (error) {
+    console.error('Resume analysis error:', error);
+
+    // Fallback to basic extraction if AI fails
+    const lines = req.body.resumeText?.split('\n') || [];
+    const skills = req.body.resumeText?.match(/\b(?:JavaScript|Python|React|Node\.js|Java|SQL|AWS|Docker|TypeScript|HTML|CSS|Git)\b/gi) || [];
+
+    res.json({
+      structured: {
+        summary: lines.find(l => l.length > 50) || 'Professional with diverse experience',
+        skills: Array.from(new Set(skills)).slice(0, 10),
+        resumeText: req.body.resumeText,
+        isComplete: true
+      }
+    });
   }
 });
 
-// AI-based resume analysis: structure profile from text (authenticated)
-// Public endpoint for onboarding - no auth required
-app.post('/onboarding/analyze', async (req, res) => {
+// Resume generation endpoints - Direct generation with error retry
+app.post('/api/generate', authenticateToken, async (req, res) => {
   try {
-    const { resumeText = '', text = '', saveToProfile = false } = req.body || {};
-    const textToAnalyze = resumeText || text;
-    if (!textToAnalyze || textToAnalyze.length < 50) return res.status(400).json({ error: 'Insufficient text' });
+    const {
+      resumeText,
+      jobDescription,
+      company,
+      role,
+      jobUrl,
+      aiMode = 'gpt-5-mini',
+      matchMode = 'balanced'
+    } = req.body;
 
-    let structured = {};
-    const apiKey = process.env.OPENAI_API_KEY;
+    if (!resumeText || !jobDescription) {
+      return res.status(400).json({ error: 'Resume text and job description required' });
+    }
 
-    // Try AI analysis first if available
-    if (apiKey && apiKey.startsWith('sk-') && apiKey.length > 20) {
-      try {
-        const { default: OpenAI } = await import('openai');
-        const openai = new OpenAI({ apiKey });
-        const system = 'You extract structured resume data as strict JSON. Create a professional summary if one does not exist. Always return valid JSON only.';
-        const user = `Resume text:\n\n${textToAnalyze}\n\nSchema:\n{\n  "summary": string,\n  "skills": string[],\n  "experience": [{ "company": string, "role": string, "location": string, "dates": string, "bullets": string[] }],\n  "projects": [{ "name": string, "summary": string, "bullets": string[] }],\n  "education": [{ "institution": string, "degree": string, "location": string, "dates": string }]\n}`;
-        const completion = await openai.chat.completions.create({
-          model: 'gpt-4-turbo-preview',
-          messages: [ { role: 'system', content: system }, { role: 'user', content: user } ],
-          temperature: 0.3,
-          max_completion_tokens: 2000
+    // Generate a unique job ID
+    const jobId = `job-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+    console.log(`[API] Starting new pipeline generation for job ${jobId}`);
+    console.log(`[API] Parameters: aiMode=${aiMode}, company=${company}, role=${role}`);
+
+    // Get relevant content if user has profile
+    let relevantContent = null;
+    try {
+      const profile = await prisma.profile.findUnique({
+        where: { userId: req.user.id }
+      });
+      if (profile) {
+        relevantContent = JSON.stringify({
+          skills: profile.skills,
+          experience: profile.experience
         });
-        let content = completion.choices?.[0]?.message?.content || '{}';
-        try { content = content.replace(/^```json|```$/g, '').trim(); } catch {}
-        structured = JSON.parse(content);
-      } catch (aiError) {
-        console.error('[AI-ANALYZE] OpenAI error, using fallback:', aiError.message);
-        // Fall through to basic parsing
       }
+    } catch (err) {
+      console.log('Could not fetch profile for relevant content:', err.message);
     }
 
-    // Fallback to basic extraction if AI fails or is not configured
-    if (!structured.summary) {
-      structured = {
-        summary: extractSummary(textToAnalyze) || "Experienced professional with a proven track record of delivering high-quality solutions.",
-        skills: extractSkills(textToAnalyze),
-        experience: extractExperience(textToAnalyze),
-        education: extractEducation(textToAnalyze),
-        projects: []
+    // === NEW MICRO-PROMPT PIPELINE SYSTEM ===
+    // Using 100% new system for pre-launch testing
+    console.log(`[API] Calling new runPipeline for job ${jobId}`);
+    const pipelineStartTime = Date.now();
+
+    const result = await runPipeline({
+      jobDescription,
+      resumeText,
+      companyContext: company || '',  // Map company to companyContext
+      aiMode,
+      templateId: null,  // Auto-select template based on job
+      useCache: true,    // Enable JD digest caching
+      fallbackToCurrent: false,  // No fallback - 100% new system
+      jobId
+    });
+
+    const pipelineDuration = Date.now() - pipelineStartTime;
+    console.log(`[API] Pipeline completed in ${pipelineDuration}ms`);
+
+    // Log pipeline metrics
+    if (result.artifacts?.templateUsed) {
+      console.log(`[API] Template used: ${result.artifacts.templateUsed}`);
+    }
+    if (result.artifacts?.metrics) {
+      console.log(`[API] Pipeline metrics:`, result.artifacts.metrics);
+    }
+
+    if (result.success) {
+      // Save to database for history
+      const job = await prisma.job.create({
+        data: {
+          id: jobId,
+          userId: req.user.id,
+          status: 'COMPLETED',
+          resumeText,
+          jobDescription,
+          company: company || null,
+          role: role || null,
+          jobUrl: jobUrl || null,
+          aiMode,
+          matchMode,
+          diagnostics: {
+            generationType: result.artifacts.generationType || 'pipeline',
+            templateUsed: result.artifacts.templateUsed || 'unknown',
+            pipelineMetrics: result.artifacts.metrics || {},
+            processingTime: pipelineDuration,
+            timestamp: Date.now()
+          }
+        }
+      });
+
+      // Save artifacts
+      if (result.artifacts.pdfBuffer) {
+        await prisma.artifact.create({
+          data: {
+            jobId,
+            type: 'PDF_OUTPUT',
+            content: result.artifacts.pdfBuffer,
+            version: 1,
+            metadata: result.artifacts.pdfMetadata || {}
+          }
+        });
+      }
+
+      if (result.artifacts.latexSource) {
+        await prisma.artifact.create({
+          data: {
+            jobId,
+            type: 'LATEX_SOURCE',
+            content: Buffer.from(result.artifacts.latexSource),
+            version: 1,
+            metadata: {}
+          }
+        });
+      }
+
+      // Include additional pipeline data for debugging
+      const response = {
+        success: true,
+        jobId,
+        message: 'Resume generated successfully',
+        downloadUrl: `/api/job/${jobId}/download/pdf`,
+        // New pipeline-specific data
+        templateUsed: result.artifacts?.templateUsed,
+        generationType: result.artifacts?.generationType || 'pipeline',
+        processingTime: pipelineDuration
       };
-    }
-    
-    // If requested, save the AI-parsed profile to database
-    if (saveToProfile && req.user?.email) {
-      const profileData = {
-        summary: structured.summary || '',
-        skills: structured.skills || [],
-        experience: structured.experience || [],
-        education: structured.education || [],
-        projects: structured.projects || [],
-        aiParsed: true,
-        parsedAt: new Date().toISOString()
-      };
-      await dbSaveProfile(req.user.email, profileData);
-      console.log(`[AI-PARSE] Saved profile for ${req.user.email}`);
-    }
-    
-    // Return the structured data directly as Profile format
-    res.json(structured);
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
 
-// AI analysis endpoint for extension (secure server-side OpenAI calls)
-app.post('/api/ai-analyze', async (req, res) => {
-  try {
-    const { systemPrompt, userPrompt, model = 'gpt-4-turbo-preview', temperature = 0.3, max_completion_tokens = 2000 } = req.body;
-    
-    if (!systemPrompt || !userPrompt) {
-      return res.status(400).json({ error: 'Missing required prompts' });
-    }
-    
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      return res.status(501).json({ error: 'OpenAI API key not configured on server' });
-    }
-    
-    const { default: OpenAI } = await import('openai');
-    const openai = new OpenAI({ apiKey });
-    
-    const completion = await openai.chat.completions.create({
-      model,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt }
-      ],
-      temperature: 0.3,
-      max_completion_tokens,
-      response_format: { type: "json_object" }
-    });
-    
-    const result = completion.choices?.[0]?.message?.content || '{}';
-    res.json({ result, success: true });
-  } catch (error) {
-    console.error('AI analysis error:', error);
-    res.status(500).json({ 
-      error: error.message || 'AI analysis failed',
-      success: false 
-    });
-  }
-});
+      // Include pipeline log in development/testing
+      if (process.env.NODE_ENV !== 'production') {
+        response.pipelineLog = result.artifacts?.pipelineLog;
+        response.metrics = result.artifacts?.metrics;
+      }
 
-// Speech-to-text using OpenAI Whisper
-const audioUpload = multer({ dest: path.join(tempDir, 'uploads') });
-app.post('/onboarding/stt', audioUpload.single('audio'), async (req, res) => {
-  try {
-    if (!req.file) return res.status(400).json({ error: 'No audio provided' });
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) return res.status(501).json({ error: 'OPENAI_API_KEY not configured' });
-    const { default: OpenAI } = await import('openai');
-    const openai = new OpenAI({ apiKey });
-    const nfs = await import('fs');
-    const stream = nfs.createReadStream(req.file.path);
-    const resp = await openai.audio.transcriptions.create({ file: stream, model: 'whisper-1' });
-    res.json({ text: resp.text || '' });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  } finally {
-    if (req.file) { try { await fs.unlink(req.file.path); } catch {} }
-  }
-});
-
-// Helper function to extract location from job description
-function extractLocationFromJD(jobText) {
-  if (!jobText) return '';
-  // Common location patterns in job descriptions
-  const locationPatterns = [
-    /(?:Location|Based in|Office in|Located in)[\s:]+([^,\n.]+(?:,\s*[A-Z]{2})?)/i,
-    /([A-Za-z\s]+,\s*[A-Z]{2}(?:\s*\d{5})?)/g, // City, State format
-    /\b([A-Za-z\s]+,\s*(?:CA|NY|TX|FL|IL|PA|OH|GA|NC|MI|NJ|VA|WA|MA|IN|AZ|TN|MO|MD|WI|MN|CO|AL|SC|LA|KY|OR|OK|CT|IA|MS|AR|KS|UT|NV|NM|WV|NE|ID|HI|ME|NH|RI|MT|DE|SD|ND|AK|VT|WY|DC))\b/g
-  ];
-  
-  for (const pattern of locationPatterns) {
-    const matches = jobText.match(pattern);
-    if (matches) {
-      return matches[0].replace(/^(?:Location|Based in|Office in|Located in)[\s:]+/i, '').trim();
-    }
-  }
-  return '';
-}
-
-async function generateLatexWithAI(profile, jobData, statusCb) {
-  statusCb?.('Preparing profile and job context...', 20);
-  
-  // Build the new master prompt system
-  const outputSettings = {
-    outputMode: "resume_only",
-    targetCompany: jobData.company || "Target Company",
-    targetRole: jobData.role || "Target Role", 
-    locationFromJd: extractLocationFromJD(jobData.text || ''),
-    pageGoal: "complete_full_page_coverage",
-    skillFlexPercent: 40,
-    includeProjects: true,
-    includeCerts: true,
-    contentTarget: "2000_plus_words",
-    expandContent: true
-  };
-
-  const systemPrompt = `You are an elite resume strategist specializing in ATS-optimized, cross-domain career transitions. Generate ONLY LaTeX body content that fits into an existing document template. The document header, preamble, and contact information are already handled - you generate ONLY the content sections.
-
-CRITICAL: You MUST use ALL the user's profile information provided. This includes:
-- Their complete professional summary (enhance but preserve their voice)
-- ALL their work experience entries (optimize descriptions for the target role)
-- ALL their education entries (highlight relevant coursework/achievements)
-- Their ACTUAL skills (reorganize and emphasize based on job requirements)
-- Any projects, certifications, or additional sections they've provided
-
-% === Critical Structure Requirements ===
-- Generate no contact information: Do not include name, email, phone, address, or contact details
-- Generate no document structure: Do not use \\documentclass, \\begin{document}, \\end{document}, or preamble
-- Generate no manual headers: Do not create \\section*{Name} or contact info blocks
-- Start with summary: Your first line must be \\section*{Summary}
-- Body content only: Generate only Summary, Experience, Skills, Education sections
-- The complete document template with headers is automatically provided
-- PRESERVE USER DATA: Never omit or replace user's actual experience, education, or skills
-
-% === Macro Whitelist (Only These Allowed) ===
-\\section* (always with *), \\resumeSubHeadingListStart, \\resumeSubHeadingListEnd, \\resumeItemListStart, \\resumeItemListEnd, \\resumeSubheading{#1}{#2}{#3}{#4}, \\resumeItem{#1}
-Critical: All sections must use \\section* (with asterisk) - never \\section without asterisk
-Critical: \\resumeItem can ONLY be used inside \\resumeItemListStart ... \\resumeItemListEnd blocks
-Escape LaTeX special chars: \\% \\& \\_ \\# \\{ \\}
-
-% === Core Transformation Methodology ===
-
-1. Keyword Extraction & Mapping:
-   - Extract 15-25 critical keywords from job description (technical skills, soft skills, industry terms, action verbs)
-   - Map each keyword to evidence in user profile (direct match, transferable skill, or contextual fit)
-   - Distribute keywords naturally: 3-4 in summary, 1 per experience bullet (max), remainder in skills section
-   - Priority order: exact matches > transferable skills > industry synonyms
-
-2. Cross-Domain Translation Matrix:
-   Technical → Business: engineering/development → solution delivery, debugging → problem-solving, architecture → strategic planning
-   Business → Technical: sales → user acquisition, market research → data analysis, client management → stakeholder engagement
-   Academic → Industry: research → analysis, teaching → training/mentoring, publications → documentation
-   Startup → Corporate: founder → business leader, scrappy → resourceful, pivot → strategic adaptation
-
-3. Experience Bullet Transformation:
-   Formula: [Action Verb] + [Scope/Context] + [Method/Tool] + [Quantified Impact] + [Relevance Bridge]
-   Example: "Built web platform" → "Delivered scalable client solution using modern frameworks, serving 10K+ users and reducing operational costs by 30%"
-   
-4. Skills Architecture:
-   - Cluster into 3-5 logical groups (Languages/Frameworks, Tools/Platforms, Methodologies, Industry Knowledge)
-   - 40% skill-flex rule: reorder/alias/condense existing skills to mirror job description language
-   - Never fabricate skills; maximum 3 adjacent skills if clearly supported by profile context
-   - Cap total skills at 18 items across all clusters
-
-% === Section-Specific Instructions ===
-
-Summary (Critical - determines initial screening):
-- Format: \\section*{Summary} followed by single paragraph (no bullets)
-- Length: 4-5 sentences, 150-220 words, fill substantial vertical space
-- Opening: [Target Role] professional with [X years] experience in [most relevant domain]
-- Body: Highlight 3-4 transferable achievements with metrics, mention target company
-- Closing: Clear value proposition for the specific role
-- Keyword density: 4-5 natural integrations, avoid keyword stuffing
-
-Experience (2-3 roles, most recent first):
-- Structure: \\section*{Experience} \\resumeSubHeadingListStart ... \\resumeSubHeadingListEnd
-- Role Format: \\resumeSubheading{Title}{Dates}{Company}{Location}
-- Role Title Adaptation: If cross-domain, subtly reframe titles (Engineer → Solutions Developer)
-- Bullet Count: 6-8 per role to fill page completely, prioritize job description-relevant achievements
-- Bullet Structure: \\resumeItem{Strong action verb + specific scope + relevant technology/method + quantified impact + business context}
-- Cross-Domain Bridging: Lead each role with most transferable bullet, use industry-appropriate language
-- Metric Authenticity: Use exact numbers from profile; if none exist, let AI determine appropriate scale/scope based on context
-
-Skills (Strategic keyword placement, substantial content):
-- Structure: \\section*{Skills} \\resumeSubHeadingListStart \\small{\\item{...}} \\resumeSubHeadingListEnd
-- Format: Group skills with \\textbf{Category}: skill1, skill2, skill3, skill4, skill5 \\\\ 
-- 5-6 categories minimum to fill space: Languages/Frameworks, Tools/Platforms, Methodologies, Industry Knowledge, Business Skills, Domain Expertise
-- 25-30 items total across categories for full page coverage
-- Group 1: Core competencies matching job description requirements (5-6 skills)
-- Group 2: Technical/tools skills (filtered for relevance) (5-6 skills)
-- Group 3: Methodologies/frameworks (4-5 skills)
-- Group 4: Industry-specific knowledge (4-5 skills)
-- Group 5: Business/soft skills relevant to target role (4-5 skills)
-- Group 6: Additional domain expertise if needed for full coverage
-
-Projects (Always include for full page coverage):
-- Structure: \\section*{Projects} \\resumeSubHeadingListStart ... \\resumeSubHeadingListEnd
-- Format: \\resumeSubheading{Project Name}{Timeline}{Technology Stack}{Context}
-- 2-3 projects minimum, focus on target role relevance and technical depth
-- 4-5 bullets each using \\resumeItem{}, emphasizing technical implementation and business impact
-
-Education (Expand for full page coverage):
-- Structure: \\section*{Education} \\resumeSubHeadingListStart ... \\resumeSubHeadingListEnd
-- Format: \\resumeSubheading{Institution}{Dates}{Degree}{Location}
-- Add relevant coursework bullet if needed to fill space: \\resumeItem{Relevant coursework: ...}
-
-% === Full Page Coverage Requirements ===
-Mandatory: Generate enough content to fill exactly one full page (2000-2400 words):
-- Summary: 150-220 words (4-5 substantial sentences)
-- Experience: 1000-1200 words (6-8 bullets per role × 2-3 roles)
-- Skills: 300-400 words (25-30 skills across 5-6 categories)
-- Projects: 400-500 words (4-5 bullets × 2-3 projects)
-- Education: 150-250 words (degree + coursework/certifications)
-
-Critical: If content appears short, expand in this order:
-1. Add more experience bullets (up to 8 per role)
-2. Expand skills to 30 items across 6 categories
-3. Add third project with 4-5 bullets
-4. Add coursework/certifications to education
-5. Lengthen summary to full 220 words
-- Total target: 1800-2200 words of LaTeX content for full page coverage
-
-% === QUALITY ASSURANCE CHECKLIST ===
-Before output, verify:
-□ All information traceable to USER_PROFILE (no fabrication)
-□ Keywords distributed naturally (not dumped)
-□ Cross-domain language bridges established
-□ Quantified achievements preserved/enhanced
-□ FULL PAGE content generated (sufficient bullets and text)
-□ LaTeX syntax correct (macros only, special chars escaped)
-□ ATS-friendly formatting (clear hierarchy, scannable structure)
-□ NO contact info or headers generated (template handles this)
-
-% === OUTPUT CONTRACT ===
-MANDATORY: Start immediately with \\section*{Summary} - NO contact info, NO name sections, NO headers!
-
-Return ONLY LaTeX body content between markers:
-% === BEGIN RESUME ===
-\\section*{Summary}
-[Summary paragraph - 3-4 sentences about target role at target company]
-
-\\section{Experience}
-\\resumeSubHeadingListStart
-  \\resumeSubheading{Job Title}{Dates}{Company Name}{Location}
-    \\resumeItemListStart
-      \\resumeItem{Bullet point 1 with metrics and keywords}
-      \\resumeItem{Bullet point 2 with cross-domain language}
-      \\resumeItem{Bullet point 3 with quantified impact}
-      \\resumeItem{Bullet point 4 with relevant technology}
-      \\resumeItem{Bullet point 5 with business value}
-    \\resumeItemListEnd
-  [Repeat for 2-3 roles total]
-\\resumeSubHeadingListEnd
-
-\\section{Skills}
-\\resumeSubHeadingListStart
-\\small{\\item{
-\\textbf{Business Development}: keyword1, keyword2, keyword3 \\\\
-\\textbf{Technical Skills}: tool1, tool2, tool3 \\\\
-\\textbf{Methodologies}: method1, method2, method3 \\\\
-\\textbf{Industry Knowledge}: domain1, domain2, domain3 \\\\
-}}
-\\resumeSubHeadingListEnd
-
-\\section{Education}
-\\resumeSubHeadingListStart
-  \\resumeSubheading{University Name}{Dates}{Degree Title}{Location}
-\\resumeSubHeadingListEnd
-% === END RESUME ===
-
-No commentary, explanations, or diagnostics unless SETTINGS requests them.`;
-
-  const userPrompt = `% === JOB_DESCRIPTION ===
-${(jobData.text || '').slice(0, 5000)}
-
-% === USER_PROFILE ===
-CONTACT INFO:
-Name: ${profile.name || 'N/A'}
-Email: ${profile.email || 'N/A'}
-Phone: ${profile.phone || 'N/A'}
-Location: ${profile.location || 'N/A'}
-LinkedIn: ${profile.linkedin || 'N/A'}
-Website: ${profile.website || 'N/A'}
-
-CURRENT SUMMARY: ${profile.summary_narrative || 'N/A'}
-
-SKILLS INVENTORY: ${(Array.isArray(profile.skills) ? profile.skills.join(', ') : 'N/A')}
-
-WORK EXPERIENCE:
-${Array.isArray(profile.experience) ? profile.experience.map((exp, idx) => 
-  `[${idx + 1}] ${exp.role || 'Role'} at ${exp.company || 'Company'} (${exp.dates || 'Dates'}) - ${exp.location || 'Location'}
-Achievements: ${Array.isArray(exp.bullets) ? exp.bullets.join(' | ') : 'N/A'}`
-).join('\n') : 'N/A'}
-
-PROJECTS:
-${Array.isArray(profile.projects) ? profile.projects.map((proj, idx) => 
-  `[${idx + 1}] ${proj.name || 'Project'}: ${proj.summary || 'Summary'}
-Details: ${Array.isArray(proj.bullets) ? proj.bullets.join(' | ') : 'N/A'}`
-).join('\n') : 'N/A'}
-
-EDUCATION:
-${Array.isArray(profile.education) ? profile.education.map((edu, idx) => 
-  `[${idx + 1}] ${edu.degree || 'Degree'} from ${edu.institution || 'Institution'} (${edu.dates || 'Dates'}) - ${edu.location || 'Location'}`
-).join('\n') : 'N/A'}
-
-ADDITIONAL CONTEXT: ${profile.resumeText || 'N/A'}
-
-% === SETTINGS ===
-TARGET_ROLE: ${outputSettings.targetRole}
-TARGET_COMPANY: ${outputSettings.targetCompany}
-INCLUDE_PROJECTS: ${outputSettings.includeProjects}
-SKILL_FLEX_PERCENT: ${outputSettings.skillFlexPercent}
-
-% === TRANSFORMATION REQUIREMENTS ===
-1. Extract 15-25 keywords from the JOB_DESCRIPTION above
-2. Map candidate's background to target role using cross-domain translation matrix
-3. Generate LaTeX body content with natural keyword distribution
-4. Ensure all claims are traceable to USER_PROFILE data
-5. Optimize for ATS scanning and human readability
-
-% === EXPECTED OUTPUT FORMAT ===
-Generate LaTeX body content between the markers exactly as specified in the system instructions.`;
-
-  const fallbackLatex = () => buildOnePageTemplateWithTransformation(profile, jobData);
-
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    statusCb?.('OpenAI API key not set. Using template.', 35);
-    return fallbackLatex();
-  }
-
-  try {
-    statusCb?.('Contacting AI for tailored draft...', 30);
-    const { default: OpenAI } = await import('openai');
-    const openai = new OpenAI({ apiKey });
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4-turbo-preview',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt }
-      ],
-      temperature: 0.3,
-      max_completion_tokens: 4000
-    });
-    let latex = completion.choices?.[0]?.message?.content || '';
-    
-    // Extract content between markers if present
-    const markerMatch = latex.match(/% === BEGIN RESUME ===([\s\S]*?)% === END RESUME ===/);
-    if (markerMatch) {
-      latex = markerMatch[1].trim();
+      res.json(response);
     } else {
-      // Fallback: clean up common formatting
-    latex = latex.replace(/```latex/g, '').replace(/```/g, '').trim();
-    }
-    
-    // Production-ready content processing
-    latex = latex.trim();
-    
-    if (!latex || latex.length < 100) throw new Error('Empty AI output');
-    statusCb?.('AI draft ready.', 55);
-    
-    // Fix all section commands in AI output (global replace)
-    latex = latex.replace(/\\section\{([^}]+)\}/g, '\\section*{$1}');
-    
-    // Clean up potential LaTeX parsing issues
-    latex = latex.replace(/\r\n/g, '\n'); // Normalize line endings
-    latex = latex.replace(/[""]/g, '"'); // Replace smart quotes
-    latex = latex.replace(/['']/g, "'"); // Replace smart apostrophes
-    latex = latex.replace(/–/g, '-'); // Replace en-dash with hyphen
-    latex = latex.replace(/—/g, '--'); // Replace em-dash with double hyphen
-    
-    // Fix misplaced \resumeItem commands (must be inside itemize blocks)
-    // First, remove any nested \resumeItemListStart blocks
-    latex = latex.replace(/\\resumeItemListStart\s*\\resumeItemListStart/g, '\\resumeItemListStart');
-    latex = latex.replace(/\\resumeItemListEnd\s*\\resumeItemListEnd/g, '\\resumeItemListEnd');
-    
-    // Then fix any remaining misplaced \resumeItem commands
-    latex = latex.replace(/(\n\s*)\\resumeItem\{([^}]*)\}(?!\s*\\resumeItemListEnd)(?!\s*\\resumeItem)/g, '$1  \\resumeItemListStart\n    \\resumeItem{$2}\n  \\resumeItemListEnd');
-    
-    console.log('[AI-LATEX] Fixed sections, body content length:', latex.length);
-    console.log('[AI-LATEX] Body content starts with:', latex.substring(0, 100));
-    
-    // Wrap AI-generated body content in complete LaTeX template
-    const completeLatex = buildCompleteLatexDocument(latex, profile);
-    console.log('[AI-LATEX] Generated complete document with', completeLatex.length, 'characters');
-    console.log('[AI-LATEX] Complete document starts with:', completeLatex.substring(0, 100));
-    return completeLatex; // Don't sanitize twice
-  } catch (e) {
-    console.warn('AI generation failed, falling back to enhanced template:', e.message);
-    statusCb?.('Using enhanced template with cross-domain optimization.', 40);
-    return fallbackLatex();
-  }
-}
-
-// Build complete LaTeX document with AI-generated body content
-function buildCompleteLatexDocument(bodyContent, profile = {}) {
-  const esc = (s = '') => String(s).replace(/([%#&_$~^{}])/g, '\\$1');
-  const name = esc(profile.name || profile.tempId || 'Candidate');
-  const email = profile.email ? esc(profile.email) : '';
-  const phone = profile.phone ? esc(profile.phone) : '';
-  const location = profile.location ? esc(profile.location) : '';
-
-  return `\\documentclass[a4paper,11pt]{article}
-\\usepackage{latexsym}
-\\usepackage[empty]{fullpage}
-\\usepackage{titlesec}
-\\usepackage{marvosym}
-\\usepackage[usenames,dvipsnames]{color}
-\\usepackage{verbatim}
-\\usepackage{enumitem}
-\\usepackage[hidelinks]{hyperref}
-\\usepackage{fancyhdr}
-\\usepackage[english]{babel}
-\\usepackage{tabularx}
-\\usepackage{ragged2e}
-\\pagestyle{fancy}
-\\fancyhf{}
-\\fancyfoot{}
-\\renewcommand{\\headrulewidth}{0pt}
-\\renewcommand{\\footrulewidth}{0pt}
-\\addtolength{\\oddsidemargin}{-0.8in}
-\\addtolength{\\evensidemargin}{-0.8in}
-\\addtolength{\\textwidth}{1.6in}
-\\addtolength{\\topmargin}{-0.8in}
-\\addtolength{\\textheight}{1.6in}
-\\urlstyle{same}
-\\raggedbottom
-\\raggedright
-\\setlength{\\tabcolsep}{0in}
-
-\\titleformat{\\section}{\\vspace{-6pt}\\scshape\\raggedright\\large}{}{0em}{}[\\color{black}\\titlerule \\vspace{-5pt}]
-
-% Custom commands
-\\newcommand{\\resumeItem}[1]{\\item\\small{#1}}
-\\newcommand{\\resumeSubheading}[4]{
-  \\vspace{2pt}\\item[]
-  \\textbf{#1} \\hfill \\textbf{\\small #2} \\\\
-  \\textit{\\small#3} \\hfill \\textit{\\small #4} \\\\
-  \\vspace{2pt}
-}
-\\newcommand{\\resumeSubItem}[1]{\\resumeItem{#1}}
-\\newcommand{\\resumeSubHeadingListStart}{\\begin{itemize}[leftmargin=0.15in, label={}]}  
-\\newcommand{\\resumeSubHeadingListEnd}{\\end{itemize}}
-\\newcommand{\\resumeItemListStart}{\\begin{itemize}[leftmargin=0.3in]}
-\\newcommand{\\resumeItemListEnd}{\\end{itemize}\\vspace{3pt}}
-
-\\begin{document}
-
-% Header
-\\begin{center}
-  \\textbf{\\Huge \\scshape ${name}} \\\\ \\vspace{1pt}
-  ${phone ? `\\small ${phone} $\\cdot$ ` : ''}${email ? `\\href{mailto:${email}}{${email}} ` : ''}${location ? `$\\cdot$ ${location}` : ''} \\\\
-\\end{center}
-
-% Body content from AI
-${bodyContent}
-
-\\end{document}`;
-}
-
-// Enhanced template with basic cross-domain transformation when AI is not available
-function buildOnePageTemplateWithTransformation(profile = {}, jobData = {}) {
-  const esc = (s = '') => String(s).replace(/([%#&_$~^{}])/g, '\\$1');
-  const name = esc(profile.name || profile.tempId || 'Candidate');
-  const email = profile.email ? esc(profile.email) : '';
-  const phone = profile.phone ? esc(profile.phone) : '';
-  const location = profile.location ? esc(profile.location) : '';
-  const linkedin = profile.linkedin ? esc(profile.linkedin) : '';
-  const website = profile.website ? esc(profile.website) : '';
-  
-  // AI-generated summary only - no hardcoded content
-  const summary = profile.summary_narrative ? esc(profile.summary_narrative) : '';
-  
-  const expArray = Array.isArray(profile.experience) ? profile.experience : [];
-  
-  // Transform experience bullets for business roles
-  // Remove hardcoded transformations - let AI handle this intelligently
-  
-  const expBlock = expArray.length > 0 ? expArray.map(exp => {
-    const org = esc(exp.company || exp.organization || '');
-    let roleTitle = exp.role || exp.title || '';
-    
-    // Let AI handle role title optimization - no hardcoded transformations
-    
-    // Escape after transformation
-    roleTitle = esc(roleTitle);
-    
-    const date = esc(exp.dates || exp.period || '');
-    const loc = esc(exp.location || '');
-    
-    let bullets = (Array.isArray(exp.bullets) ? exp.bullets : []).slice(0, 8); // Increased for full page coverage
-    
-    // Ensure we have at least one bullet to avoid LaTeX errors
-    if (bullets.length === 0) {
-      bullets = ['Contributed to team objectives and organizational goals'];
-    }
-    
-    // Let AI handle bullet optimization - no hardcoded transformations
-    
-    const bulletItems = bullets.map(b => `      \\resumeItem{${esc(b)}}`).join('\n');
-    return `  \\resumeSubheading{${roleTitle}}{${date}}{${org}}{${loc}}\n    \\resumeItemListStart\n${bulletItems}\n    \\resumeItemListEnd`;
-  }).join('\n\n') : `  \\resumeSubheading{Professional Experience}{}{}{}\n    \\resumeItemListStart\n      \\resumeItem{Contributed to team objectives and organizational goals}\n    \\resumeItemListEnd`;
-
-  // Let AI handle skills optimization based on job requirements
-  let skillsArray = Array.isArray(profile.skills) ? profile.skills : [];
-  skillsArray = skillsArray.slice(0, 18);
-  
-  // Ensure we have at least some skills to avoid empty itemize
-  if (skillsArray.length === 0) {
-    skillsArray = ['Professional Skills', 'Team Collaboration', 'Problem Solving'];
-  }
-  
-  const skillsLine = esc(skillsArray.join(', '));
-  
-  // Add projects section for full page coverage
-  const projArray = Array.isArray(profile.projects) ? profile.projects : [];
-  const projectsBlock = projArray.length > 0 ? projArray.slice(0, 3).map(proj => {
-    const projName = esc(proj.name || proj.title || 'Project');
-    const projTech = esc(proj.tech || proj.technologies || '');
-    const projDesc = esc(proj.description || proj.desc || '');
-    return `  \\resumeSubheading{${projName}}{}{${projTech}}{}\n    \\resumeItemListStart\n      \\resumeItem{${projDesc}}\n    \\resumeItemListEnd`;
-  }).join('\n\n') : '';
-  
-  const eduArray = Array.isArray(profile.education) ? profile.education : [];
-  const eduBlock = (eduArray[0]) ? `  \\resumeSubheading{${esc(eduArray[0].institution || eduArray[0].school || '')}}{${esc(eduArray[0].dates || eduArray[0].duration || '')}}{${esc(eduArray[0].degree || '')}}{${esc(eduArray[0].location || '')}}` : `  \\resumeSubheading{Educational Background}{}{}{}`;
-
-  // Build header line dynamically with only present fields
-  const headerParts = [];
-  if (location) headerParts.push(location);
-  if (phone) headerParts.push(phone);
-  if (email) headerParts.push(`\\href{mailto:${email}}{\\underline{${email}}}`);
-  if (linkedin) {
-    const cleanLinkedin = linkedin.replace(/^https?:\/\//, '');
-    headerParts.push(`\\href{https://${cleanLinkedin}}{\\underline{${cleanLinkedin}}}`);
-  }
-  if (website) {
-    const cleanWebsite = website.replace(/^https?:\/\//, '');
-    headerParts.push(`\\href{https://${cleanWebsite}}{\\underline{${cleanWebsite}}}`);
-  }
-  const headerLine = headerParts.join(' ~ | ~ ');
-
-  return `\\documentclass[a4paper,11pt]{article}
-\\usepackage{latexsym}
-\\usepackage[empty]{fullpage}
-\\usepackage{titlesec}
-\\usepackage{marvosym}
-\\usepackage[usenames,dvipsnames]{color}
-\\usepackage{verbatim}
-\\usepackage{enumitem}
-\\usepackage[hidelinks]{hyperref}
-\\usepackage{fancyhdr}
-\\usepackage[english]{babel}
-\\usepackage{tabularx}
-\\usepackage{ragged2e}
-\\pagestyle{fancy}
-\\fancyhf{}
-\\fancyfoot{}
-\\renewcommand{\\headrulewidth}{0pt}
-\\renewcommand{\\footrulewidth}{0pt}
-\\addtolength{\\oddsidemargin}{-0.75in}
-\\addtolength{\\evensidemargin}{-0.75in}
-\\addtolength{\\textwidth}{1.5in}
-\\addtolength{\\topmargin}{-0.8in}
-\\addtolength{\\textheight}{1.6in}
-\\urlstyle{same}
-\\raggedbottom
-\\raggedright
-\\setlength{\\tabcolsep}{0in}
-\\titleformat{\\section}{\\vspace{-4pt}\\scshape\\raggedright\\large\\bfseries}{}{0em}{}[\\color{black}\\titlerule \\vspace{-4pt}]
-\\newcommand{\\resumeItem}[1]{\\item\\small{#1 \\vspace{-1pt}}}
-\\newcommand{\\resumeSubheading}[4]{\\vspace{-2pt}\\item \\textbf{#1} \\hfill \\textbf{\\small #2} \\\\ \\textit{\\small#3} \\hfill \\textit{\\small #4} \\\\ \\vspace{-4pt}}
-\\newcommand{\\resumeSubItem}[1]{\\resumeItem{#1}\\vspace{-1pt}}
-\\newcommand{\\resumeSubHeadingListStart}{\\begin{itemize}[leftmargin=0.0in, label={}]}  
-\\newcommand{\\resumeSubHeadingListEnd}{\\end{itemize}}
-\\newcommand{\\resumeItemListStart}{\\begin{itemize}[itemsep=0pt]}
-\\newcommand{\\resumeItemListEnd}{\\end{itemize}\\vspace{-2pt}}
-\\begin{document}
-\\begin{center}
-    {\\Huge \\scshape ${name}} \\\\ \\vspace{1pt}
-    \\small ${headerLine}
-    \\vspace{-5pt}
-\\end{center}
-\\section*{Summary}
-${summary}
-\\section{Experience}
-\\resumeSubHeadingListStart
-${expBlock}
-\\resumeSubHeadingListEnd
-\\section{Skills}
-\\resumeSubHeadingListStart
-\\small{\\item{${skillsLine}}}
-\\resumeSubHeadingListEnd
-${projectsBlock ? `\\section{Projects}
-\\resumeSubHeadingListStart
-${projectsBlock}
-\\resumeSubHeadingListEnd
-` : ''}\\section{Education}
-\\resumeSubHeadingListStart
-${eduBlock}
-\\resumeSubHeadingListEnd
-\\end{document}`;
-}
-
-// Build LaTeX using the provided one-page style
-function buildOnePageTemplate(profile = {}, jobData = {}) {
-  const esc = (s = '') => String(s).replace(/([%#&_$~^{}])/g, '\\$1');
-  const name = esc(profile.name || profile.tempId || 'Candidate');
-  const email = profile.email ? esc(profile.email) : '';
-  const phone = profile.phone ? esc(profile.phone) : '';
-  const location = profile.location ? esc(profile.location) : '';
-  // Only include LinkedIn/website if they actually exist
-  const linkedin = profile.linkedin ? esc(profile.linkedin) : '';
-  const website = profile.website ? esc(profile.website) : '';
-  // AI-generated summary only - no hardcoded content
-  const summary = profile.summary_narrative ? esc(profile.summary_narrative) : '';
-  const role = esc(jobData.role || 'Target Role');
-  const company = esc(jobData.company || 'Target Company');
-
-  const expArray = Array.isArray(profile.experience) ? profile.experience : [];
-  const skillsArray = Array.isArray(profile.skills) ? profile.skills : [];
-  const eduArray = Array.isArray(profile.education) ? profile.education : [];
-
-  const expBlock = expArray.length > 0 ? expArray.map(exp => {
-    const org = esc(exp.company || exp.organization || '');
-    const roleTitle = esc(exp.role || exp.title || '');
-    const date = esc(exp.dates || exp.period || '');
-    const loc = esc(exp.location || '');
-    let bullets = (Array.isArray(exp.bullets) ? exp.bullets : []).slice(0, 5);
-    
-    // Ensure we have at least one bullet to avoid LaTeX errors
-    if (bullets.length === 0) {
-      bullets = ['Contributed to team objectives and organizational goals'];
-    }
-    
-    const bulletItems = bullets.map(b => `      \\resumeItem{${esc(b)}}`).join('\n');
-    return `  \\resumeSubheading{${roleTitle}}{${date}}{${org}}{${loc}}\n    \\resumeItemListStart\n${bulletItems}\n    \\resumeItemListEnd`;
-  }).join('\n\n') : `  \\resumeSubheading{Professional Experience}{}{}{}\n    \\resumeItemListStart\n      \\resumeItem{Contributed to team objectives and organizational goals}\n    \\resumeItemListEnd`;
-
-  // Ensure we have at least some skills to avoid empty itemize
-  const finalSkillsArray = skillsArray.length > 0 ? skillsArray.slice(0, 18) : ['Professional Skills', 'Team Collaboration', 'Problem Solving'];
-  const skillsLine = esc(finalSkillsArray.join(', '));
-  
-  // Add projects section
-  const projArray = Array.isArray(profile.projects) ? profile.projects : [];
-  const projectsBlock = projArray.length > 0 ? projArray.slice(0, 3).map(proj => {
-    const projName = esc(proj.name || proj.title || 'Project');
-    const projTech = esc(proj.tech || proj.technologies || '');
-    const projDesc = esc(proj.description || proj.desc || '');
-    return `  \\resumeSubheading{${projName}}{}{${projTech}}{}\n    \\resumeItemListStart\n      \\resumeItem{${projDesc}}\n    \\resumeItemListEnd`;
-  }).join('\n\n') : '';
-  
-  const eduBlock = (eduArray[0]) ? `  \\resumeSubheading{${esc(eduArray[0].institution || '')}}{${esc(eduArray[0].dates || '')}}{${esc(eduArray[0].degree || '')}}{${esc(eduArray[0].location || '')}}` : `  \\resumeSubheading{Educational Background}{}{}{}`;
-
-  // Build header line dynamically with only present fields
-  const headerParts = [];
-  if (location) headerParts.push(location);
-  if (phone) headerParts.push(phone);
-  if (email) headerParts.push(`\\href{mailto:${email}}{\\underline{${email}}}`);
-  if (linkedin) {
-    const cleanLinkedin = linkedin.replace(/^https?:\/\//, '');
-    headerParts.push(`\\href{https://${cleanLinkedin}}{\\underline{${cleanLinkedin}}}`);
-  }
-  if (website) {
-    const cleanWebsite = website.replace(/^https?:\/\//, '');
-    headerParts.push(`\\href{https://${cleanWebsite}}{\\underline{${cleanWebsite}}}`);
-  }
-  const headerLine = headerParts.join(' ~ | ~ ');
-
-  return `\\documentclass[a4paper,11pt]{article}
-\\usepackage{latexsym}
-\\usepackage[empty]{fullpage}
-\\usepackage{titlesec}
-\\usepackage{marvosym}
-\\usepackage[usenames,dvipsnames]{color}
-\\usepackage{verbatim}
-\\usepackage{enumitem}
-\\usepackage[hidelinks]{hyperref}
-\\usepackage{fancyhdr}
-\\usepackage[english]{babel}
-\\usepackage{tabularx}
-\\usepackage{ragged2e}
-\\pagestyle{fancy}
-\\fancyhf{}
-\\fancyfoot{}
-\\renewcommand{\\headrulewidth}{0pt}
-\\renewcommand{\\footrulewidth}{0pt}
-\\addtolength{\\oddsidemargin}{-0.75in}
-\\addtolength{\\evensidemargin}{-0.75in}
-\\addtolength{\\textwidth}{1.5in}
-\\addtolength{\\topmargin}{-0.8in}
-\\addtolength{\\textheight}{1.6in}
-\\urlstyle{same}
-\\raggedbottom
-\\raggedright
-\\setlength{\\tabcolsep}{0in}
-\\titleformat{\\section}{\\vspace{-4pt}\\scshape\\raggedright\\large\\bfseries}{}{0em}{}[\\color{black}\\titlerule \\vspace{-4pt}]
-\\newcommand{\\resumeItem}[1]{\\item\\small{#1 \\vspace{-1pt}}}
-\\newcommand{\\resumeSubheading}[4]{\\vspace{-2pt}\\item \\textbf{#1} \\hfill \\textbf{\\small #2} \\\\ \\textit{\\small#3} \\hfill \\textit{\\small #4} \\\\ \\vspace{-4pt}}
-\\newcommand{\\resumeSubItem}[1]{\\resumeItem{#1}\\vspace{-1pt}}
-\\newcommand{\\resumeSubHeadingListStart}{\\begin{itemize}[leftmargin=0.0in, label={}]}  
-\\newcommand{\\resumeSubHeadingListEnd}{\\end{itemize}}
-\\newcommand{\\resumeItemListStart}{\\begin{itemize}[itemsep=0pt]}
-\\newcommand{\\resumeItemListEnd}{\\end{itemize}\\vspace{-2pt}}
-\\begin{document}
-\\begin{center}
-    {\\Huge \\scshape ${name}} \\\\ \\vspace{1pt}
-    \\small ${headerLine}
-    \\vspace{-5pt}
-\\end{center}
-\\section*{Summary}
-${summary}
-\\section{Experience}
-\\resumeSubHeadingListStart
-${expBlock}
-\\resumeSubHeadingListEnd
-\\section{Skills}
-\\resumeSubHeadingListStart
-\\small{\\item{${skillsLine}}}
-\\resumeSubHeadingListEnd
-${projectsBlock ? `\\section{Projects}
-\\resumeSubHeadingListStart
-${projectsBlock}
-\\resumeSubHeadingListEnd
-` : ''}\\section{Education}
-\\resumeSubHeadingListStart
-${eduBlock}
-\\resumeSubHeadingListEnd
-\\end{document}`;
-}
-
-// Enhanced template with projects section and better space utilization
-function buildOnePageTemplateEnhanced(profile = {}, jobData = {}) {
-  const esc = (s = '') => String(s).replace(/([%#&_$~^{}])/g, '\\$1');
-  const name = esc(profile.name || profile.tempId || 'Candidate');
-  const email = profile.email ? esc(profile.email) : '';
-  const phone = profile.phone ? esc(profile.phone) : '';
-  const location = profile.location ? esc(profile.location) : '';
-  const linkedin = profile.linkedin ? esc(profile.linkedin) : '';
-  const website = profile.website ? esc(profile.website) : '';
-  // AI-generated summary only - no hardcoded content
-  const summary = profile.summary_narrative ? esc(profile.summary_narrative) : '';
-
-  const expArray = Array.isArray(profile.experience) ? profile.experience : [];
-  const skillsArray = Array.isArray(profile.skills) ? profile.skills : [];
-  const eduArray = Array.isArray(profile.education) ? profile.education : [];
-  const projArray = Array.isArray(profile.projects) ? profile.projects : [];
-
-  // Build experience section with more bullets
-  const expBlock = expArray.map(exp => {
-    const org = esc(exp.company || exp.organization || '');
-    const roleTitle = esc(exp.role || exp.title || '');
-    const date = esc(exp.dates || exp.period || '');
-    const loc = esc(exp.location || '');
-    // Use more bullets if available to fill space
-    const bullets = (Array.isArray(exp.bullets) ? exp.bullets : []).slice(0, 6).map(b => `      \\resumeItem{${esc(b)}}`).join('\n');
-    return `  \\resumeSubheading{${roleTitle}}{${date}}{${org}}{${loc}}\n    \\resumeItemListStart\n${bullets}\n    \\resumeItemListEnd`;
-  }).join('\n\n');
-
-  // Build projects section if available
-  const projBlock = projArray.length > 0 ? projArray.map(proj => {
-    const projName = esc(proj.name || proj.title || 'Project');
-    const projDesc = esc(proj.description || '');
-    const projBullets = (Array.isArray(proj.bullets) ? proj.bullets : [projDesc]).filter(b => b).slice(0, 3).map(b => `      \\resumeItem{${esc(b)}}`).join('\n');
-    return `  \\resumeSubheading{${projName}}{}{}{}\n    \\resumeItemListStart\n${projBullets}\n    \\resumeItemListEnd`;
-  }).join('\n\n') : '';
-
-  // Organize skills into categories for better space utilization
-  const skillsLine = skillsArray.length > 15 ? 
-    `\\small{\\item{\\textbf{Technical:} ${esc(skillsArray.slice(0, Math.ceil(skillsArray.length/2)).join(', '))}}}
-\\small{\\item{\\textbf{Additional:} ${esc(skillsArray.slice(Math.ceil(skillsArray.length/2)).join(', '))}}}` :
-    `\\small{\\item{${esc(skillsArray.join(', '))}}}`;
-
-  const eduBlock = (eduArray[0]) ? `  \\resumeSubheading{${esc(eduArray[0].institution || '')}}{${esc(eduArray[0].dates || '')}}{${esc(eduArray[0].degree || '')}}{${esc(eduArray[0].location || '')}}` : '';
-
-  // Build header with conditional LinkedIn/website
-  const headerContact = [location, phone, email ? `\\href{mailto:${email}}{\\underline{${email}}}` : '']
-    .filter(Boolean);
-  if (linkedin && !linkedin.includes('yourprofile')) {
-    const cleanLinkedin = linkedin.replace(/^https?:\/\//, '');
-    headerContact.push(`\\href{https://${cleanLinkedin}}{\\underline{${cleanLinkedin}}}`);
-  }
-  if (website && !website.includes('yourdomain')) {
-    const cleanWebsite = website.replace(/^https?:\/\//, '');
-    headerContact.push(`\\href{https://${cleanWebsite}}{\\underline{${cleanWebsite}}}`);
-  }
-  const headerLine = headerContact.join(' ~ | ~ ');
-
-  // Use tighter spacing to fill the page
-  return `\\documentclass[a4paper,11pt]{article}
-\\usepackage{latexsym}
-\\usepackage[empty]{fullpage}
-\\usepackage{titlesec}
-\\usepackage{marvosym}
-\\usepackage[usenames,dvipsnames]{color}
-\\usepackage{verbatim}
-\\usepackage{enumitem}
-\\usepackage[hidelinks]{hyperref}
-\\usepackage{fancyhdr}
-\\usepackage[english]{babel}
-\\usepackage{tabularx}
-\\usepackage{ragged2e}
-\\pagestyle{fancy}
-\\fancyhf{}
-\\fancyfoot{}
-\\renewcommand{\\headrulewidth}{0pt}
-\\renewcommand{\\footrulewidth}{0pt}
-\\addtolength{\\oddsidemargin}{-0.85in}
-\\addtolength{\\evensidemargin}{-0.85in}
-\\addtolength{\\textwidth}{1.7in}
-\\addtolength{\\topmargin}{-1in}
-\\addtolength{\\textheight}{2in}
-\\urlstyle{same}
-\\raggedbottom
-\\raggedright
-\\setlength{\\tabcolsep}{0in}
-\\titleformat{\\section}{\\vspace{-2pt}\\scshape\\raggedright\\large\\bfseries}{}{0em}{}[\\color{black}\\titlerule \\vspace{-2pt}]
-\\newcommand{\\resumeItem}[1]{\\item\\small{#1 \\vspace{-1pt}}}
-\\newcommand{\\resumeSubheading}[4]{\\vspace{-1pt}\\item \\textbf{#1} \\hfill \\textbf{\\small #2} \\\\ \\textit{\\small#3} \\hfill \\textit{\\small #4} \\\\ \\vspace{-2pt}}
-\\newcommand{\\resumeSubItem}[1]{\\resumeItem{#1}\\vspace{-1pt}}
-\\newcommand{\\resumeSubHeadingListStart}{\\begin{itemize}[leftmargin=0.0in, label={}]}  
-\\newcommand{\\resumeSubHeadingListEnd}{\\end{itemize}}
-\\newcommand{\\resumeItemListStart}{\\begin{itemize}[itemsep=-1pt]}
-\\newcommand{\\resumeItemListEnd}{\\end{itemize}\\vspace{-2pt}}
-\\begin{document}
-\\begin{center}
-    {\\Huge \\scshape ${name}} \\\\ \\vspace{1pt}
-    \\small ${headerLine}
-    \\vspace{-6pt}
-\\end{center}
-\\section*{Summary}
-${summary}
-\\vspace{-2pt}
-\\section{Experience}
-\\resumeSubHeadingListStart
-${expBlock}
-\\resumeSubHeadingListEnd
-${projBlock ? `\\vspace{-2pt}
-\\section{Projects}
-\\resumeSubHeadingListStart
-${projBlock}
-\\resumeSubHeadingListEnd` : ''}
-\\vspace{-2pt}
-\\section{Skills}
-\\resumeSubHeadingListStart
-${skillsLine}
-\\resumeSubHeadingListEnd
-${eduBlock ? `\\vspace{-2pt}
-\\section{Education}
-\\resumeSubHeadingListStart
-${eduBlock}
-\\resumeSubHeadingListEnd` : ''}
-\\end{document}`;
-}
-
-// Replace common placeholder values from AI responses with real user data
-function sanitizeLatexPlaceholders(latex, profile = {}) {
-  const esc = (s='') => String(s).replace(/([%#&_$~^{}])/g, '\\$1');
-  let out = latex;
-  if (profile.name) {
-    out = out.replace(/Your Name/g, esc(profile.name));
-  }
-  if (profile.email) {
-    out = out.replace(/your\.email@example\.com/g, esc(profile.email));
-    out = out.replace(/email@example\.com/g, esc(profile.email));
-  }
-  if (profile.phone) {
-    // Replace common phone placeholders
-    out = out.replace(/\(123\) 456-7890|123-456-7890|\(555\) 123-4567/g, esc(profile.phone));
-  }
-  if (profile.location) {
-    out = out.replace(/City, State/g, esc(profile.location));
-    out = out.replace(/Dallas, TX/g, esc(profile.location));
-  }
-  if (profile.linkedin) {
-    out = out.replace(/linkedin\.com\/in\/yourprofile/g, esc(profile.linkedin));
-  }
-  if (profile.website) {
-    out = out.replace(/yourdomain\.com/g, esc(profile.website));
-  }
-  return out;
-}
-
-function extractNumericFacts(profile = {}) {
-  const facts = new Set();
-  const addFromText = (text) => {
-    if (!text) return;
-    const lines = String(text).split(/\n|\r/);
-    for (const line of lines) {
-      if (/\d/.test(line)) {
-        const snippet = line.trim();
-        if (snippet.length > 0 && snippet.length < 300) facts.add(snippet);
+      // Pipeline failed - log details for debugging
+      console.error(`[API] Pipeline failed for job ${jobId}:`, result.error);
+      if (result.artifacts?.pipelineLog) {
+        console.error(`[API] Pipeline log:`, JSON.stringify(result.artifacts.pipelineLog, null, 2));
       }
-    }
-  };
-  addFromText(profile.summary_narrative);
-  if (Array.isArray(profile.experience)) {
-    for (const exp of profile.experience) {
-      addFromText(exp?.summary);
-      if (Array.isArray(exp?.bullets)) {
-        for (const b of exp.bullets) addFromText(b);
-      }
-    }
-  }
-  if (Array.isArray(profile.projects)) {
-    for (const p of profile.projects) {
-      addFromText(p?.summary);
-      if (Array.isArray(p?.bullets)) {
-        for (const b of p.bullets) addFromText(b);
-      }
-    }
-  }
-  return Array.from(facts);
-}
 
-async function loadSynonyms() {
-  try {
-    // try local server synonyms first
-    const localPath = path.join(__dirname, 'synonyms.json');
-    const buf = await fs.readFile(localPath, 'utf-8');
-    return JSON.parse(buf);
-  } catch {
-    try {
-      // fallback to extension copy if available
-      const buf = await fs.readFile(path.join(__dirname, '..', 'extension', 'lib', 'synonyms.json'), 'utf-8');
-      return JSON.parse(buf);
-    } catch {
-      return {};
-    }
-  }
-}
+      // Save failed job to database
+      await prisma.job.create({
+        data: {
+          id: jobId,
+          userId: req.user.id,
+          status: 'FAILED',
+          resumeText,
+          jobDescription,
+          company: company || null,
+          role: role || null,
+          jobUrl: jobUrl || null,
+          aiMode,
+          matchMode,
+          error: result.error,
+          diagnostics: {
+            error: result.error,
+            pipelineLog: result.artifacts?.pipelineLog || [],
+            failedAtStage: result.artifacts?.pipelineLog?.slice(-1)[0]?.stage || 'unknown'
+          }
+        }
+      });
 
-function canonicalize(term = '', synonyms = {}) {
-  const t = String(term).toLowerCase();
-  for (const [key, list] of Object.entries(synonyms)) {
-    if (key.toLowerCase() === t) return key.toUpperCase();
-    if (Array.isArray(list) && list.map(x=>String(x).toLowerCase()).includes(t)) return key.toUpperCase();
-  }
-  return t.toUpperCase();
-}
-
-function extractKeywordHints(jdText = '', profile = {}, synonyms = {}) {
-  try {
-    const lower = jdText.toLowerCase();
-    const tokens = (lower.match(/[a-z][a-z0-9+.#-]{2,}/g) || [])
-      .filter(t => !['the','and','for','with','you','are','our','this','that','will','work','team','role','your','from','have','has','not','but','all','who','can','ability','skills','skill','requirements','years','experience','in','of','to','on','as','at','is','be','or','an','we','by','a'].includes(t))
-      .slice(0, 200);
-    const uniq = Array.from(new Set(tokens.map(t => canonicalize(t, synonyms))));
-    const profSkills = new Set((Array.isArray(profile.skills)?profile.skills:[]).map(s=>canonicalize(s, synonyms)))
-    // prioritize items present in profile skills - let AI determine relevance, not hardcoded tech patterns
-    const scored = uniq.map(t => ({ t, score: (profSkills.has(t)?2:0) }));
-    scored.sort((a,b)=>b.score-a.score);
-    return scored.filter(s=>s.score>0).slice(0, 20).map(s=>s.t);
-  } catch {
-    return [];
-  }
-}
-
-function computeCoverage(structured, keywords = [], synonyms = {}) {
-  try {
-    const canon = (s) => canonicalize(s, synonyms);
-    const kw = new Set(keywords.map(canon));
-    const text = JSON.stringify(structured || {}).toLowerCase();
-    const present = new Set();
-    for (const k of kw) {
-      if (text.includes(k.toLowerCase())) present.add(k);
-    }
-    const missing = Array.from([...kw].filter(k => !present.has(k)));
-    return { present: Array.from(present), missing };
-  } catch {
-    return { present: [], missing: [] };
-  }
-}
-
-async function generateStructuredWithAI(profile, jobData, keywords, lockedFacts, statusCb) {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    statusCb?.('OpenAI API key not set. Using profile memory only.', 25);
-    return profileToStructured(profile);
-  }
-  
-  try {
-    statusCb?.('Contacting AI to structure data...', 20);
-    const { default: OpenAI } = await import('openai');
-    const openai = new OpenAI({ apiKey });
-    
-    // Use a cleaner, more focused system prompt without emojis and hardcoded elements
-    const system = `You are an expert resume writer who creates compelling, tailored resumes that maximize ATS scores and interview chances.
-Your task is to transform the candidate's experience to match the job requirements while maintaining complete truthfulness.
-Output ONLY valid minified JSON matching the schema. No code fences or explanations.
-Key rules: Distribute job keywords naturally across the summary and experience bullets. Do not dump keywords into the skills section.`;
-
-    const schema = {
-      header: { name: 'string', email: 'string', phone: 'string', location: 'string', linkedin: 'string', website: 'string' },
-      summary: 'string',
-      skills: ['string'],
-      experience: [{ company: 'string', role: 'string', location: 'string', dates: 'string', bullets: ['string'] }],
-      projects: [{ name: 'string', summary: 'string', bullets: ['string'] }],
-      education: [{ institution: 'string', degree: 'string', location: 'string', dates: 'string' }]
-    };
-
-    const user = `Schema: ${JSON.stringify(schema)}
-
-Target Role: "${jobData.role || 'Target Role'}" at "${jobData.company || 'Target Company'}"
-
-Transformation Guidelines:
-1. Professional Summary (2-3 sentences): Tailor to the exact role and company using the candidate's true background. Weave in 2-3 priority keywords naturally. Be specific and authentic.
-
-2. Experience Section: For each role, write 3-5 concise bullets using action, impact, and metric format. 14-22 words per bullet. Start with strong verbs. Include at most one relevant keyword when it fits naturally. Reuse existing numeric facts: ${lockedFacts.slice(0, 15).join(', ')}. Do not fabricate employers, roles, dates, or results.
-
-3. Projects: 1-3 projects that reinforce match to job requirements. 2-3 bullets each with clear impact and metrics when possible.
-
-4. Skills Section: Limit to 12-18 items total. Include only true skills and technologies the candidate actually has. Do not include job phrases, soft statements, or role titles. Do not dump or mirror the full keyword list. Prefer items already present in candidate memory.
-
-5. Keyword Distribution: Weave these key terms naturally into summary and bullets, not the skills list: ${keywords.join(', ')}. Avoid repetition and keyword stuffing. Each bullet may include 1 relevant key term at most.
-
-6. Formatting: One-page target. Adjust bullet counts to fit layout (typically 3-5 per role). Header fields should use candidate data only.
-
-Candidate Profile:
-${JSON.stringify(profileToStructured(profile))}
-
-Job Description:
-${(jobData.text || '').slice(0, 5000)}
-
-Transform the candidate's experience to match this job while staying truthful.`;
-
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4-turbo-preview',
-      messages: [ { role: 'system', content: system }, { role: 'user', content: user } ],
-      temperature: 0.3,
-      max_completion_tokens: 2500
-    });
-    
-    let content = completion.choices?.[0]?.message?.content || '{}';
-    content = content.replace(/^```json|```$/g, '').trim();
-    const structured = JSON.parse(content);
-    
-    // Post-process: keep skills authentic and concise
-    if (Array.isArray(structured.skills)) {
-      const seen = new Set();
-      structured.skills = structured.skills
-        .map(s => String(s).trim())
-        .filter(s => s && s.length <= 40 && !/\b(owner|manager|leader|professional|methodology|life cycle|project delivery|work schedule)\b/i.test(s))
-        .filter(s => { const k = s.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; })
-        .slice(0, 18);
-    }
-    
-    statusCb?.('Structured draft ready.', 40);
-    return mergeStructured(profileToStructured(profile), structured);
-  } catch (e) {
-    console.warn('Structured AI failed:', e.message);
-    return profileToStructured(profile);
-  }
-}
-
-async function refineStructuredWithAI(structured, missingKeywords, lockedFacts) {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey || missingKeywords.length === 0) return structured;
-  try {
-    const { default: OpenAI } = await import('openai');
-    const openai = new OpenAI({ apiKey });
-    const system = 'You revise ONLY bullets/summary to add missing keywords naturally. Output valid minified JSON, same schema. Do not change employers/roles/dates. Preserve numbers as-is. Do not add irrelevant content.';
-    const user = `Current structured resume JSON:\n${JSON.stringify(structured)}\n\nAdd these missing keywords naturally (no fluff): ${missingKeywords.join(', ')}\nPreserve numeric facts verbatim: ${lockedFacts.join(' | ')}\nReturn only JSON.`;
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4-turbo-preview',
-      messages: [ { role: 'system', content: system }, { role: 'user', content: user } ],
-      temperature: 0.3,
-      max_completion_tokens: 1000
-    });
-    let content = completion.choices?.[0]?.message?.content || '{}';
-    content = content.replace(/^```json|```$/g, '').trim();
-    const refined = JSON.parse(content);
-    return mergeStructured(structured, refined);
-  } catch (e) {
-    console.warn('Refine AI failed:', e.message);
-    return structured;
-  }
-}
-
-function profileToStructured(profile = {}) {
-  return {
-    header: {
-      name: profile.name || '',
-      email: profile.email || '',
-      phone: profile.phone || '',
-      location: profile.location || '',
-      linkedin: profile.linkedin || '',
-      website: profile.website || ''
-    },
-    summary: profile.summary_narrative || '',
-    skills: Array.isArray(profile.skills) ? profile.skills : [],
-    experience: Array.isArray(profile.experience) ? profile.experience : [],
-    projects: Array.isArray(profile.projects) ? profile.projects : [],
-    education: Array.isArray(profile.education) ? profile.education : []
-  };
-}
-
-function mergeStructured(base, incoming) {
-  try {
-    return {
-      header: { ...base.header, ...(incoming.header || {}) },
-      summary: incoming.summary || base.summary || '',
-      skills: Array.isArray(incoming.skills) && incoming.skills.length ? incoming.skills : base.skills,
-      experience: Array.isArray(incoming.experience) && incoming.experience.length ? incoming.experience : base.experience,
-      projects: Array.isArray(incoming.projects) && incoming.projects.length ? incoming.projects : base.projects,
-      education: Array.isArray(incoming.education) && incoming.education.length ? incoming.education : base.education,
-    };
-  } catch {
-    return base;
-  }
-}
-
-function renderLatexFromStructured(s = {}, jobData = {}) {
-  // Ensure header fields
-  const profile = {
-    name: s.header?.name || '',
-    email: s.header?.email || '',
-    phone: s.header?.phone || '',
-    location: s.header?.location || '',
-    linkedin: s.header?.linkedin || '',
-    website: s.header?.website || '',
-    summary_narrative: s.summary || '',
-    skills: Array.isArray(s.skills) ? s.skills : [],
-    experience: Array.isArray(s.experience) ? s.experience : [],
-    education: Array.isArray(s.education) ? s.education : [],
-    projects: Array.isArray(s.projects) ? s.projects : [] // Add projects support
-  };
-  return buildOnePageTemplateWithTransformation(profile, jobData);
-}
-
-function determineAggressiveness(profile = {}, jobData = {}) {
-  // Let AI determine the appropriate tone based on job description and user profile
-  // No hardcoded defaults - AI should analyze the context
-  const p = (profile.aggressiveness || jobData.aggressiveness || '').toString().toLowerCase();
-  if (p === 'conservative' || p === 'assertive' || p === 'moderate') return p;
-  return null; // Let AI decide
-}
-
-async function generateKeywordsWithAI(jdText = '', profile = {}, synonyms = {}) {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey || !jdText || jdText.length < 60) return extractKeywordHints(jdText, profile, synonyms);
-  try {
-    const { default: OpenAI } = await import('openai');
-    const openai = new OpenAI({ apiKey });
-    const system = 'Extract 15-25 PRIORITY KEYWORDS/PHRASES for resume tailoring. Return a JSON array of strings only. No code fences.';
-    const user = `Job description:\n${jdText.slice(0,4000)}\n\nProfile skills (bias toward these): ${(Array.isArray(profile.skills)?profile.skills.join(', '):'')}`;
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4-turbo-preview',
-      messages: [ { role: 'system', content: system }, { role: 'user', content: user } ],
-      temperature: 0.3,
-      max_completion_tokens: 400
-    });
-    let content = completion.choices?.[0]?.message?.content || '[]';
-    content = content.replace(/^```json|```$/g, '').trim();
-    const arr = JSON.parse(content);
-    const canon = (s) => canonicalize(s, synonyms);
-    const out = Array.from(new Set(arr.map(canon))).filter(Boolean).slice(0, 25);
-    return out.length ? out : extractKeywordHints(jdText, profile, synonyms);
-  } catch (e) {
-    console.warn('Keyword AI failed:', e.message);
-    return extractKeywordHints(jdText, profile, synonyms);
-  }
-}
-
-setInterval(async () => {
-  try {
-    const files = await fs.readdir(tempDir);
-    const now = Date.now();
-    
-    for (const file of files) {
-      const filePath = path.join(tempDir, file);
-      const stats = await fs.stat(filePath);
-      
-      if (now - stats.mtimeMs > 300000) {
-        await fs.unlink(filePath).catch(() => {});
-      }
+      res.status(500).json({
+        error: result.error || 'Failed to generate resume',
+        jobId,
+        // Include debug info in non-production
+        ...(process.env.NODE_ENV !== 'production' && {
+          pipelineLog: result.artifacts?.pipelineLog,
+          failedAtStage: result.artifacts?.pipelineLog?.slice(-1)[0]?.stage
+        })
+      });
     }
   } catch (error) {
-    console.error('Cleanup error:', error);
-  }
-}, 60000);
+    console.error(`[API] Unexpected error in /api/generate:`, error);
+    console.error(`[API] Stack trace:`, error.stack);
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Resume Generator Server v2.0.0`);
-  console.log(`📡 Server running on http://0.0.0.0:${PORT}`);
-  console.log(`🔍 PORT environment variable: ${process.env.PORT || 'not set (using default 3000)'}`);
-  console.log(`🤖 AI Generation: ${process.env.OPENAI_API_KEY ? '✅ Enabled' : '❌ Disabled (using enhanced templates)'}`);
-  console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🔗 Public URL: ${PUBLIC_BASE_URL || 'http://localhost:' + PORT}`);
-});
+    // Get pipeline metrics for debugging
+    const metrics = getMetrics();
+    console.error(`[API] Current pipeline metrics:`, metrics);
 
-// Health check
-// Comprehensive health check with database connectivity
-// Metrics endpoint for Prometheus scraping
-app.get('/metrics', async (req, res) => {
-  res.set('Content-Type', metricsRegistry.contentType);
-  const metrics = await metricsRegistry.metrics();
-  res.end(metrics);
-});
-
-app.get('/health', async (req, res) => {
-  const startTime = Date.now();
-  
-  const health = {
-    status: 'ok',
-    service: 'resume-server',
-    version: '2.0.0',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    environment: process.env.NODE_ENV || 'development',
-    features: {
-      aiGeneration: !!process.env.OPENAI_API_KEY,
-      crossDomainTransformation: true,
-      enhancedPrompts: true,
-      fullPageOptimization: true,
-      database: !!process.env.DATABASE_URL
-    },
-    checks: {
-      database: { status: 'unknown', responseTime: 0 },
-      tectonic: { status: 'unknown', responseTime: 0 },
-      memory: { status: 'ok', usage: process.memoryUsage() },
-      activeJobs: jobs.size
-    }
-  };
-  
-  let httpStatus = 200;
-  
-  // Database health check
-  try {
-    const dbStart = Date.now();
-    const dbHealth = await checkDatabaseHealth();
-    health.checks.database = {
-      status: dbHealth.healthy ? 'ok' : 'error',
-      responseTime: Date.now() - dbStart,
-      error: dbHealth.error || undefined
-    };
-    
-    if (!dbHealth.healthy && process.env.NODE_ENV === 'production') {
-      health.status = 'degraded';
-      httpStatus = 503;
-    }
-  } catch (error) {
-    health.checks.database = {
-      status: 'error',
-      responseTime: Date.now() - startTime,
-      error: redactSensitive(error.message)
-    };
-    if (process.env.NODE_ENV === 'production') {
-      health.status = 'degraded';
-      httpStatus = 503;
-    }
-  }
-  
-  // Tectonic availability check
-  try {
-    const tectonicStart = Date.now();
-    const tectonic = spawn('tectonic', ['--version'], { stdio: 'pipe' });
-    const timeout = setTimeout(() => {
-      tectonic.kill();
-      health.checks.tectonic = {
-        status: 'timeout',
-        responseTime: Date.now() - tectonicStart
-      };
-    }, 3000);
-    
-    tectonic.on('close', (code) => {
-      clearTimeout(timeout);
-      health.checks.tectonic = {
-        status: code === 0 ? 'ok' : 'error',
-        responseTime: Date.now() - tectonicStart
-      };
+    res.status(500).json({
+      error: error.message || 'Failed to generate resume',
+      // Include detailed error info in non-production
+      ...(process.env.NODE_ENV !== 'production' && {
+        errorType: error.constructor.name,
+        errorStack: error.stack
+      })
     });
-    
-    await new Promise(resolve => {
-      tectonic.on('close', resolve);
-      tectonic.on('error', resolve);
-    });
-  } catch (error) {
-    health.checks.tectonic = {
-      status: 'error',
-      responseTime: Date.now() - startTime,
-      error: redactSensitive(error.message)
-    };
   }
-  
-  health.totalResponseTime = Date.now() - startTime;
-  res.status(httpStatus).json(health);
 });
 
-// Readiness probe for Kubernetes/container orchestration
-app.get('/readiness', async (req, res) => {
-  const ready = {
-    ready: true,
-    timestamp: new Date().toISOString(),
-    checks: []
-  };
-  
-  // Check if server can accept requests
-  if (process.env.NODE_ENV === 'production') {
-    // In production, require database connectivity
-    try {
-      const dbHealth = await checkDatabaseHealth();
-      if (!dbHealth.healthy) {
-        ready.ready = false;
-        ready.checks.push({ name: 'database', status: 'fail', error: dbHealth.error });
-      } else {
-        ready.checks.push({ name: 'database', status: 'pass' });
+app.get('/api/job/:jobId', authenticateToken, async (req, res) => {
+  try {
+    const job = await prisma.job.findUnique({
+      where: { id: req.params.jobId },
+      include: {
+        artifacts: {
+          orderBy: { createdAt: 'desc' }
+        }
       }
-    } catch (error) {
-      ready.ready = false;
-      ready.checks.push({ name: 'database', status: 'fail', error: redactSensitive(error.message) });
+    });
+
+    if (!job) {
+      return res.status(404).json({ error: 'Job not found' });
     }
-  } else {
-    ready.checks.push({ name: 'database', status: 'skip', reason: 'development mode' });
+
+    if (job.userId !== req.user.id) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    res.json(job);
+  } catch (error) {
+    console.error('Job status error:', error);
+    res.status(500).json({ error: 'Failed to fetch job status' });
   }
-  
-  // Check essential environment variables
-  const required = ['JWT_SECRET', 'OPENAI_API_KEY'];
-  const missing = required.filter(key => !process.env[key]);
-  if (missing.length > 0) {
-    ready.ready = false;
-    ready.checks.push({ name: 'environment', status: 'fail', missing });
-  } else {
-    ready.checks.push({ name: 'environment', status: 'pass' });
-  }
-  
-  res.status(ready.ready ? 200 : 503).json(ready);
 });
 
-// Liveness probe for Kubernetes/container orchestration  
-app.get('/liveness', (req, res) => {
-  res.json({
-    alive: true,
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime()
-  });
-});
+app.get('/api/job/:jobId/download/:type', authenticateToken, async (req, res) => {
+  try {
+    const { jobId, type } = req.params;
 
-// Root endpoint
-app.get('/', (_req, res) => {
-  res.json({
-    service: 'PASS ATS - AI Resume Generator',
-    version: '2.0.0',
-    status: 'running',
-    description: 'AI-powered resume generator with ATS optimization',
-    endpoints: {
-      health: '/health',
-      status: '/api/status',
-      generate: '/generate',
-      auth: {
-        signup: '/auth/signup',
-        login: '/auth/login'
+    // Verify job belongs to user
+    const job = await prisma.job.findUnique({
+      where: { id: jobId },
+      select: { userId: true }
+    });
+
+    if (!job) {
+      return res.status(404).json({ error: 'Job not found' });
+    }
+
+    if (job.userId !== req.user.id) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    const artifactType = type.toUpperCase();
+    const artifact = await prisma.artifact.findFirst({
+      where: {
+        jobId,
+        type: artifactType === 'PDF' ? 'PDF_OUTPUT' :
+              artifactType === 'LATEX' ? 'LATEX_SOURCE' :
+              artifactType === 'JSON' ? 'RESUME_JSON' : artifactType
       },
-      profile: '/profile',
-      analyze: '/analyze-job'
-    },
-    features: {
-      aiGeneration: !!process.env.OPENAI_API_KEY,
-      database: 'Connected',
-      latex: 'Enabled',
-      cors: 'Configured'
-    },
-    timestamp: new Date().toISOString()
+      orderBy: { version: 'desc' }
+    });
+
+    if (!artifact) {
+      return res.status(404).json({ error: 'Artifact not found' });
+    }
+
+    const contentType =
+      artifactType === 'PDF_OUTPUT' ? 'application/pdf' :
+      artifactType === 'LATEX_SOURCE' ? 'text/x-latex' :
+      'application/json';
+
+    const filename =
+      artifactType === 'PDF_OUTPUT' ? 'resume.pdf' :
+      artifactType === 'LATEX_SOURCE' ? 'resume.tex' :
+      'resume.json';
+
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(artifact.content);
+  } catch (error) {
+    console.error('Download error:', error);
+    res.status(500).json({ error: 'Failed to download artifact' });
+  }
+});
+
+// Simple status endpoint for polling if needed
+app.get('/api/job/:jobId/status', authenticateToken, async (req, res) => {
+  try {
+    const job = await prisma.job.findUnique({
+      where: { id: req.params.jobId },
+      select: {
+        id: true,
+        status: true,
+        userId: true,
+        createdAt: true,
+        updatedAt: true
+      }
+    });
+
+    if (!job) {
+      return res.status(404).json({ error: 'Job not found' });
+    }
+
+    if (job.userId !== req.user.id) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    res.json(job);
+  } catch (error) {
+    console.error('Status error:', error);
+    res.status(500).json({ error: 'Failed to fetch status' });
+  }
+});
+
+// User's job history
+app.get('/api/jobs', authenticateToken, async (req, res) => {
+  try {
+    const { limit = 20, offset = 0, status } = req.query;
+
+    const where = { userId: req.user.id };
+    if (status) {
+      // Handle both single status and comma-separated list
+      if (status.includes(',')) {
+        where.status = { in: status.split(',').map(s => s.trim()) };
+      } else if (Array.isArray(status)) {
+        where.status = { in: status };
+      } else {
+        where.status = status;
+      }
+    }
+
+    const jobs = await prisma.job.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: parseInt(limit),
+      skip: parseInt(offset),
+      select: {
+        id: true,
+        status: true,
+        aiMode: true,
+        company: true,
+        role: true,
+        jobUrl: true,
+        createdAt: true,
+        completedAt: true,
+        error: true
+      }
+    });
+
+    const total = await prisma.job.count({ where });
+
+    res.json({
+      jobs,
+      total,
+      limit: parseInt(limit),
+      offset: parseInt(offset)
+    });
+  } catch (error) {
+    console.error('Jobs list error:', error);
+    res.status(500).json({ error: 'Failed to fetch jobs' });
+  }
+});
+
+// Queue metrics endpoint
+app.get('/api/metrics/queue', authenticateToken, async (req, res) => {
+  try {
+    const metrics = await getQueueMetrics();
+    res.json(metrics);
+  } catch (error) {
+    console.error('Queue metrics error:', error);
+    res.status(500).json({ error: 'Failed to fetch queue metrics' });
+  }
+});
+
+// Direct resume generation - simple endpoint (LaTeX-based)
+app.post('/api/generate-direct', authenticateToken, async (req, res) => {
+  try {
+    const { jobDescription } = req.body;
+    const userId = req.userId;
+
+    if (!jobDescription) {
+      return res.status(400).json({ error: 'Job description required' });
+    }
+
+    // Get user profile
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { profile: true }
+    });
+
+    if (!user?.profile) {
+      return res.status(400).json({ error: 'Profile not found' });
+    }
+
+    // Import and use direct generator
+    const { generateResumeDirect } = await import('./lib/direct-generator.js');
+    const result = await generateResumeDirect(user.profile, jobDescription);
+
+    if (result.success) {
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'attachment; filename="resume.pdf"');
+      res.send(result.pdf);
+    } else {
+      res.status(500).json({ error: result.error });
+    }
+  } catch (error) {
+    console.error('Direct generation error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// HTML-based resume generation endpoint (NEW - simpler and more reliable)
+app.post('/api/generate-html', authenticateToken, async (req, res) => {
+  try {
+    const { jobDescription, aiMode = 'gpt-5-mini', outputFormat = 'pdf' } = req.body;
+    const userId = req.userId;
+
+    if (!jobDescription) {
+      return res.status(400).json({ error: 'Job description required' });
+    }
+
+    // Get user profile
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { profile: true }
+    });
+
+    if (!user?.profile) {
+      return res.status(400).json({ error: 'Profile not found' });
+    }
+
+    // Import and use HTML generator
+    const { generateResumeHTML } = await import('./lib/html-generator.js');
+    const result = await generateResumeHTML(user.profile, jobDescription, aiMode);
+
+    if (result.success) {
+      if (outputFormat === 'html') {
+        res.setHeader('Content-Type', 'text/html');
+        res.send(result.html);
+      } else if (outputFormat === 'json') {
+        res.json(result.json);
+      } else if (outputFormat === 'pdf' && result.pdf) {
+        // Send PDF if available
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', 'attachment; filename="resume.pdf"');
+        res.send(result.pdf);
+      } else if (outputFormat === 'pdf' && !result.pdf && result.html) {
+        // Fallback: send HTML with warning when PDF generation failed
+        res.json({
+          warning: 'PDF generation failed, returning HTML and JSON instead',
+          html: result.html,
+          json: result.json,
+          error: result.error
+        });
+      } else {
+        res.status(500).json({ error: 'Failed to generate resume in requested format' });
+      }
+    } else {
+      res.status(500).json({ error: result.error });
+    }
+  } catch (error) {
+    console.error('HTML generation error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Static file serving in production
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(path.join(__dirname, '..', 'frontend', 'dist')));
+
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '..', 'frontend', 'dist', 'index.html'));
+  });
+}
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err);
+  res.status(500).json({
+    error: 'Internal server error',
+    message: process.env.NODE_ENV === 'development' ? err.message : undefined
   });
 });
 
-// API Status endpoint (for compatibility)
-app.get('/api/status', (_req, res) => {
-  const status = {
-    status: 'operational',
-    service: 'PASS ATS API',
-    version: '2.0.0',
-    uptime: process.uptime(),
-    database: {
-      status: 'connected',
-      type: 'PostgreSQL (Supabase)'
-    },
-    ai: {
-      status: process.env.OPENAI_API_KEY ? 'enabled' : 'disabled',
-      provider: 'OpenAI GPT-5 Mini'
-    },
-    latex: {
-      status: 'enabled',
-      compiler: 'Tectonic'
-    },
-    environment: process.env.NODE_ENV || 'development',
-    timestamp: new Date().toISOString()
-  };
-  res.json(status);
+// Start server
+const PORT = config.server.port;
+const server = app.listen(PORT, () => {
+  console.log(`✅ Server running on port ${PORT}`);
+  console.log(`   - Health check: http://localhost:${PORT}/health`);
+  console.log(`   - Auth endpoints: http://localhost:${PORT}/api/register, /api/login`);
+  console.log(`   - Environment: ${process.env.NODE_ENV || 'development'}`);
 });
 
-// AI Job Analysis endpoint - let AI make ALL decisions
-app.post('/analyze-job', async (req, res) => {
-  try {
-    const { jdText, profile } = req.body;
-    
-    if (!jdText) {
-      return res.status(400).json({ error: 'Job description text required' });
-    }
+// Graceful shutdown
+process.on('SIGTERM', async () => {
+  console.log('SIGTERM received, shutting down gracefully...');
 
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      return res.status(503).json({ error: 'AI analysis unavailable - API key not configured' });
-    }
-
-    const { default: OpenAI } = await import('openai');
-    const openai = new OpenAI({ apiKey });
-
-    const systemPrompt = `You are an expert ATS and resume optimization analyst. Analyze the job description and candidate profile to provide strategic resume guidance.
-
-Return a JSON object with:
-{
-  "atsScore": estimated_score_0_to_100,
-  "jobTitle": "extracted_job_title",
-  "criticalKeywords": ["top_10_most_important_keywords"],
-  "importantKeywords": ["next_10_important_keywords"],
-  "suggestedSummary": "tailored_professional_summary_2_3_sentences",
-  "skillsPriority": ["reordered_skills_by_relevance"],
-  "experienceOptimizations": ["specific_suggestions_for_experience_section"],
-  "missingQualifications": ["key_requirements_candidate_lacks"],
-  "strengthMatches": ["candidate_strengths_that_match_role"],
-  "customizations": {
-    "tone": "formal/conversational/technical_based_on_company_culture",
-    "focus": "technical/leadership/results_based_on_role_level",
-    "length": "concise/detailed_based_on_seniority_level"
-  },
-  "warnings": ["any_concerns_or_gaps_to_address"]
-}
-
-Base all recommendations on actual job requirements and candidate background. No generic advice.`;
-
-    const userPrompt = `Job Description:\n${jdText}\n\nCandidate Profile:\n${JSON.stringify(profile, null, 2)}`;
-
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4-turbo-preview',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt }
-      ],
-      temperature: 0.3,
-      max_completion_tokens: 2000
-    });
-
-    const analysisText = completion.choices[0]?.message?.content;
-    if (!analysisText) {
-      throw new Error('No analysis generated');
-    }
-
-    // Clean up JSON response (remove markdown code blocks if present)
-    let cleanJson = analysisText.trim();
-    if (cleanJson.startsWith('```json')) {
-      cleanJson = cleanJson.replace(/```json\n?/, '').replace(/\n?```$/, '');
-    } else if (cleanJson.startsWith('```')) {
-      cleanJson = cleanJson.replace(/```\n?/, '').replace(/\n?```$/, '');
-    }
-
-    // Parse JSON response
-    const analysis = JSON.parse(cleanJson);
-    res.json(analysis);
-
-  } catch (error) {
-    console.error('Job analysis error:', error);
-    res.status(500).json({ 
-      error: 'Analysis failed',
-      details: error.message 
-    });
-  }
+  // Close server
+  server.close(async () => {
+    await prisma.$disconnect();
+    process.exit(0);
+  });
 });
 
-// --- PDF Validation Endpoint ---
-// Validate existing PDF for ATS compatibility
-app.post('/validate-pdf', upload.single('pdf'), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'No PDF file uploaded' });
-    }
+process.on('SIGINT', async () => {
+  console.log('SIGINT received, shutting down gracefully...');
 
-    const { candidateName, targetRole, targetCompany, keywords } = req.body;
-    
-    // Parse keywords if provided as string
-    const keywordList = keywords ? 
-      (typeof keywords === 'string' ? keywords.split(',').map(k => k.trim()) : keywords) : 
-      [];
-
-    // Import validator
-    const { validatePDFForATS } = await import('./lib/pdf-validator.js');
-    
-    // Prepare metadata
-    const metadata = {
-      candidateName: candidateName || 'Unknown',
-      targetRole: targetRole || 'Position',
-      targetCompany: targetCompany || 'Company',
-      keywords: keywordList
-    };
-
-    // Validate PDF
-    const validation = await validatePDFForATS(req.file.path, metadata);
-    
-    // Clean up uploaded file
-    await fs.unlink(req.file.path).catch(() => {});
-    
-    // Return validation results
-    res.json({
-      success: validation.validation_status === 'PASS',
-      status: validation.validation_status,
-      ats_score: validation.ats_parse_check?.parseability_score || 0,
-      corrected_path: validation.corrected_path,
-      issues: validation.issues_found,
-      recommendations: validation.recommendations,
-      metadata_report: validation.metadata_report,
-      parse_check: validation.ats_parse_check
-    });
-
-  } catch (error) {
-    console.error('PDF validation error:', error);
-    
-    // Clean up uploaded file on error
-    if (req.file?.path) {
-      await fs.unlink(req.file.path).catch(() => {});
-    }
-    
-    res.status(500).json({ 
-      error: 'PDF validation failed',
-      details: error.message 
-    });
-  }
+  server.close(async () => {
+    await prisma.$disconnect();
+    process.exit(0);
+  });
 });
 
-// Quick PDF validation without metadata
-app.post('/quick-validate-pdf', upload.single('pdf'), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'No PDF file uploaded' });
-    }
-
-    // Import validator
-    const { quickValidatePDF } = await import('./lib/pdf-validator.js');
-    
-    // Quick validate PDF
-    const validation = await quickValidatePDF(req.file.path);
-    
-    // Clean up uploaded file
-    await fs.unlink(req.file.path).catch(() => {});
-    
-    // Return validation results
-    res.json({
-      success: validation.validation_status === 'PASS',
-      status: validation.validation_status,
-      ats_score: validation.ats_parse_check?.parseability_score || 0,
-      checks: validation.checks,
-      issues: validation.issues_found,
-      recommendations: validation.recommendations
-    });
-
-  } catch (error) {
-    console.error('Quick PDF validation error:', error);
-    
-    // Clean up uploaded file on error
-    if (req.file?.path) {
-      await fs.unlink(req.file.path).catch(() => {});
-    }
-    
-    res.status(500).json({ 
-      error: 'PDF validation failed',
-      details: error.message 
-    });
-  }
-});
-
-// Warm up Tectonic cache to speed first compile
-(async function warmupTectonic() {
-  try {
-    const tex = `\\documentclass{article}\\begin{document}warmup\\end{document}`;
-    const tmp = path.join(generatedDir, `warmup_${Date.now()}.tex`);
-    await fs.writeFile(tmp, tex, 'utf-8');
-    const tectonicPath = process.env.TECTONIC_PATH || 'tectonic';
-    const proc = spawn(tectonicPath, [tmp], { cwd: generatedDir });
-    proc.on('close', async () => {
-      try { await fs.unlink(tmp); } catch {}
-    });
-  } catch (e) {
-    console.warn('[WARMUP] Tectonic warmup skipped:', e.message);
-  }
-})();
+export default app;

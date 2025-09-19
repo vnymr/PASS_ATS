@@ -1,0 +1,42 @@
+{
+  "roleFamily": "Technical Product Owner",
+  "seniority": "Mid",
+  "industry": "E-commerce",
+  "companySize": "Mid-size",
+  "companyThemes": [
+    "collaboration",
+    "customer-centric",
+    "innovation",
+    "transparency",
+    "leadership"
+  ],
+  "keywords": [
+    "product roadmap",
+    "stakeholder management",
+    "user stories",
+    "agile",
+    "SDLC",
+    "JIRA",
+    "Confluence",
+    "sprint planning",
+    "acceptance criteria",
+    "technical documentation",
+    "problem-solving",
+    "communication",
+    "prioritization",
+    "feedback analysis",
+    "vendor management"
+  ],
+  "responsibilities": [
+    "Define and prioritize product roadmaps",
+    "Gather top-level scope and requirements",
+    "Ensure productive workflow environment",
+    "Manage escalation and trade-offs",
+    "Develop and document user stories",
+    "Participate in sprint planning",
+    "Maintain the product backlog",
+    "Lead sprint review meetings",
+    "Document high-level roadmaps",
+    "Provide leadership through SDLC"
+  ]
+}

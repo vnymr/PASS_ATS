@@ -8,10 +8,20 @@
     "dev": "cd server && npm run dev",
     "install:server": "cd server && npm install",
     "build:extension": "./build-extension.sh",
-    "setup": "npm run install:server"
+    "setup": "npm run install:server",
+    "db:migrate": "cd server && npx prisma migrate dev",
+    "db:push": "cd server && npx prisma db push",
+    "db:generate": "cd server && npx prisma generate"
   },
-  "keywords": ["resume", "generator", "chrome-extension"],
+  "keywords": [
+    "resume",
+    "generator",
+    "chrome-extension"
+  ],
   "author": "",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.12.2",
+    "eventsource": "^4.0.0"
+  }
 }
-

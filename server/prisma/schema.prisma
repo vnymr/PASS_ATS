@@ -12,14 +12,95 @@ model User {
   email     String   @unique
   password  String
   createdAt DateTime @default(now())
+  jobs      Job[]
   profile   Profile?
 }
 
 model Profile {
-  id         Int      @id @default(autoincrement())
-  user       User     @relation(fields: [userId], references: [id])
-  userId     Int      @unique
-  data       Json
-  updatedAt  DateTime @default(now())
+  id        Int      @id @default(autoincrement())
+  userId    Int      @unique
+  data      Json
+  updatedAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
 }
 
+model Job {
+  id             String      @id @default(cuid())
+  userId         Int?
+  status         JobStatus   @default(PENDING)
+  priority       Int         @default(0)
+  attempts       Int         @default(0)
+  maxAttempts    Int         @default(3)
+  resumeText     String
+  jobDescription String
+  aiMode         String?
+  matchMode      String?
+  error          String?
+  diagnostics    Json?
+  processingLog  Json[]
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  startedAt      DateTime?
+  completedAt    DateTime?
+  company        String?
+  jobUrl         String?
+  role           String?
+  artifacts      Artifact[]
+  embeddings     Embedding[]
+  user           User?       @relation(fields: [userId], references: [id])
+
+  @@index([status, priority, createdAt])
+  @@index([userId])
+}
+
+model Artifact {
+  id        String       @id @default(cuid())
+  jobId     String
+  type      ArtifactType
+  version   Int          @default(1)
+  content   Bytes
+  metadata  Json?
+  schema    Json?
+  validated Boolean      @default(false)
+  createdAt DateTime     @default(now())
+  job       Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, type, version])
+  @@index([jobId, type])
+}
+
+model Embedding {
+  id          String        @id @default(cuid())
+  jobId       String
+  content     String
+  contentType EmbeddingType
+  embedding   Float[]
+  relevance   Float?
+  createdAt   DateTime      @default(now())
+  job         Job           @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId, contentType])
+}
+
+enum JobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  RETRYING
+}
+
+enum ArtifactType {
+  RESUME_JSON
+  LATEX_SOURCE
+  PDF_OUTPUT
+  JOB_DESCRIPTION
+  DIAGNOSTIC_LOG
+}
+
+enum EmbeddingType {
+  SKILL
+  EXPERIENCE
+  REQUIREMENT
+  KEYWORD
+}

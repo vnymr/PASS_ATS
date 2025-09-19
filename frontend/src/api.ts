@@ -19,7 +19,7 @@ export type Profile = {
   updatedAt?: string;
 };
 
-const API_URL = (import.meta as any).env?.VITE_API_URL || (window as any).__API_URL__ || 'http://localhost:3001';
+const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3000';
 
 function authHeaders(): Record<string, string> {
   const token = localStorage.getItem('token');
@@ -35,89 +35,117 @@ async function handle<T>(res: Response): Promise<T> {
 
 export const api = {
   base: API_URL,
+  async get(path: string) {
+    const r = await fetch(`${API_URL}${path}`, { headers: { ...authHeaders() } });
+    return handle<any>(r);
+  },
   async login(email: string, password: string) {
-    const r = await fetch(`${API_URL}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) });
-    return handle<{ token: string; isNew?: boolean; onboardingCompleted?: boolean }>(r);
+    const r = await fetch(`${API_URL}/api/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) });
+    const result = await handle<{ token: string; user: any }>(r);
+    localStorage.setItem('token', result.token);
+    return { ...result, isNew: false, onboardingCompleted: true };
   },
   async signup(email: string, password: string) {
-    const r = await fetch(`${API_URL}/auth/signup`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) });
-    return handle<{ token: string }>(r);
+    const r = await fetch(`${API_URL}/api/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password, name: email.split('@')[0] }) });
+    const result = await handle<{ token: string }>(r);
+    localStorage.setItem('token', result.token);
+    return result;
   },
   async me() {
-    const r = await fetch(`${API_URL}/me`, { headers: { ...authHeaders() } });
+    const r = await fetch(`${API_URL}/api/profile`, { headers: { ...authHeaders() } });
     return r.status === 404 ? null : handle<Profile>(r);
   },
   async getProfile() {
-    const r = await fetch(`${API_URL}/profile`, { headers: { ...authHeaders() } });
+    const r = await fetch(`${API_URL}/api/profile`, { headers: { ...authHeaders() } });
     return r.status === 404 ? null : handle<Profile>(r);
   },
   async postProfile(p: Profile) {
-    const r = await fetch(`${API_URL}/profile`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify(p) });
+    const r = await fetch(`${API_URL}/api/profile`, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify(p) });
     return handle<{ success: boolean; profile: Profile }>(r);
   },
   async putProfile(p: Partial<Profile>) {
-    const r = await fetch(`${API_URL}/profile`, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify(p) });
+    const r = await fetch(`${API_URL}/api/profile`, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify(p) });
     return handle<{ success: boolean }>(r);
   },
   async quota() {
-    const r = await fetch(`${API_URL}/quota`, { headers: { ...authHeaders() } });
-    return handle<Quota>(r);
+    // Mock quota - backend doesn't have this endpoint yet
+    return Promise.resolve({ month: new Date().toISOString().slice(0, 7), used: 0, remaining: 100, limit: 100 });
   },
   async resumes() {
-    const r = await fetch(`${API_URL}/me/resumes`, { headers: { ...authHeaders() } });
-    return handle<ResumeEntry[]>(r);
+    const r = await fetch(`${API_URL}/api/jobs?status=COMPLETED&limit=20`, { headers: { ...authHeaders() } });
+    const result = await handle<{ jobs: any[] }>(r);
+    return result.jobs.map((job: any) => ({
+      fileName: `resume_${job.id}.pdf`,
+      pdfUrl: `${API_URL}/api/job/${job.id}/download/pdf`,
+      texUrl: `${API_URL}/api/job/${job.id}/download/tex`,
+      createdAt: job.createdAt
+    }));
   },
   async analyzePublic(resumeText: string) {
-    const r = await fetch(`${API_URL}/onboarding/analyze-public`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ resumeText }) });
+    const r = await fetch(`${API_URL}/api/analyze/public`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ resumeText }) });
     return handle<{ structured: { summary?: string; skills?: string[] } }>(r);
   },
-  async generateResume(jobUrl: string, jobDetails: any) {
-    const r = await fetch(`${API_URL}/generate/job`, {
+  async generateResume(resumeText: string, jobDescription: string, company?: string, role?: string) {
+    const r = await fetch(`${API_URL}/api/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify({
-        jobData: {
-          ...jobDetails,
-          company: jobDetails.company || '',
-          role: jobDetails.role || '',
-          text: jobDetails.description || ''
-        }
+        resumeText,
+        jobDescription,
+        company,
+        role,
+        aiMode: 'gpt-5-mini'
       })
     });
-    return handle<{ jobId: string }>(r);
+
+    const result = await handle<{ success: boolean; jobId: string; downloadUrl: string; error?: string }>(r);
+
+    if (result.success && result.downloadUrl) {
+      // Auto-download the PDF
+      const pdfRes = await fetch(`${API_URL}${result.downloadUrl}`, { headers: authHeaders() });
+      if (pdfRes.ok) {
+        const blob = await pdfRes.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `resume_${company || 'generated'}_${Date.now()}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      }
+    }
+
+    return result;
   },
   async getJobStatus(jobId: string) {
-    const r = await fetch(`${API_URL}/generate/job/${jobId}`, { headers: { ...authHeaders() } });
-    return handle<{ status: string; progress?: number; error?: string; result?: any }>(r);
+    const r = await fetch(`${API_URL}/api/job/${jobId}`, { headers: { ...authHeaders() } });
+    const job = await handle<any>(r);
+    return {
+      status: job.status.toLowerCase(),
+      progress: job.status === 'COMPLETED' ? 100 : job.status === 'PROCESSING' ? 50 : 0,
+      error: job.error,
+      result: job.artifacts?.[0]
+    };
   },
   async downloadResume(fileName: string) {
-    const r = await fetch(`${API_URL}/download/${fileName}`, { headers: { ...authHeaders() } });
+    // Extract jobId from fileName if needed
+    const jobId = fileName.replace('resume_', '').replace('.pdf', '');
+    const r = await fetch(`${API_URL}/api/job/${jobId}/download/pdf`, { headers: { ...authHeaders() } });
     if (!r.ok) throw new Error('Failed to download resume');
     return r.blob();
   },
   async resetPassword(email: string) {
-    const r = await fetch(`${API_URL}/auth/reset-password`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email })
-    });
-    return handle<{ success: boolean; message: string }>(r);
+    // Password reset not implemented in current backend
+    return Promise.resolve({ success: false, message: 'Password reset not available' });
   },
   async verifyResetToken(token: string) {
-    const r = await fetch(`${API_URL}/auth/verify-reset-token`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token })
-    });
-    return handle<{ valid: boolean }>(r);
+    // Not implemented in current backend
+    return Promise.resolve({ valid: false });
   },
   async updatePassword(token: string, newPassword: string) {
-    const r = await fetch(`${API_URL}/auth/update-password`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token, newPassword })
-    });
-    return handle<{ success: boolean }>(r);
+    // Not implemented in current backend
+    return Promise.resolve({ success: false });
   },
   // Simplified API methods for the new flow
   async getQuota() {
@@ -130,29 +158,51 @@ export const api = {
     return this.putProfile(profile);
   },
   async summarizeResume(resumeText: string) {
-    const r = await fetch(`${API_URL}/ai/summarize`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ resumeText })
-    });
-    return handle<{ summary: string; skills: string[]; experience: any[] }>(r);
-  },
-  async uploadResume(file: File) {
-    const formData = new FormData();
-    formData.append('resume', file);
-    const r = await fetch(`${API_URL}/onboarding/parse`, {
-      method: 'POST',
-      body: formData
-    });
-    return handle<{ text: string }>(r);
-  },
-  async analyzeResume(resumeText: string) {
-    const r = await fetch(`${API_URL}/onboarding/analyze`, {
+    // Store resume text for later use
+    localStorage.setItem('userResumeText', resumeText);
+    const r = await fetch(`${API_URL}/api/analyze/public`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ resumeText })
     });
-    return handle<Profile>(r);
+    const result = await handle<{ structured: any }>(r);
+    return {
+      summary: result.structured.summary || '',
+      skills: result.structured.skills || [],
+      experience: result.structured.experience || []
+    };
+  },
+  async uploadResume(file: File) {
+    // Upload file to backend for proper parsing (PDF, DOCX, etc.)
+    const formData = new FormData();
+    formData.append('resume', file);
+
+    const r = await fetch(`${API_URL}/api/upload/resume`, {
+      method: 'POST',
+      body: formData
+    });
+
+    if (!r.ok) {
+      const error = await r.json();
+      throw new Error(error.error || 'Failed to upload file');
+    }
+
+    const result = await handle<{ success: boolean; text: string; filename: string; size: number }>(r);
+    return { text: result.text };
+  },
+  async analyzeResume(resumeText: string) {
+    localStorage.setItem('userResumeText', resumeText);
+    const r = await fetch(`${API_URL}/api/analyze/public`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resumeText })
+    });
+    const result = await handle<{ structured: any }>(r);
+    return {
+      ...result.structured,
+      resumeText,
+      isComplete: true
+    } as Profile;
   }
 };
 
