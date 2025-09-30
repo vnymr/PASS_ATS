@@ -72,29 +72,35 @@ function validateEnvironment() {
 
 validateEnvironment();
 
-// Middleware
-app.use(cors({
+// Middleware - CORS configuration
+const corsOptions = {
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
 
+    console.log('CORS check - Origin:', origin);
+    console.log('CORS check - Allowed origins:', config.server.allowedOrigins);
+
     if (config.server.allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
-      console.warn('CORS blocked origin:', origin);
-      console.warn('Allowed origins:', config.server.allowedOrigins);
-      callback(new Error('Not allowed by CORS'));
+      console.warn('⚠️ CORS blocked origin:', origin);
+      // Don't throw error, just reject with false
+      callback(null, false);
     }
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   exposedHeaders: ['Content-Length', 'X-Request-Id'],
-  maxAge: 86400 // 24 hours
-}));
+  maxAge: 86400, // 24 hours
+  optionsSuccessStatus: 204
+};
+
+app.use(cors(corsOptions));
 
 // Enable pre-flight for all routes
-app.options('*', cors());
+app.options('*', cors(corsOptions));
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
