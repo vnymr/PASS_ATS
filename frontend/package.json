@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build --mode production",
-    "preview": "vite preview --port 4173"
+    "preview": "vite preview --port 4173",
+    "start": "npx serve -s dist -l ${PORT:-8080}"
   },
   "dependencies": {
     "@clerk/clerk-react": "^5.48.1",

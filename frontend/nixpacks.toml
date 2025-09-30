@@ -1,8 +1,8 @@
 [phases.build]
-cmds = ["npm run build"]
+cmds = ["npm ci", "npm run build"]
 
 [phases.setup]
 nixPkgs = ["nodejs-18_x"]
 
 [start]
-cmd = "npx serve -s dist -l 8080"
+cmd = "npm start"
