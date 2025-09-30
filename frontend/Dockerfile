@@ -3,14 +3,14 @@ FROM node:18-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files from frontend directory
-COPY frontend/package*.json ./
+# Copy package files
+COPY package*.json ./
 
 # Install dependencies
 RUN npm ci
 
-# Copy frontend source code
-COPY frontend/ .
+# Copy source code
+COPY . .
 
 # Define build arguments for environment variables
 ARG VITE_API_URL
