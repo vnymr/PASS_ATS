@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build --mode production",
     "preview": "vite preview --port 4173",
-    "start": "serve -c serve.json -l ${PORT:-8080}"
+    "start": "serve -s dist -l ${PORT:-8080} --single"
   },
   "dependencies": {
     "@clerk/clerk-react": "^5.48.1",
