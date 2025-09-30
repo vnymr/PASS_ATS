@@ -108,14 +108,31 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Health check
 app.get('/health', async (req, res) => {
   try {
-    await prisma.$queryRaw`SELECT 1`;
-
+    // Basic health check without database dependency
     res.json({
       status: 'healthy',
       timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      memory: process.memoryUsage(),
       services: {
-        database: 'connected'
+        server: 'running'
       }
+    });
+  } catch (error) {
+    res.status(503).json({
+      status: 'unhealthy',
+      error: error.message
+    });
+  }
+});
+
+// Database health check (separate endpoint)
+app.get('/health/db', async (req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({
+      status: 'healthy',
+      database: 'connected'
     });
   } catch (error) {
     res.status(503).json({

@@ -11,7 +11,7 @@ RUN apk add --no-cache curl && \
 FROM node:18-alpine
 
 # Install runtime dependencies
-RUN apk add --no-cache ca-certificates openssl
+RUN apk add --no-cache ca-certificates openssl curl
 
 # Copy tectonic from builder
 COPY --from=builder /usr/local/bin/tectonic /usr/local/bin/tectonic
@@ -41,9 +41,9 @@ ENV NODE_ENV=production \
 
 EXPOSE ${PORT}
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:' + process.env.PORT + '/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"
+# Health check - more robust with longer startup time
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=5 \
+  CMD curl -f http://localhost:${PORT}/health || exit 1
 
 WORKDIR /app/server
 
