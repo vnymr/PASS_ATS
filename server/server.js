@@ -131,15 +131,25 @@ const authenticateToken = async (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
+  console.log('🔐 Auth attempt:', {
+    hasAuthHeader: !!authHeader,
+    hasToken: !!token,
+    tokenPrefix: token ? token.substring(0, 20) + '...' : 'none',
+    hasClerkClient: !!clerkClient
+  });
+
   if (!token) {
+    console.log('❌ No token provided');
     return res.status(401).json({ error: 'Access token required' });
   }
 
   // Try Clerk authentication first if available
   if (clerkClient) {
     try {
+      console.log('🔍 Attempting Clerk verification...');
       // Verify the Clerk session token
       const sessionClaims = await clerkClient.verifyToken(token);
+      console.log('✅ Clerk verification successful:', sessionClaims.sub);
 
       // Get or create user in our database
       let user = await prisma.user.findUnique({
@@ -161,21 +171,20 @@ const authenticateToken = async (req, res, next) => {
       req.userId = user.id;
       return next();
     } catch (clerkError) {
-      // Only log meaningful Clerk errors, not JWT format issues or expirations
-      if (!clerkError.message.includes('JWT') &&
-          !clerkError.message.includes('expired') &&
-          !clerkError.message.includes('Invalid JWT form')) {
-        console.log('Clerk auth issue:', clerkError.message);
-      }
-      // Fall through to legacy JWT auth silently
+      console.log('⚠️ Clerk auth failed:', clerkError.message);
+      // Fall through to legacy JWT auth
     }
   }
 
   // Legacy JWT authentication
+  console.log('🔑 Attempting legacy JWT verification...');
   jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
     if (err) {
+      console.log('❌ JWT verification failed:', err.message);
       return res.status(403).json({ error: 'Invalid or expired token' });
     }
+
+    console.log('✅ JWT verification successful for user:', decoded.id);
 
     // For legacy tokens, ensure user exists
     const user = await prisma.user.findUnique({
