@@ -260,71 +260,71 @@ export class OnboardingValidator {
     };
 
     // Sanitize string fields
-    const stringFields = ['name', 'email', 'phone', 'location', 'linkedin', 'website', 'summary'];
+    const stringFields: (keyof ParsedResumeData)[] = ['name', 'email', 'phone', 'location', 'linkedin', 'website', 'summary'];
     stringFields.forEach(field => {
       if (data[field] && typeof data[field] === 'string') {
-        sanitized[field as keyof ParsedResumeData] = data[field].trim().replace(/\u0000/g, '');
+        (sanitized as any)[field] = (data[field] as string).trim().replace(/\u0000/g, '');
       }
     });
 
     // Sanitize arrays
     if (Array.isArray(data.skills)) {
       sanitized.skills = data.skills
-        .filter(skill => skill && typeof skill === 'string')
-        .map(skill => skill.trim())
-        .filter(skill => skill.length > 0);
+        .filter((skill: any) => skill && typeof skill === 'string')
+        .map((skill: string) => skill.trim())
+        .filter((skill: string) => skill.length > 0);
     }
 
     if (Array.isArray(data.experiences)) {
       sanitized.experiences = data.experiences
-        .filter(exp => exp && typeof exp === 'object')
-        .map(exp => ({
+        .filter((exp: any) => exp && typeof exp === 'object')
+        .map((exp: any) => ({
           company: exp.company?.trim() || '',
           role: exp.role?.trim() || '',
           location: exp.location?.trim() || '',
           dates: exp.dates?.trim() || '',
-          bullets: Array.isArray(exp.bullets) ? exp.bullets.filter(b => b && typeof b === 'string').map(b => b.trim()) : [],
+          bullets: Array.isArray(exp.bullets) ? exp.bullets.filter((b: any) => b && typeof b === 'string').map((b: string) => b.trim()) : [],
           isCurrent: Boolean(exp.isCurrent)
         }))
-        .filter(exp => exp.company && exp.role);
+        .filter((exp: any) => exp.company && exp.role);
     }
 
     if (Array.isArray(data.projects)) {
       sanitized.projects = data.projects
-        .filter(project => project && typeof project === 'object')
-        .map(project => ({
+        .filter((project: any) => project && typeof project === 'object')
+        .map((project: any) => ({
           name: project.name?.trim() || '',
           summary: project.summary?.trim() || '',
-          bullets: Array.isArray(project.bullets) ? project.bullets.filter(b => b && typeof b === 'string').map(b => b.trim()) : [],
-          technologies: Array.isArray(project.technologies) ? project.technologies.filter(t => t && typeof t === 'string').map(t => t.trim()) : [],
+          bullets: Array.isArray(project.bullets) ? project.bullets.filter((b: any) => b && typeof b === 'string').map((b: string) => b.trim()) : [],
+          technologies: Array.isArray(project.technologies) ? project.technologies.filter((t: any) => t && typeof t === 'string').map((t: string) => t.trim()) : [],
           url: project.url?.trim() || ''
         }))
-        .filter(project => project.name);
+        .filter((project: any) => project.name);
     }
 
     if (Array.isArray(data.education)) {
       sanitized.education = data.education
-        .filter(edu => edu && typeof edu === 'object')
-        .map(edu => ({
+        .filter((edu: any) => edu && typeof edu === 'object')
+        .map((edu: any) => ({
           institution: edu.institution?.trim() || '',
           degree: edu.degree?.trim() || '',
           location: edu.location?.trim() || '',
           dates: edu.dates?.trim() || '',
           gpa: edu.gpa?.trim() || ''
         }))
-        .filter(edu => edu.institution && edu.degree);
+        .filter((edu: any) => edu.institution && edu.degree);
     }
 
     if (Array.isArray(data.certifications)) {
       sanitized.certifications = data.certifications
-        .filter(cert => cert && typeof cert === 'object')
-        .map(cert => ({
+        .filter((cert: any) => cert && typeof cert === 'object')
+        .map((cert: any) => ({
           name: cert.name?.trim() || '',
           issuer: cert.issuer?.trim() || '',
           date: cert.date?.trim() || '',
           url: cert.url?.trim() || ''
         }))
-        .filter(cert => cert.name && cert.issuer);
+        .filter((cert: any) => cert.name && cert.issuer);
     }
 
     return sanitized;
