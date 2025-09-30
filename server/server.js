@@ -1418,7 +1418,7 @@ async function processJobAsyncSimplified(jobId, profileData, jobDescription) {
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
     // Initial generation
-    console.log(`🧠 Calling gpt-5-mini with ultrathink (reasoning_effort: high)...`);
+    console.log(`🧠 Calling gpt-5-mini (no reasoning effort for speed)...`);
     const genStart = Date.now();
     let latexCode = await generateLatexWithLLM(openai, userDataForLLM, jobDescription);
     const genTime = Date.now() - genStart;
@@ -1575,7 +1575,10 @@ async function generateLatexWithLLM(openai, userDataJSON, jobDescription) {
     messages: [
       {
         role: 'system',
-        content: `You are an expert ATS-optimized resume writer and LaTeX developer specializing in tailoring resumes for specific roles.
+        content: [
+          {
+            type: 'text',
+            text: `You are an expert ATS-optimized resume writer and LaTeX developer specializing in tailoring resumes for specific roles.
 
 YOUR TASK:
 Analyze ALL available user data (structured fields, resumeText, additionalInfo) and the target job description to create a strategically optimized resume that:
@@ -1613,16 +1616,23 @@ OUTPUT RULES:
 - Include \\documentclass, \\begin{document}, and \\end{document}
 - Use 10pt article class with tight margins for 1-page fit
 - Use user's ACTUAL name (never "Candidate" or generic names)
-- Never invent experiences, companies, or metrics not in the data`
+- Never invent experiences, companies, or metrics not in the data`,
+            cache_control: { type: 'ephemeral' }
+          }
+        ]
       },
       {
         role: 'user',
-        content: `Analyze this user's complete profile and create an ATS-optimized resume tailored for the target job.
-
-USER PROFILE DATA:
-${userDataJSON}
-
-TARGET JOB DESCRIPTION:
+        content: [
+          {
+            type: 'text',
+            text: `USER PROFILE DATA (cached):
+${userDataJSON}`,
+            cache_control: { type: 'ephemeral' }
+          },
+          {
+            type: 'text',
+            text: `TARGET JOB DESCRIPTION:
 ${jobDescription}
 
 Instructions:
@@ -1633,9 +1643,11 @@ Instructions:
 5. Make sure the resume would pass ATS keyword matching for this specific role
 
 Generate the complete LaTeX document now.`
+          }
+        ]
       }
-    ],
-    reasoning_effort: 'high' // ultrathink
+    ]
+    // Note: gpt-5-mini doesn't support temperature parameter, only default (1) is allowed
   });
 
   let latex = response.choices[0].message.content.trim();
@@ -1660,9 +1672,15 @@ async function fixLatexWithLLM(openai, brokenLatex, errorMessage) {
         role: 'system',
         content: `You are a LaTeX debugging expert. Fix the LaTeX compilation error and return the corrected LaTeX code.
 
+COMMON LATEX ERRORS AND FIXES:
+- "Missing $ inserted" → Escape special characters: _ → \_ , & → \& , % → \% , $ → \$ , # → \#
+- Unescaped underscores in text → Wrap in \texttt{} or escape with \_
+- Math mode characters outside $ $ → Either escape them or wrap in math mode
+- Undefined control sequences → Check for typos in commands
+
 RULES:
-1. Fix ONLY the error mentioned
-2. Keep all content intact
+1. If error mentions "Missing $", find ALL unescaped special characters (_, &, %, $, #) and escape them
+2. Keep all content intact - don't remove information
 3. Return ONLY the corrected LaTeX code
 4. No explanations, no markdown`
       },
@@ -1676,10 +1694,15 @@ ${errorMessage}
 LATEX CODE:
 ${brokenLatex}
 
+SPECIFIC INSTRUCTIONS:
+- Look for line ${errorMessage.match(/line (\d+)/)?.[1] || errorMessage.match(/resume\.tex:(\d+)/)?.[1] || '?'} mentioned in the error
+- If "Missing $" error: Find and escape ALL special characters (_ & % $ #) in that area
+- Common issue: underscore in text like "skill_name" should be "skill\\_name"
+
 Fix the error and return the corrected LaTeX code.`
       }
-    ],
-    reasoning_effort: 'high'
+    ]
+    // Note: gpt-5-mini doesn't support temperature parameter
   });
 
   let fixedLatex = response.choices[0].message.content.trim();

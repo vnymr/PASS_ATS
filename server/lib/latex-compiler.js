@@ -93,16 +93,49 @@ async function compileLatex(latexCode) {
       console.error('LaTeX compilation error:', error.message);
     }
 
-    // Try to read log file for better error message
+    // Try to read log file for detailed error context
     try {
       const logFile = path.join(tempDir, 'resume.log');
       const logContent = await fs.readFile(logFile, 'utf8');
+
+      // Extract detailed error information
+      const errorLines = [];
+      const lines = logContent.split('\n');
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+
+        // Look for error markers
+        if (line.startsWith('!') || line.includes('Error') || line.includes('error:')) {
+          // Capture error line and 5 lines of context
+          errorLines.push('=== ERROR CONTEXT ===');
+          for (let j = Math.max(0, i - 2); j < Math.min(lines.length, i + 5); j++) {
+            errorLines.push(lines[j]);
+          }
+          errorLines.push('=== END CONTEXT ===\n');
+        }
+
+        // Look for line number references (l.123 format)
+        if (line.match(/^l\.\d+/)) {
+          errorLines.push(`Line reference: ${line}`);
+        }
+      }
+
+      if (errorLines.length > 0) {
+        const detailedError = errorLines.join('\n');
+        throw new Error(`LaTeX compilation error with context:\n${detailedError.substring(0, 1000)}`);
+      }
+
+      // Fallback to simple error extraction
       const errorMatch = logContent.match(/^! (.+)$/m);
       if (errorMatch) {
         throw new Error(`LaTeX error: ${errorMatch[1]}`);
       }
     } catch (logError) {
-      // Ignore log reading errors
+      // If log parsing itself fails, continue with original error
+      if (logError.message.includes('LaTeX compilation error')) {
+        throw logError; // Re-throw our parsed error
+      }
     }
 
     throw new Error(`LaTeX compilation failed: ${error.message}`);
