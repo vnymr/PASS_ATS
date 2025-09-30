@@ -29,10 +29,12 @@ async function compileLatex(latexCode) {
     await fs.writeFile(texFile, latexCode);
 
     // Try to compile with different engines in order of preference
+    // Include full path for tectonic on Mac (homebrew installation)
     const compilers = [
-      { cmd: 'tectonic', args: '--outdir . --keep-logs resume.tex' },
-      { cmd: 'pdflatex', args: '-interaction=nonstopmode -output-directory=. resume.tex' },
-      { cmd: 'xelatex', args: '-interaction=nonstopmode -output-directory=. resume.tex' }
+      { cmd: '/opt/homebrew/bin/tectonic', args: '--outdir . --keep-logs resume.tex', name: 'tectonic (homebrew)' },
+      { cmd: 'tectonic', args: '--outdir . --keep-logs resume.tex', name: 'tectonic' },
+      { cmd: 'pdflatex', args: '-interaction=nonstopmode -output-directory=. resume.tex', name: 'pdflatex' },
+      { cmd: 'xelatex', args: '-interaction=nonstopmode -output-directory=. resume.tex', name: 'xelatex' }
     ];
 
     let compiled = false;
@@ -40,11 +42,13 @@ async function compileLatex(latexCode) {
 
     for (const compiler of compilers) {
       try {
-        // Check if compiler exists
-        await execAsync(`which ${compiler.cmd}`);
+        // Check if compiler exists (skip 'which' check for absolute paths)
+        if (!compiler.cmd.startsWith('/')) {
+          await execAsync(`which ${compiler.cmd}`);
+        }
 
         // Run compilation (twice for references)
-        await execAsync(`cd ${tempDir} && ${compiler.cmd} ${compiler.args}`);
+        const result = await execAsync(`cd ${tempDir} && ${compiler.cmd} ${compiler.args}`);
 
         // Some compilers need a second pass for references
         if (compiler.cmd !== 'tectonic') {
@@ -52,11 +56,23 @@ async function compileLatex(latexCode) {
         }
 
         compiled = true;
-        console.log(`Successfully compiled with ${compiler.cmd}`);
+        console.log(`✅ Successfully compiled PDF with ${compiler.name || compiler.cmd}`);
         break;
       } catch (error) {
         lastError = error;
-        console.log(`${compiler.cmd} not available or failed, trying next...`);
+        // Log tectonic errors for debugging
+        if (compiler.cmd === '/opt/homebrew/bin/tectonic' || compiler.name === 'tectonic') {
+          console.log(`⚠️ Tectonic compilation failed: ${error.message.substring(0, 300)}`);
+          // Show stderr if available (contains LaTeX errors)
+          if (error.stderr && error.stderr.length > 0) {
+            console.log(`📋 Stderr output:`, error.stderr.substring(0, 500));
+          }
+          if (error.stdout && error.stdout.length > 0) {
+            console.log(`📋 Stdout output:`, error.stdout.substring(0, 500));
+          }
+        } else if (!compiled) {
+          console.log(`⚠️ ${compiler.name || compiler.cmd} not available, trying next...`);
+        }
         continue;
       }
     }
@@ -72,7 +88,10 @@ async function compileLatex(latexCode) {
     return pdfBuffer;
 
   } catch (error) {
-    console.error('LaTeX compilation error:', error);
+    // Only log critical errors, not expected fallbacks
+    if (!error.message.includes('not available')) {
+      console.error('LaTeX compilation error:', error.message);
+    }
 
     // Try to read log file for better error message
     try {

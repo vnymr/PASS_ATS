@@ -32,8 +32,13 @@ export type Profile = {
 // Update to use the new backend port
 const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3000';
 
-function authHeaders(): Record<string, string> {
-  const token = localStorage.getItem('token');
+// Clerk token helper - this will be used by components that have access to Clerk
+export function getClerkToken(): Promise<string | null> {
+  // This will be implemented in components that use Clerk hooks
+  return Promise.resolve(null);
+}
+
+function authHeaders(token?: string): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
@@ -47,8 +52,8 @@ async function handle<T>(res: Response): Promise<T> {
 export const api = {
   base: API_URL,
 
-  async get(path: string) {
-    const r = await fetch(`${API_URL}${path}`, { headers: { ...authHeaders() } });
+  async get(path: string, token?: string) {
+    const r = await fetch(`${API_URL}${path}`, { headers: { ...authHeaders(token) } });
     return handle<any>(r);
   },
 

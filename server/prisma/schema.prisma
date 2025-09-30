@@ -11,6 +11,7 @@ model User {
   id        Int      @id @default(autoincrement())
   email     String   @unique
   password  String
+  clerkId   String?  @unique
   createdAt DateTime @default(now())
   jobs      Job[]
   profile   Profile?
@@ -31,7 +32,7 @@ model Job {
   priority       Int         @default(0)
   attempts       Int         @default(0)
   maxAttempts    Int         @default(3)
-  resumeText     String
+  resumeText     String?     @default("")
   jobDescription String
   aiMode         String?
   matchMode      String?

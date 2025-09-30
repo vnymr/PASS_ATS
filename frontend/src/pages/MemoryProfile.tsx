@@ -1,16 +1,42 @@
-import React, { useState, useEffect } from 'react';
-import { api, type Profile } from '../api-adapter';
+import React, { useState, useEffect, useRef } from 'react';
+import { useAuth } from '@clerk/clerk-react';
 import Icons from '../components/ui/icons';
 
+// Define the profile type with all fields
+type Profile = {
+  name?: string;
+  email?: string;
+  phone?: string;
+  location?: string;
+  linkedin?: string;
+  website?: string;
+  summary?: string;
+  skills?: string[];
+  experiences?: Array<{ company?: string; role?: string; location?: string; dates?: string; bullets?: string[] }>;
+  projects?: Array<{ name?: string; summary?: string; bullets?: string[] }>;
+  education?: Array<{ institution?: string; degree?: string; location?: string; dates?: string }>;
+  resumeText?: string;
+  additionalInfo?: string;
+};
+
+type TabType = 'personal' | 'summary' | 'skills' | 'experience' | 'additional' | 'resume';
+
+// API base URL
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+
 export default function MemoryProfile() {
+  const { getToken, isLoaded, isSignedIn } = useAuth();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [additionalInfo, setAdditionalInfo] = useState('');
   const [resumeText, setResumeText] = useState('');
-  const [activeTab, setActiveTab] = useState<'profile' | 'additional' | 'resume'>('profile');
+  const [activeTab, setActiveTab] = useState<TabType>('personal');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [newSkill, setNewSkill] = useState('');
+  const [uploadingResume, setUploadingResume] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Form fields for structured profile data
   const [formData, setFormData] = useState({
@@ -28,13 +54,41 @@ export default function MemoryProfile() {
   });
 
   useEffect(() => {
-    loadProfile();
-  }, []);
+    if (isLoaded && isSignedIn) {
+      loadProfile();
+    } else if (isLoaded && !isSignedIn) {
+      setError('Please sign in to view your profile');
+      setLoading(false);
+    }
+  }, [isLoaded, isSignedIn]);
 
   async function loadProfile() {
     try {
-      const data = await api.getProfile();
+      const token = await getToken();
+      if (!token) {
+        throw new Error('No authentication token available');
+      }
+
+      const response = await fetch(`${API_URL}/api/profile`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.status === 404) {
+        // Profile doesn't exist yet, that's okay
+        console.log('No profile found, user can create one');
+        setLoading(false);
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch profile');
+      }
+
+      const data = await response.json();
       console.log('🔍 Loaded profile data:', data);
+
       if (data) {
         setProfile(data);
 
@@ -69,7 +123,7 @@ export default function MemoryProfile() {
           projects: Array.isArray(data.projects) ? data.projects : [],
           education: Array.isArray(data.education) ? data.education : []
         };
-        
+
         console.log('📝 Setting form data:', formDataToSet);
         setFormData(formDataToSet);
 
@@ -91,433 +145,537 @@ export default function MemoryProfile() {
     }
   }
 
+  async function handleResumeUpload(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const allowedTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'];
+    if (!allowedTypes.includes(file.type)) {
+      setError('Please upload a PDF, DOCX, or TXT file');
+      return;
+    }
+
+    setUploadingResume(true);
+    setError(null);
+
+    try {
+      const token = await getToken();
+      if (!token) {
+        throw new Error('No authentication token available');
+      }
+
+      const formData = new FormData();
+      formData.append('resume', file);
+
+      const response = await fetch(`${API_URL}/api/parse-resume`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to parse resume');
+      }
+
+      const { extractedData, resumeText } = await response.json();
+
+      // Auto-fill the form fields with extracted data
+      setFormData(prev => ({
+        ...prev,
+        name: extractedData.name || prev.name,
+        email: extractedData.email || prev.email,
+        phone: extractedData.phone || prev.phone,
+        location: extractedData.location || prev.location,
+        linkedin: extractedData.linkedin || prev.linkedin,
+        website: extractedData.website || prev.website,
+        summary: extractedData.summary || prev.summary,
+        skills: extractedData.skills?.length > 0 ? extractedData.skills : prev.skills,
+        experiences: extractedData.experience?.length > 0 ?
+          extractedData.experience.map((exp: any) => ({
+            company: exp.company,
+            role: exp.title,
+            location: exp.location,
+            dates: `${exp.startDate} - ${exp.endDate}`,
+            bullets: exp.description ? [exp.description] : []
+          })) : prev.experiences,
+        education: extractedData.education?.length > 0 ?
+          extractedData.education.map((edu: any) => ({
+            institution: edu.institution,
+            degree: `${edu.degree} in ${edu.field}`,
+            location: '',
+            dates: edu.graduationDate
+          })) : prev.education,
+        projects: extractedData.projects?.length > 0 ?
+          extractedData.projects.map((proj: any) => ({
+            name: proj.name,
+            summary: proj.description,
+            bullets: proj.technologies || []
+          })) : prev.projects
+      }));
+
+      // Set resume text
+      if (resumeText) {
+        setResumeText(resumeText);
+      }
+
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 3000);
+    } catch (err) {
+      console.error('Failed to parse resume:', err);
+      setError('Failed to parse resume. You can still fill in the information manually.');
+    } finally {
+      setUploadingResume(false);
+    }
+  }
+
   async function handleSave() {
     setSaving(true);
     setError(null);
     setSuccess(false);
 
     try {
-      const updatedProfile: any = { ...profile };
+      const token = await getToken();
+      if (!token) {
+        throw new Error('No authentication token available');
+      }
 
-      // Update with form data
-      updatedProfile.name = formData.name;
-      updatedProfile.email = formData.email;
-      updatedProfile.phone = formData.phone;
-      updatedProfile.location = formData.location;
-      updatedProfile.linkedin = formData.linkedin;
-      updatedProfile.website = formData.website;
-      updatedProfile.summary = formData.summary;
-      updatedProfile.skills = formData.skills;
-      updatedProfile.experiences = formData.experiences;
-      updatedProfile.projects = formData.projects;
-      updatedProfile.education = formData.education;
+      // Combine all data
+      const profileData = {
+        ...formData,
+        additionalInfo,
+        resumeText
+      };
 
-      // Save additional info and resume text
-      updatedProfile.additionalInfo = additionalInfo;
-      updatedProfile.resumeText = resumeText;
+      const response = await fetch(`${API_URL}/api/profile`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(profileData)
+      });
 
-      await api.updateProfile(updatedProfile);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        console.error('Profile save error:', response.status, errorData);
+        throw new Error(errorData.error || 'Failed to update profile');
+      }
+
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to save profile:', err);
-      setError(err?.message || 'Failed to save profile');
+      setError('Failed to save profile');
     } finally {
       setSaving(false);
     }
   }
 
+  function addSkill() {
+    if (newSkill.trim() && !formData.skills.includes(newSkill.trim())) {
+      setFormData({
+        ...formData,
+        skills: [...formData.skills, newSkill.trim()]
+      });
+      setNewSkill('');
+    }
+  }
+
+  function removeSkill(skill: string) {
+    setFormData({
+      ...formData,
+      skills: formData.skills.filter(s => s !== skill)
+    });
+  }
+
+  if (!isLoaded) {
+    return (
+      <div className="modern-profile-loading">
+        <div className="modern-profile-spinner">
+          <div className="modern-profile-spinner-inner"></div>
+        </div>
+        <p className="modern-profile-loading-text">Initializing...</p>
+      </div>
+    );
+  }
+
+  if (!isSignedIn) {
+    return (
+      <div className="modern-profile-error">
+        <Icons.alertCircle size={48} />
+        <h2>Authentication Required</h2>
+        <p>Please sign in to access your profile</p>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
-      <div className="loading-container">
-        <Icons.loader className="animate-spin" size={48} />
-        <p>Loading profile...</p>
+      <div className="modern-profile-loading">
+        <div className="modern-profile-spinner">
+          <div className="modern-profile-spinner-inner"></div>
+        </div>
+        <p className="modern-profile-loading-text">Loading your profile...</p>
       </div>
     );
   }
 
   return (
-    <div className="profile-container">
-      {/* Header Section */}
-      <div className="profile-header">
-        <div className="profile-header-content">
-          <div className="profile-header-icon">
-            <Icons.user size={32} />
-          </div>
-          <div className="profile-header-text">
-            <h1 className="profile-title">Memory & Profile</h1>
-            <p className="profile-subtitle">
-              Manage your professional information and additional context to create better resumes
-            </p>
-          </div>
-        </div>
-        <div className="profile-actions">
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="btn btn-primary btn-save"
-          >
-            {saving ? (
-              <>
-                <Icons.loader className="animate-spin mr-2" size={18} />
-                Saving...
-              </>
-            ) : (
-              <>
-                <Icons.check size={18} className="mr-2" />
-                Save Changes
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-
-      {/* Status Messages */}
-      {error && (
-        <div className="status-message error-message">
-          <Icons.alertCircle size={20} />
-          <span>{error}</span>
-        </div>
-      )}
-
-      {success && (
-        <div className="status-message success-message">
-          <Icons.checkCircle size={20} />
-          <span>Profile saved successfully!</span>
-        </div>
-      )}
-
-      {/* Navigation Tabs */}
-      <div className="profile-tabs">
-        <button
-          className={`profile-tab ${activeTab === 'profile' ? 'active' : ''}`}
-          onClick={() => setActiveTab('profile')}
-        >
-          <Icons.user size={20} />
-          <span>Profile Information</span>
-        </button>
-        <button
-          className={`profile-tab ${activeTab === 'additional' ? 'active' : ''}`}
-          onClick={() => setActiveTab('additional')}
-        >
-          <Icons.fileText size={20} />
-          <span>Additional Notes</span>
-        </button>
-        <button
-          className={`profile-tab ${activeTab === 'resume' ? 'active' : ''}`}
-          onClick={() => setActiveTab('resume')}
-        >
-          <Icons.file size={20} />
-          <span>Original Resume</span>
-        </button>
-      </div>
-
-      {/* Content Area */}
-      <div className="profile-content">
-        {activeTab === 'profile' ? (
-          <div className="profile-form-container">
-            {/* Personal Information Card */}
-            <div className="form-card">
-              <div className="form-card-header">
-                <Icons.user size={24} />
-                <h3 className="form-card-title">Personal Information</h3>
-              </div>
-              <div className="form-card-content">
-                <div className="form-grid">
-                  <div className="form-field">
-                    <label className="form-label">
-                      <Icons.user size={16} />
-                      Full Name
-                    </label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      value={formData.name}
-                      onChange={(e) => setFormData({...formData, name: e.target.value})}
-                      placeholder="Enter your full name"
-                    />
-                  </div>
-                  <div className="form-field">
-                    <label className="form-label">
-                      <Icons.mail size={16} />
-                      Email Address
-                    </label>
-                    <input
-                      type="email"
-                      className="form-input"
-                      value={formData.email}
-                      onChange={(e) => setFormData({...formData, email: e.target.value})}
-                      placeholder="your@email.com"
-                    />
-                  </div>
-                  <div className="form-field">
-                    <label className="form-label">
-                      <Icons.phone size={16} />
-                      Phone Number
-                    </label>
-                    <input
-                      type="tel"
-                      className="form-input"
-                      value={formData.phone}
-                      onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                      placeholder="+1 (555) 123-4567"
-                    />
-                  </div>
-                  <div className="form-field">
-                    <label className="form-label">
-                      <Icons.mapPin size={16} />
-                      Location
-                    </label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      value={formData.location}
-                      onChange={(e) => setFormData({...formData, location: e.target.value})}
-                      placeholder="City, State"
-                    />
-                  </div>
-                  <div className="form-field">
-                    <label className="form-label">
-                      <Icons.linkedin size={16} />
-                      LinkedIn Profile
-                    </label>
-                    <input
-                      type="url"
-                      className="form-input"
-                      value={formData.linkedin}
-                      onChange={(e) => setFormData({...formData, linkedin: e.target.value})}
-                      placeholder="https://linkedin.com/in/yourprofile"
-                    />
-                  </div>
-                  <div className="form-field">
-                    <label className="form-label">
-                      <Icons.globe size={16} />
-                      Website
-                    </label>
-                    <input
-                      type="url"
-                      className="form-input"
-                      value={formData.website}
-                      onChange={(e) => setFormData({...formData, website: e.target.value})}
-                      placeholder="https://yourwebsite.com"
-                    />
-                  </div>
-                </div>
-              </div>
+    <div className="modern-profile-page">
+      <div className="modern-profile-container">
+        {/* Premium Header */}
+        <div className="modern-profile-header">
+          <div className="modern-profile-header-bg"></div>
+          <div className="modern-profile-header-content">
+            <div className="modern-profile-avatar">
+              <Icons.user size={40} />
             </div>
+            <div className="modern-profile-info">
+              <h1 className="modern-profile-title">
+                {formData.name || 'Your Profile'}
+                <span className="modern-profile-badge">Pro</span>
+              </h1>
+              <p className="modern-profile-subtitle">
+                Enhance your professional presence with detailed information
+              </p>
+            </div>
+            <div className="modern-profile-header-actions">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,.docx,.txt"
+                onChange={handleResumeUpload}
+                style={{ display: 'none' }}
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingResume}
+                className="modern-profile-upload-btn"
+              >
+                {uploadingResume ? (
+                  <>
+                    <div className="modern-profile-btn-spinner"></div>
+                    <span>Parsing...</span>
+                  </>
+                ) : (
+                  <>
+                    <Icons.upload size={18} />
+                    <span>Upload Resume</span>
+                  </>
+                )}
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="modern-profile-save-btn"
+              >
+                {saving ? (
+                  <>
+                    <div className="modern-profile-btn-spinner"></div>
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <>
+                    <Icons.check size={18} />
+                    <span>Save Profile</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
 
-            {/* Professional Summary Card */}
-            <div className="form-card">
-              <div className="form-card-header">
-                <Icons.fileText size={24} />
-                <h3 className="form-card-title">Professional Summary</h3>
+        {/* Modern Status Messages */}
+        {error && (
+          <div className="modern-profile-alert modern-profile-alert-error">
+            <Icons.alertCircle size={18} />
+            <span>{error}</span>
+            <button
+              onClick={() => setError(null)}
+              className="modern-profile-alert-close"
+              aria-label="Dismiss"
+            >
+              <Icons.x size={16} />
+            </button>
+          </div>
+        )}
+
+        {success && (
+          <div className="modern-profile-alert modern-profile-alert-success">
+            <Icons.checkCircle size={18} />
+            <span>Profile saved successfully!</span>
+          </div>
+        )}
+
+        {/* Enhanced Tab Navigation */}
+        <div className="modern-profile-tabs">
+          <div className="modern-profile-tabs-container">
+            <button
+              className={`modern-profile-tab ${activeTab === 'personal' ? 'active' : ''}`}
+              onClick={() => setActiveTab('personal')}
+            >
+              <Icons.user size={18} />
+              <span>Personal</span>
+            </button>
+            <button
+              className={`modern-profile-tab ${activeTab === 'summary' ? 'active' : ''}`}
+              onClick={() => setActiveTab('summary')}
+            >
+              <Icons.fileText size={18} />
+              <span>Summary</span>
+            </button>
+            <button
+              className={`modern-profile-tab ${activeTab === 'skills' ? 'active' : ''}`}
+              onClick={() => setActiveTab('skills')}
+            >
+              <Icons.award size={18} />
+              <span>Skills</span>
+            </button>
+            <button
+              className={`modern-profile-tab ${activeTab === 'experience' ? 'active' : ''}`}
+              onClick={() => setActiveTab('experience')}
+            >
+              <Icons.briefcase size={18} />
+              <span>Experience</span>
+            </button>
+            <button
+              className={`modern-profile-tab ${activeTab === 'additional' ? 'active' : ''}`}
+              onClick={() => setActiveTab('additional')}
+            >
+              <Icons.fileText size={18} />
+              <span>Notes</span>
+            </button>
+            <button
+              className={`modern-profile-tab ${activeTab === 'resume' ? 'active' : ''}`}
+              onClick={() => setActiveTab('resume')}
+            >
+              <Icons.file size={18} />
+              <span>Resume</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Tab Content */}
+        <div className="modern-profile-content">
+          {activeTab === 'personal' ? (
+            <div className="modern-profile-section">
+              <div className="modern-profile-section-header">
+                <h2 className="modern-profile-section-title">Personal Information</h2>
+                <p className="modern-profile-section-desc">Your basic contact details</p>
               </div>
-              <div className="form-card-content">
-                <div className="form-field">
-                  <label className="form-label">
-                    <Icons.edit size={16} />
-                    Summary
+              <div className="modern-profile-grid">
+                <div className="modern-profile-field">
+                  <label className="modern-profile-label">
+                    <Icons.user size={14} />
+                    Full Name
                   </label>
-                  <textarea
-                    className="form-textarea"
-                    value={formData.summary}
-                    onChange={(e) => setFormData({...formData, summary: e.target.value})}
-                    placeholder="Write a compelling professional summary that highlights your key strengths and career objectives..."
-                    rows={4}
+                  <input
+                    type="text"
+                    className="modern-profile-input"
+                    value={formData.name}
+                    onChange={(e) => setFormData({...formData, name: e.target.value})}
+                    placeholder="John Doe"
+                  />
+                </div>
+
+                <div className="modern-profile-field">
+                  <label className="modern-profile-label">
+                    <Icons.mail size={14} />
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    className="modern-profile-input"
+                    value={formData.email}
+                    onChange={(e) => setFormData({...formData, email: e.target.value})}
+                    placeholder="john.doe@example.com"
+                  />
+                </div>
+
+                <div className="modern-profile-field">
+                  <label className="modern-profile-label">
+                    <Icons.phone size={14} />
+                    Phone Number
+                  </label>
+                  <input
+                    type="tel"
+                    className="modern-profile-input"
+                    value={formData.phone}
+                    onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                    placeholder="+1 (555) 123-4567"
+                  />
+                </div>
+
+                <div className="modern-profile-field">
+                  <label className="modern-profile-label">
+                    <Icons.mapPin size={14} />
+                    Location
+                  </label>
+                  <input
+                    type="text"
+                    className="modern-profile-input"
+                    value={formData.location}
+                    onChange={(e) => setFormData({...formData, location: e.target.value})}
+                    placeholder="San Francisco, CA"
+                  />
+                </div>
+
+                <div className="modern-profile-field">
+                  <label className="modern-profile-label">
+                    <Icons.linkedin size={14} />
+                    LinkedIn Profile
+                  </label>
+                  <input
+                    type="url"
+                    className="modern-profile-input"
+                    value={formData.linkedin}
+                    onChange={(e) => setFormData({...formData, linkedin: e.target.value})}
+                    placeholder="https://linkedin.com/in/johndoe"
+                  />
+                </div>
+
+                <div className="modern-profile-field">
+                  <label className="modern-profile-label">
+                    <Icons.globe size={14} />
+                    Personal Website
+                  </label>
+                  <input
+                    type="url"
+                    className="modern-profile-input"
+                    value={formData.website}
+                    onChange={(e) => setFormData({...formData, website: e.target.value})}
+                    placeholder="https://johndoe.com"
                   />
                 </div>
               </div>
             </div>
-
-            {/* Skills Card */}
-            <div className="form-card">
-              <div className="form-card-header">
-                <Icons.award size={24} />
-                <h3 className="form-card-title">Skills & Expertise</h3>
+          ) : activeTab === 'summary' ? (
+            <div className="modern-profile-section">
+              <div className="modern-profile-section-header">
+                <h2 className="modern-profile-section-title">Professional Summary</h2>
+                <p className="modern-profile-section-desc">Brief overview of your professional background</p>
               </div>
-              <div className="form-card-content">
-                <div className="form-field">
-                  <label className="form-label">
-                    <Icons.plus size={16} />
-                    Add Skills
-                  </label>
-                  <div className="skills-input-container">
-                    <input
-                      type="text"
-                      className="form-input skills-input"
-                      placeholder="Type a skill and press Enter to add it"
-                      onKeyPress={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          const skill = e.currentTarget.value.trim();
-                          if (skill && !formData.skills.includes(skill)) {
-                            setFormData({...formData, skills: [...formData.skills, skill]});
-                            e.currentTarget.value = '';
-                          }
-                        }
-                      }}
-                    />
-                    <div className="skills-tags">
-                      {formData.skills.map((skill, index) => (
-                        <div key={index} className="skill-tag">
-                          <span className="skill-tag-text">{skill}</span>
-                          <button
-                            onClick={() => setFormData({
-                              ...formData,
-                              skills: formData.skills.filter((_, i) => i !== index)
-                            })}
-                            className="skill-tag-remove"
-                            type="button"
-                          >
-                            <Icons.x size={14} />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
+              <div className="modern-profile-field-full">
+                <textarea
+                  className="modern-profile-textarea"
+                  value={formData.summary}
+                  onChange={(e) => setFormData({...formData, summary: e.target.value})}
+                  placeholder="Write a compelling summary of your professional experience, skills, and career objectives..."
+                  rows={8}
+                />
               </div>
             </div>
-
-            {/* Work Experience Card */}
-            <div className="form-card">
-              <div className="form-card-header">
-                <Icons.briefcase size={24} />
-                <h3 className="form-card-title">Work Experience</h3>
+          ) : activeTab === 'skills' ? (
+            <div className="modern-profile-section">
+              <div className="modern-profile-section-header">
+                <h2 className="modern-profile-section-title">Skills & Expertise</h2>
+                <p className="modern-profile-section-desc">Your technical and professional skills</p>
               </div>
-              <div className="form-card-content">
-                <div className="experience-list">
-                  {formData.experiences.map((exp, index) => (
-                    <div key={index} className="experience-item">
-                      <div className="experience-item-header">
-                        <h4 className="experience-item-title">Experience #{index + 1}</h4>
-                        <button
-                          onClick={() => setFormData({
-                            ...formData,
-                            experiences: formData.experiences.filter((_, i) => i !== index)
-                          })}
-                          className="btn btn-ghost btn-sm experience-remove"
-                          type="button"
-                        >
-                          <Icons.trash size={16} />
-                          Remove
-                        </button>
-                      </div>
-                      <div className="form-grid">
-                        <div className="form-field">
-                          <label className="form-label">Job Title</label>
-                          <input
-                            type="text"
-                            className="form-input"
-                            value={exp.role || ''}
-                            onChange={(e) => {
-                              const newExp = [...formData.experiences];
-                              newExp[index] = {...newExp[index], role: e.target.value};
-                              setFormData({...formData, experiences: newExp});
-                            }}
-                            placeholder="e.g. Software Engineer"
-                          />
-                        </div>
-                        <div className="form-field">
-                          <label className="form-label">Company</label>
-                          <input
-                            type="text"
-                            className="form-input"
-                            value={exp.company || ''}
-                            onChange={(e) => {
-                              const newExp = [...formData.experiences];
-                              newExp[index] = {...newExp[index], company: e.target.value};
-                              setFormData({...formData, experiences: newExp});
-                            }}
-                            placeholder="e.g. Tech Corp"
-                          />
-                        </div>
-                        <div className="form-field">
-                          <label className="form-label">Duration</label>
-                          <input
-                            type="text"
-                            className="form-input"
-                            value={exp.dates || ''}
-                            onChange={(e) => {
-                              const newExp = [...formData.experiences];
-                              newExp[index] = {...newExp[index], dates: e.target.value};
-                              setFormData({...formData, experiences: newExp});
-                            }}
-                            placeholder="e.g. Jan 2020 - Present"
-                          />
-                        </div>
-                      </div>
-                    </div>
+              <div className="modern-profile-skills">
+                <div className="modern-profile-skill-input-group">
+                  <input
+                    type="text"
+                    className="modern-profile-input"
+                    value={newSkill}
+                    onChange={(e) => setNewSkill(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && addSkill()}
+                    placeholder="Add a skill..."
+                  />
+                  <button onClick={addSkill} className="modern-profile-add-btn">
+                    <Icons.plus size={20} />
+                    Add
+                  </button>
+                </div>
+                <div className="modern-profile-skills-list">
+                  {formData.skills.map((skill) => (
+                    <span key={skill} className="modern-profile-skill-tag">
+                      {skill}
+                      <button
+                        onClick={() => removeSkill(skill)}
+                        className="modern-profile-skill-remove"
+                        aria-label={`Remove ${skill}`}
+                      >
+                        <Icons.x size={14} />
+                      </button>
+                    </span>
                   ))}
+                  {formData.skills.length === 0 && (
+                    <p className="modern-profile-empty-state">
+                      No skills added yet. Start adding your skills above or upload a resume to auto-fill.
+                    </p>
+                  )}
                 </div>
-                <button
-                  onClick={() => setFormData({
-                    ...formData,
-                    experiences: [...formData.experiences, {role: '', company: '', dates: ''}]
-                  })}
-                  className="btn btn-outline btn-add-experience"
-                  type="button"
-                >
-                  <Icons.plus size={18} />
-                  Add Work Experience
-                </button>
               </div>
             </div>
-          </div>
-        ) : activeTab === 'additional' ? (
-          <div className="text-content-card">
-            <div className="text-content-header">
-              <Icons.fileText size={24} />
-              <h3 className="text-content-title">Additional Notes</h3>
-              <p className="text-content-subtitle">
-                Add any additional context about yourself that will help us create better resumes
-              </p>
+          ) : activeTab === 'experience' ? (
+            <div className="modern-profile-section">
+              <div className="modern-profile-section-header">
+                <h2 className="modern-profile-section-title">Work Experience</h2>
+                <p className="modern-profile-section-desc">Your professional work history</p>
+              </div>
+              <div className="modern-profile-experiences">
+                {formData.experiences.map((exp, index) => (
+                  <div key={index} className="modern-profile-experience-card">
+                    <div className="modern-profile-experience-header">
+                      <h3 className="modern-profile-experience-title">{exp.role}</h3>
+                      <span className="modern-profile-experience-company">{exp.company}</span>
+                    </div>
+                    <div className="modern-profile-experience-meta">
+                      <span className="modern-profile-experience-date">{exp.dates}</span>
+                      {exp.location && <span className="modern-profile-experience-location">{exp.location}</span>}
+                    </div>
+                    {exp.bullets && exp.bullets.length > 0 && (
+                      <ul className="modern-profile-experience-bullets">
+                        {exp.bullets.map((bullet: string, idx: number) => (
+                          <li key={idx}>{bullet}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                ))}
+                {formData.experiences.length === 0 && (
+                  <p className="modern-profile-empty-state">
+                    No experiences added yet. Upload a resume to auto-fill your work history.
+                  </p>
+                )}
+              </div>
             </div>
-            <textarea
-              className="text-content-textarea"
-              value={additionalInfo}
-              onChange={(e) => setAdditionalInfo(e.target.value)}
-              placeholder="Additional information about yourself...
-
-You can include:
-• Personal information (name, email, phone, location)
-• Professional summary
-• Skills and expertise
-• Work experience
-• Education
-• Certifications
-• Achievements
-• Career goals
-• Preferences (remote work, specific industries, etc.)
-• Projects you've worked on
-• Languages you speak
-• Hobbies and interests
-• Anything else you think is relevant
-
-The more you share, the better we can customize your resumes for each job application.
-
-This is any additional context you provided during onboarding or want to add now."
-            />
-          </div>
-        ) : (
-          <div className="text-content-card">
-            <div className="text-content-header">
-              <Icons.file size={24} />
-              <h3 className="text-content-title">Original Resume</h3>
-              <p className="text-content-subtitle">
-                This is the content extracted from your uploaded resume
-              </p>
+          ) : activeTab === 'additional' ? (
+            <div className="modern-profile-section">
+              <div className="modern-profile-section-header">
+                <h2 className="modern-profile-section-title">Additional Information</h2>
+                <p className="modern-profile-section-desc">Any other relevant details or notes</p>
+              </div>
+              <div className="modern-profile-field-full">
+                <textarea
+                  className="modern-profile-textarea"
+                  value={additionalInfo}
+                  onChange={(e) => setAdditionalInfo(e.target.value)}
+                  placeholder="Add any additional information, certifications, awards, or notes..."
+                  rows={12}
+                />
+              </div>
             </div>
-            <textarea
-              className="text-content-textarea"
-              value={resumeText}
-              onChange={(e) => setResumeText(e.target.value)}
-              placeholder="Your original resume content will appear here...
-
-This is the full text from your uploaded resume that we extracted and use as the base for generating tailored resumes."
-            />
-          </div>
-        )}
+          ) : (
+            <div className="modern-profile-section">
+              <div className="modern-profile-section-header">
+                <h2 className="modern-profile-section-title">Resume Text</h2>
+                <p className="modern-profile-section-desc">Raw text content of your resume</p>
+              </div>
+              <div className="modern-profile-field-full">
+                <textarea
+                  className="modern-profile-textarea modern-profile-monospace"
+                  value={resumeText}
+                  onChange={(e) => setResumeText(e.target.value)}
+                  placeholder="Paste your resume content here or upload a file to auto-fill..."
+                  rows={20}
+                />
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

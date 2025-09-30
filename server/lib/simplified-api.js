@@ -1,5 +1,5 @@
 /**
- * Simplified API endpoints using the new AI Resume Generator
+ * Simplified API endpoints using the AI Resume Generator
  */
 
 import AIResumeGenerator from './ai-resume-generator.js';
@@ -9,12 +9,7 @@ import AIResumeGenerator from './ai-resume-generator.js';
  */
 async function generateResumeEndpoint(req, res) {
   try {
-    const {
-      jobDescription,
-      userData,
-      style,
-      outputFormat = 'pdf'
-    } = req.body;
+    const { jobDescription, userData, outputFormat = 'pdf' } = req.body;
 
     if (!jobDescription) {
       return res.status(400).json({ error: 'Job description is required' });
@@ -28,7 +23,7 @@ async function generateResumeEndpoint(req, res) {
         where: { userId: req.user.id }
       });
 
-      if (!profile || !profile.data) {
+      if (!profile?.data) {
         return res.status(400).json({ error: 'No profile data found' });
       }
 
@@ -44,102 +39,29 @@ async function generateResumeEndpoint(req, res) {
 
     // Generate resume
     const options = {
-      style: style || 'auto', // auto, technical, professional, creative
-      model: process.env.AI_MODEL || 'gpt-4',
-      preferences: req.body.preferences
+      model: process.env.AI_MODEL || 'gpt-4'
     };
 
     if (outputFormat === 'latex') {
-      // Return just LaTeX code
-      const { latex, metadata } = await generator.generateResume(
-        resumeData,
-        jobDescription,
-        options
-      );
-
-      res.json({
-        success: true,
-        latex,
-        metadata
-      });
+      const { latex, metadata } = await generator.generateResume(resumeData, jobDescription, options);
+      res.json({ success: true, latex, metadata });
     } else if (outputFormat === 'pdf') {
-      // Generate and compile to PDF
-      const { latex, pdf } = await generator.generateAndCompile(
-        resumeData,
-        jobDescription,
-        options
-      );
-
+      const { latex, pdf } = await generator.generateAndCompile(resumeData, jobDescription, options);
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', 'attachment; filename="resume.pdf"');
       res.send(pdf);
     } else {
-      // Return both LaTeX and PDF
-      const { latex, pdf } = await generator.generateAndCompile(
-        resumeData,
-        jobDescription,
-        options
-      );
-
-      // Convert PDF buffer to base64 for JSON response
-      const pdfBase64 = pdf.toString('base64');
-
+      const { latex, pdf } = await generator.generateAndCompile(resumeData, jobDescription, options);
       res.json({
         success: true,
         latex,
-        pdf: pdfBase64,
-        metadata: {
-          generatedAt: new Date().toISOString(),
-          style: options.style
-        }
+        pdf: pdf.toString('base64'),
+        metadata: { generatedAt: new Date().toISOString() }
       });
     }
   } catch (error) {
     console.error('Resume generation error:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
-}
-
-/**
- * Regenerate a specific section
- */
-async function regenerateSectionEndpoint(req, res) {
-  try {
-    const {
-      currentLatex,
-      section,
-      userData,
-      jobDescription
-    } = req.body;
-
-    if (!currentLatex || !section) {
-      return res.status(400).json({
-        error: 'Current LaTeX and section name are required'
-      });
-    }
-
-    const generator = new AIResumeGenerator(process.env.OPENAI_API_KEY);
-
-    const newSection = await generator.regenerateSection(
-      currentLatex,
-      section,
-      userData,
-      jobDescription
-    );
-
-    res.json({
-      success: true,
-      section: newSection
-    });
-  } catch (error) {
-    console.error('Section regeneration error:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
+    res.status(500).json({ success: false, error: error.message });
   }
 }
 
@@ -168,6 +90,5 @@ async function checkCompilersEndpoint(req, res) {
 
 export {
   generateResumeEndpoint,
-  regenerateSectionEndpoint,
   checkCompilersEndpoint
 };

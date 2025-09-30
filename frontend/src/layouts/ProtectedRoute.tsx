@@ -1,7 +1,8 @@
 import React from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
-import { getToken } from '../auth';
-import { api } from '../api-adapter';
+import { Navigate } from 'react-router-dom';
+// import { useLocation } from 'react-router-dom'; // ONBOARDING DISABLED: Not needed without profile-based redirects
+import { useAuth } from '@clerk/clerk-react';
+// import { api } from '../api-clerk'; // ONBOARDING DISABLED: API not needed without profile checks
 import Icons from '../components/ui/icons';
 
 interface ProtectedRouteProps {
@@ -9,39 +10,71 @@ interface ProtectedRouteProps {
 }
 
 export default function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const [isAuthenticated, setIsAuthenticated] = React.useState(false);
-  const [hasProfile, setHasProfile] = React.useState<boolean | null>(null);
+  const { isSignedIn, isLoaded } = useAuth();
+  // const { getToken } = useAuth(); // ONBOARDING DISABLED: Not needed without API calls
+  // const { user } = useUser(); // ONBOARDING DISABLED: Not currently used
+  // const [hasProfile, setHasProfile] = React.useState<boolean | null>(null); // ONBOARDING DISABLED
   const [loading, setLoading] = React.useState(true);
-  const location = useLocation();
+  // const location = useLocation(); // ONBOARDING DISABLED: Not needed without redirects
+  // const checkingRef = React.useRef(false); // ONBOARDING DISABLED: Not needed without profile checks
+
+  // ONBOARDING DISABLED: Bypassing profile check - treating all authenticated users as having profiles
+  // To re-enable: Uncomment the imports and restore the original profile check logic below
 
   React.useEffect(() => {
-    async function checkAuthAndProfile() {
-      const token = getToken();
+    // ONBOARDING DISABLED: Simply check auth status
+    if (!isLoaded) {
+      setLoading(true);
+    } else {
+      setLoading(false);
+    }
 
-      if (!token) {
-        setIsAuthenticated(false);
+    // Original profile check logic - preserved for re-enablement
+    /*
+    async function checkProfile() {
+      // Skip profile check if onboarding is disabled
+      if (!ONBOARDING_ENABLED) {
+        setHasProfile(true);
         setLoading(false);
         return;
       }
 
-      setIsAuthenticated(true);
+      // Prevent multiple concurrent checks
+      if (checkingRef.current || !isLoaded || !isSignedIn) {
+        if (!isLoaded || !isSignedIn) {
+          setLoading(false);
+        }
+        return;
+      }
+
+      checkingRef.current = true;
 
       // Check if user has completed onboarding (has profile)
       try {
-        const profile = await api.getProfile();
+        const token = await getToken();
+        const profile = await api.getProfile(token || undefined);
         setHasProfile(!!profile);
-      } catch (err) {
-        // If profile fetch fails (404), user hasn't completed onboarding
-        setHasProfile(false);
+      } catch (err: any) {
+        // Distinguish between 404 (no profile) and other errors
+        if (err?.response?.status === 404 || err?.status === 404) {
+          // User hasn't completed onboarding
+          setHasProfile(false);
+        } else {
+          // Other error - assume profile exists to avoid redirect loop
+          console.error('Profile check error:', err);
+          setHasProfile(true);
+        }
+      } finally {
+        checkingRef.current = false;
+        setLoading(false);
       }
-
-      setLoading(false);
     }
 
-    checkAuthAndProfile();
-  }, []);
+    checkProfile();
+    */
+  }, [isLoaded]);
 
-  if (loading) {
+  if (!isLoaded || loading) {
     return (
       <div className="loading-container">
         <Icons.loader className="animate-spin" size={48} />
@@ -49,14 +82,21 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
     );
   }
 
-  if (!isAuthenticated) {
-    return <Navigate to="/login" />;
+  if (!isSignedIn) {
+    return <Navigate to="/auth" />;
   }
 
-  // If authenticated but no profile, redirect to onboarding (unless already there)
+  // ONBOARDING DISABLED: Skip profile-based redirects
+  // Original logic: Redirect to /onboarding if hasProfile === false
+  // To re-enable: Uncomment the block below and set ONBOARDING_ENABLED to true above
+  /*
   if (hasProfile === false && location.pathname !== '/onboarding') {
-    return <Navigate to="/onboarding" />;
+    console.log('User has no profile, redirecting to onboarding from:', location.pathname);
+    // Store the intended destination so we can redirect back after onboarding
+    sessionStorage.setItem('intendedDestination', location.pathname);
+    return <Navigate to="/onboarding" replace />;
   }
+  */
 
   return <>{children}</>;
 }

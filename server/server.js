@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import { prisma } from './lib/prisma-client.js';
 import dotenv from 'dotenv';
+import { createClerkClient } from '@clerk/clerk-sdk-node';
 import { fileURLToPath } from 'url';
 import path from 'path';
 import multer from 'multer';
@@ -16,15 +17,33 @@ import fs from 'fs';
 import AIResumeGenerator from './lib/ai-resume-generator.js';
 import { config, getOpenAIModel } from './lib/config.js';
 import dataValidator from './lib/utils/dataValidator.js';
+import ResumeParser from './lib/resume-parser.js';
+// Import LaTeX compiler
+import { compileLatex } from './lib/latex-compiler.js';
 
-// Load environment variables
-if (process.env.NODE_ENV !== 'production') {
-  dotenv.config({ path: '.env.local' });
+// Load environment variables - .env first, then .env.local to override
+dotenv.config();
+dotenv.config({ path: '.env.local' });
+
+// Override for production if needed
+if (process.env.NODE_ENV === 'production' && !process.env.DATABASE_URL) {
   dotenv.config();
+}
+
+// Initialize Clerk if keys are available
+let clerkClient = null;
+console.log('Clerk secret key check:', {
+  exists: !!process.env.CLERK_SECRET_KEY,
+  length: process.env.CLERK_SECRET_KEY ? process.env.CLERK_SECRET_KEY.length : 0,
+  startsWithSk: process.env.CLERK_SECRET_KEY ? process.env.CLERK_SECRET_KEY.startsWith('sk_') : false,
+  value: process.env.CLERK_SECRET_KEY ? process.env.CLERK_SECRET_KEY.substring(0, 10) + '...' : 'not set'
+});
+
+if (process.env.CLERK_SECRET_KEY && process.env.CLERK_SECRET_KEY !== 'YOUR_CLERK_SECRET_KEY') {
+  clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
+  console.log('🔐 Clerk authentication enabled');
 } else {
-  if (!process.env.DATABASE_URL) {
-    dotenv.config();
-  }
+  console.log('⚠️  Clerk authentication not configured, using legacy JWT auth');
 }
 
 const __filename = fileURLToPath(import.meta.url);
@@ -83,7 +102,8 @@ app.get('/health', async (req, res) => {
 });
 
 // Authentication middleware
-const authenticateToken = (req, res, next) => {
+// Enhanced authentication middleware that supports both Clerk and legacy JWT
+const authenticateToken = async (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
@@ -91,12 +111,59 @@ const authenticateToken = (req, res, next) => {
     return res.status(401).json({ error: 'Access token required' });
   }
 
-  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+  // Try Clerk authentication first if available
+  if (clerkClient) {
+    try {
+      // Verify the Clerk session token
+      const sessionClaims = await clerkClient.verifyToken(token);
+
+      // Get or create user in our database
+      let user = await prisma.user.findUnique({
+        where: { clerkId: sessionClaims.sub }
+      });
+
+      if (!user) {
+        // Create user if doesn't exist
+        user = await prisma.user.create({
+          data: {
+            clerkId: sessionClaims.sub,
+            email: sessionClaims.email || `${sessionClaims.sub}@clerk.user`,
+            password: 'clerk-managed' // Placeholder since Clerk manages auth
+          }
+        });
+      }
+
+      req.user = { id: user.id, email: user.email, clerkId: user.clerkId };
+      req.userId = user.id;
+      return next();
+    } catch (clerkError) {
+      // Only log meaningful Clerk errors, not JWT format issues or expirations
+      if (!clerkError.message.includes('JWT') &&
+          !clerkError.message.includes('expired') &&
+          !clerkError.message.includes('Invalid JWT form')) {
+        console.log('Clerk auth issue:', clerkError.message);
+      }
+      // Fall through to legacy JWT auth silently
+    }
+  }
+
+  // Legacy JWT authentication
+  jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
     if (err) {
       return res.status(403).json({ error: 'Invalid or expired token' });
     }
-    req.user = user;
-    req.userId = user.id; // Use 'id' from JWT payload
+
+    // For legacy tokens, ensure user exists
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.id }
+    });
+
+    if (!user) {
+      return res.status(403).json({ error: 'User not found' });
+    }
+
+    req.user = decoded;
+    req.userId = decoded.id;
     next();
   });
 };
@@ -289,17 +356,24 @@ app.post('/api/login', async (req, res) => {
 // Profile endpoints
 app.get('/api/profile', authenticateToken, async (req, res) => {
   try {
+    const userId = req.userId;
     const profile = await prisma.profile.findUnique({
-      where: { userId: req.user.id }
+      where: { userId }
     });
 
     if (!profile) {
       return res.status(404).json({ error: 'Profile not found' });
     }
 
+    // Add download URL if resume is saved
+    const profileData = { ...profile.data };
+    if (profileData.savedResumeBuffer) {
+      profileData.savedResumeUrl = `/api/profile/resume-download`;
+    }
+
     // Return the profile data directly, not wrapped in a profile object
-    console.log('📤 Returning profile data:', JSON.stringify(profile.data, null, 2));
-    res.json(profile.data);
+    console.log('📤 Returning profile data:', JSON.stringify(profileData, null, 2));
+    res.json(profileData);
   } catch (error) {
     console.error('Profile fetch error:', error);
     res.status(500).json({ error: 'Failed to fetch profile' });
@@ -308,7 +382,8 @@ app.get('/api/profile', authenticateToken, async (req, res) => {
 
 app.put('/api/profile', authenticateToken, async (req, res) => {
   try {
-    console.log('📝 Profile update request:', req.user.email);
+    const userId = req.userId;
+    console.log('📝 Profile update request for user:', req.user.email);
 
     // Clean and sanitize the data - remove null characters and undefined values
     const cleanData = (obj) => {
@@ -365,13 +440,13 @@ app.put('/api/profile', authenticateToken, async (req, res) => {
     processedData = mergeIntoTopLevel(processedData);
 
     const profile = await prisma.profile.upsert({
-      where: { userId: req.user.id },
+      where: { userId },
       update: {
         data: processedData,
         updatedAt: new Date()
       },
       create: {
-        userId: req.user.id,
+        userId,
         data: processedData
       }
     });
@@ -381,6 +456,100 @@ app.put('/api/profile', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Profile update error:', error);
     res.status(500).json({ error: 'Failed to update profile' });
+  }
+});
+
+// Parse resume endpoint - extract information from uploaded resume
+app.post('/api/parse-resume', authenticateToken, upload.single('resume'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    console.log('📄 Parsing resume:', req.file.originalname);
+
+    const parser = new ResumeParser();
+    const { text, extractedData } = await parser.parseResume(req.file.buffer, req.file.mimetype);
+
+    console.log('✅ Resume parsed successfully');
+    res.json({
+      resumeText: text,
+      extractedData
+    });
+  } catch (error) {
+    console.error('Resume parse error:', error);
+    res.status(500).json({ error: 'Failed to parse resume' });
+  }
+});
+
+// Save profile with resume endpoint
+app.post('/api/profile/with-resume', authenticateToken, upload.single('resume'), async (req, res) => {
+  try {
+    const profileData = JSON.parse(req.body.profile);
+    let resumeBuffer = null;
+
+    if (req.file) {
+      console.log('📎 Saving resume file:', req.file.originalname);
+      resumeBuffer = req.file.buffer;
+
+      // Parse resume if not already parsed
+      if (!profileData.resumeText) {
+        const parser = new ResumeParser();
+        const { text } = await parser.parseResume(resumeBuffer, req.file.mimetype);
+        profileData.resumeText = text;
+      }
+    }
+
+    // Clean and validate profile data
+    const cleanedData = {
+      ...profileData,
+      savedResumeBuffer: resumeBuffer ? resumeBuffer.toString('base64') : null,
+      savedResumeMimeType: req.file ? req.file.mimetype : null,
+      savedResumeFilename: req.file ? req.file.originalname : null
+    };
+
+    // Save profile
+    const profile = await prisma.profile.upsert({
+      where: { userId: req.userId },
+      update: {
+        data: cleanedData,
+        updatedAt: new Date()
+      },
+      create: {
+        userId: req.userId,
+        data: cleanedData
+      }
+    });
+
+    console.log('✅ Profile saved with resume');
+    res.json(profile);
+  } catch (error) {
+    console.error('Profile save error:', error);
+    res.status(500).json({ error: 'Failed to save profile' });
+  }
+});
+
+// Get saved resume endpoint
+app.get('/api/profile/resume-download', authenticateToken, async (req, res) => {
+  try {
+    const profile = await prisma.profile.findUnique({
+      where: { userId: req.userId }
+    });
+
+    if (!profile || !profile.data?.savedResumeBuffer) {
+      return res.status(404).json({ error: 'No saved resume found' });
+    }
+
+    const resumeBuffer = Buffer.from(profile.data.savedResumeBuffer, 'base64');
+    const mimeType = profile.data.savedResumeMimeType || 'application/octet-stream';
+    const filename = profile.data.savedResumeFilename || 'resume.pdf';
+
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(resumeBuffer);
+  } catch (error) {
+    console.error('Resume download error:', error);
+    res.status(500).json({ error: 'Failed to download resume' });
   }
 });
 
@@ -404,7 +573,7 @@ const resumeUpload = multer({
 });
 
 // File upload and parse endpoint
-app.post('/api/upload/resume', resumeUpload.single('resume'), async (req, res) => {
+app.post('/api/upload/resume', authenticateToken, resumeUpload.single('resume'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
@@ -704,316 +873,69 @@ Return ONLY a valid JSON object, no other text.`
   }
 });
 
-// Resume generation endpoints - Direct generation with error retry
+// Resume generation endpoint - Simplified version
 app.post('/api/generate', authenticateToken, async (req, res) => {
   try {
-    const {
-      resumeText,
-      jobDescription,
-      company,
-      role,
-      jobUrl,
-      aiMode = 'gpt-5-mini',
-      matchMode = 'balanced'
-    } = req.body;
+    const { resumeText, jobDescription, aiMode = 'gpt-4o' } = req.body;
 
     if (!jobDescription) {
       return res.status(400).json({ error: 'Job description required' });
     }
 
-    // Generate a unique job ID
-    const jobId = `job-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    // Get user profile
+    const profile = await prisma.profile.findUnique({
+      where: { userId: req.userId }
+    });
 
-    console.log(`[API] Starting new pipeline generation for job ${jobId}`);
-    console.log(`[API] Parameters: aiMode=${aiMode}, company=${company}, role=${role}`);
-
-    // Get structured profile data if user has profile
-    let profileData = null;
-    let useStructuredData = false;
-
-    try {
-      const profile = await prisma.profile.findUnique({
-        where: { userId: req.user.id }
-      });
-
-      if (profile && profile.data) {
-        profileData = profile.data;
-
-        // Check if profile data has the new structure directly OR under fullData
-        if (profileData.experiences || profileData.skills || profileData.education ||
-            profileData.fullData?.experiences || profileData.fullData?.skills || profileData.fullData?.education) {
-
-          // If structured data is under fullData, lift it up (non-destructively)
-          if (!profileData.experiences && profileData.fullData) {
-            const structuredProfile = {
-              ...profileData,
-              experiences: profileData.fullData.experiences || profileData.experiences,
-              skills: profileData.fullData.skills || profileData.skills,
-              education: profileData.fullData.education || profileData.education,
-              projects: profileData.fullData.projects || profileData.projects,
-              certifications: profileData.fullData.certifications || profileData.certifications
-            };
-            profileData = structuredProfile;
-          }
-
-          // Check if structured data is sufficient
-          if (dataValidator.hassufficientStructuredData(profileData)) {
-            useStructuredData = true;
-            console.log(`[API] Using structured profile data for user ${req.user.id}`);
-            console.log(`[API] Profile has ${profileData.skills?.length || 0} skills, ${profileData.experiences?.length || 0} experiences`);
-          } else {
-            console.log(`[API] Structured data insufficient, will use fallback to combined raw text`);
-            useStructuredData = false;
-          }
-        } else {
-          console.log(`[API] Profile exists but has no structured data, will use fallback`);
-          useStructuredData = false;
-        }
-      }
-    } catch (err) {
-      console.error('[API] Could not fetch profile:', err.message);
-      // Continue with resume text if profile fetch fails
-      useStructuredData = false;
+    if (!profile?.data) {
+      return res.status(400).json({ error: 'Profile not found' });
     }
-
-    // Validation: Require either structured profile OR resumeText
-    if (!useStructuredData && !resumeText) {
-      // Try to use raw fields from profile as fallback
-      if (profileData?.resumeText) {
-        const combinedRawText = profileData.additionalInfo
-          ? `${profileData.resumeText}\n\nADDITIONAL INFORMATION:\n${profileData.additionalInfo}`
-          : profileData.resumeText;
-
-        console.log(`[API] Using combined resumeText + additionalInfo from profile as fallback`);
-        // Override resumeText for pipeline
-        req.body.resumeText = combinedRawText;
-      } else {
-        return res.status(400).json({ error: 'Resume text or structured profile required' });
-      }
-    }
-
-    // If not using structured data but have additionalInfo, combine with resumeText
-    let pipelineResumeText = null;
-    if (!useStructuredData) {
-      if (profileData?.additionalInfo && resumeText) {
-        pipelineResumeText = `${resumeText}\n\nADDITIONAL INFORMATION:\n${profileData.additionalInfo}`;
-        console.log(`[API] Combined resumeText with additionalInfo for fallback parsing`);
-      } else {
-        pipelineResumeText = resumeText || req.body.resumeText;
-      }
-    }
-
-    // === AI RESUME GENERATOR ===
-    console.log(`[API] Using AI Resume Generator for job ${jobId}`);
-    const pipelineStartTime = Date.now();
 
     // Initialize generator
     const generator = new AIResumeGenerator(process.env.OPENAI_API_KEY);
 
-    // Prepare user data - ensure all fields are included
-    const userData = useStructuredData ? {
-      ...profileData,
-      // Map field names correctly
-      fullName: profileData.name || profileData.fullName || 'Candidate',
-      email: profileData.email || '',
-      phone: profileData.phone || '',
-      location: profileData.location || '',
-      linkedin: profileData.linkedin || '',
-      website: profileData.website || '',
-      summary: profileData.summary || '',
-      skills: profileData.skills || [],
-      experiences: profileData.experiences || [],
-      education: profileData.education || [],
-      projects: profileData.projects || [],
-      certifications: profileData.certifications || [],
-      // Ensure additionalInfo is included
-      additionalInfo: profileData.additionalInfo || '',
-      resumeText: profileData.resumeText || ''
-    } : {
-      resumeText: pipelineResumeText,
-      fullName: profileData?.name || profileData?.fullName || 'Candidate',
-      email: profileData?.email || '',
-      phone: profileData?.phone || '',
-      location: profileData?.location || '',
-      // Include additionalInfo even in fallback mode
-      additionalInfo: profileData?.additionalInfo || ''
-    };
-
-    // Generate resume with PDF
-    const generatedResult = await generator.generateWithPDF(
-      userData,
+    // Generate resume using simple approach
+    const { latex, pdf } = await generator.generateAndCompile(
+      profile.data,
       jobDescription,
-      {
-        style: 'auto',
-        model: aiMode === 'gpt-5-mini' ? 'gpt-4' : aiMode,
-        preferences: { company, role }
-      }
+      { model: aiMode }
     );
 
-    // Create result object compatible with existing code
-    const result = {
-      success: true,
-      artifacts: {
-        pdfBuffer: generatedResult.pdf,
-        latexSource: generatedResult.latex,
-        templateUsed: 'ai-generated',
-        generationType: 'ai-generator',
-        metrics: {}
+    // Generate job ID for tracking
+    const jobId = `job-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+    // Save to database
+    await prisma.job.create({
+      data: {
+        id: jobId,
+        userId: req.userId,
+        status: 'COMPLETED',
+        resumeText: resumeText || '',
+        jobDescription,
+        aiMode
       }
-    };
+    });
 
-    const pipelineDuration = Date.now() - pipelineStartTime;
-    console.log(`[API] Pipeline completed in ${pipelineDuration}ms`);
-
-    // Log pipeline metrics
-    if (result.artifacts?.templateUsed) {
-      console.log(`[API] Template used: ${result.artifacts.templateUsed}`);
-    }
-    if (result.artifacts?.metrics) {
-      console.log(`[API] Pipeline metrics:`, result.artifacts.metrics);
-    }
-
-    if (result.success) {
-      // Save to database for history
-      let job;
-      try {
-        job = await prisma.job.create({
-          data: {
-            id: jobId,
-            userId: req.user.id,
-            status: 'COMPLETED',
-            resumeText: resumeText || '',  // Handle null resumeText when using profile data
-            jobDescription,
-            company: company || null,
-            role: role || null,
-            jobUrl: jobUrl || null,
-            aiMode,
-            matchMode,
-            diagnostics: {
-              generationType: result.artifacts.generationType || 'pipeline',
-              templateUsed: result.artifacts.templateUsed || 'unknown',
-              pipelineMetrics: result.artifacts.metrics || {},
-              processingTime: pipelineDuration,
-              dataSource: useStructuredData ? 'profile' : 'resumeText_fallback',
-              timestamp: Date.now()
-            }
-          }
-        });
-      } catch (dbError) {
-        console.error(`[API] Failed to save job to database:`, dbError);
-        // Continue even if database save fails - user still gets their PDF
-      }
-
-      // Save artifacts - with detailed logging
-      console.log(`[API] Saving artifacts for job ${jobId}`);
-      console.log(`[API] PDF Buffer exists: ${!!result.artifacts.pdfBuffer}`);
-      console.log(`[API] PDF Buffer size: ${result.artifacts.pdfBuffer ? result.artifacts.pdfBuffer.length : 0}`);
-      console.log(`[API] LaTeX Source exists: ${!!result.artifacts.latexSource}`);
-
-      if (result.artifacts.pdfBuffer) {
-        console.log(`[API] Saving PDF artifact (${result.artifacts.pdfBuffer.length} bytes)`);
-        await prisma.artifact.create({
-          data: {
-            jobId,
-            type: 'PDF_OUTPUT',
-            content: result.artifacts.pdfBuffer,
-            version: 1,
-            metadata: result.artifacts.pdfMetadata || {}
-          }
-        });
-        console.log(`[API] PDF artifact saved successfully`);
-      } else {
-        console.error(`[API] ❌ NO PDF BUFFER FOUND - PDF will not be downloadable!`);
-      }
-
-      if (result.artifacts.latexSource) {
-        console.log(`[API] Saving LaTeX artifact`);
-        await prisma.artifact.create({
-          data: {
-            jobId,
-            type: 'LATEX_SOURCE',
-            content: Buffer.from(result.artifacts.latexSource),
-            version: 1,
-            metadata: {}
-          }
-        });
-        console.log(`[API] LaTeX artifact saved successfully`);
-      }
-
-      // Include additional pipeline data for debugging
-      const response = {
-        success: true,
-        jobId,
-        message: 'Resume generated successfully',
-        downloadUrl: `/api/job/${jobId}/download/pdf`,
-        // New pipeline-specific data
-        templateUsed: result.artifacts?.templateUsed,
-        generationType: result.artifacts?.generationType || 'pipeline',
-        processingTime: pipelineDuration
-      };
-
-      // Include pipeline log in development/testing
-      if (process.env.NODE_ENV !== 'production') {
-        response.pipelineLog = result.artifacts?.pipelineLog;
-        response.metrics = result.artifacts?.metrics;
-      }
-
-      res.json(response);
-    } else {
-      // Pipeline failed - log details for debugging
-      console.error(`[API] Pipeline failed for job ${jobId}:`, result.error);
-      if (result.artifacts?.pipelineLog) {
-        console.error(`[API] Pipeline log:`, JSON.stringify(result.artifacts.pipelineLog, null, 2));
-      }
-
-      // Save failed job to database
-      await prisma.job.create({
+    // Save PDF artifact
+    if (pdf) {
+      await prisma.artifact.create({
         data: {
-          id: jobId,
-          userId: req.user.id,
-          status: 'FAILED',
-          resumeText,
-          jobDescription,
-          company: company || null,
-          role: role || null,
-          jobUrl: jobUrl || null,
-          aiMode,
-          matchMode,
-          error: result.error,
-          diagnostics: {
-            error: result.error,
-            pipelineLog: result.artifacts?.pipelineLog || [],
-            failedAtStage: result.artifacts?.pipelineLog?.slice(-1)[0]?.stage || 'unknown'
-          }
+          jobId,
+          type: 'PDF_OUTPUT',
+          content: pdf,
+          version: 1
         }
       });
-
-      res.status(500).json({
-        error: result.error || 'Failed to generate resume',
-        jobId,
-        // Include debug info in non-production
-        ...(process.env.NODE_ENV !== 'production' && {
-          pipelineLog: result.artifacts?.pipelineLog,
-          failedAtStage: result.artifacts?.pipelineLog?.slice(-1)[0]?.stage
-        })
-      });
     }
-  } catch (error) {
-    console.error(`[API] Unexpected error in /api/generate:`, error);
-    console.error(`[API] Stack trace:`, error.stack);
 
-    // Get pipeline metrics for debugging
-    const metrics = getMetrics();
-    console.error(`[API] Current pipeline metrics:`, metrics);
-
-    res.status(500).json({
-      error: error.message || 'Failed to generate resume',
-      // Include detailed error info in non-production
-      ...(process.env.NODE_ENV !== 'production' && {
-        errorType: error.constructor.name,
-        errorStack: error.stack
-      })
+    res.json({
+      success: true,
+      jobId,
+      downloadUrl: `/api/job/${jobId}/download/pdf`
     });
+  } catch (error) {
+    console.error('Generate error:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -1032,7 +954,7 @@ app.get('/api/job/:jobId', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Job not found' });
     }
 
-    if (job.userId !== req.user.id) {
+    if (job.userId !== req.userId) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
@@ -1057,7 +979,7 @@ app.get('/api/job/:jobId/download/:type', authenticateToken, async (req, res) =>
       return res.status(404).json({ error: 'Job not found' });
     }
 
-    if (job.userId !== req.user.id) {
+    if (job.userId !== req.userId) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
@@ -1113,7 +1035,7 @@ app.get('/api/job/:jobId/status', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Job not found' });
     }
 
-    if (job.userId !== req.user.id) {
+    if (job.userId !== req.userId) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
@@ -1129,7 +1051,7 @@ app.get('/api/jobs', authenticateToken, async (req, res) => {
   try {
     const { limit = 20, offset = 0, status } = req.query;
 
-    const where = { userId: req.user.id };
+    const where = { userId: req.userId };
     if (status) {
       // Handle both single status and comma-separated list
       if (status.includes(',')) {
@@ -1184,66 +1106,28 @@ app.get('/api/metrics/queue', authenticateToken, async (req, res) => {
   }
 });
 
-// Direct resume generation - simple endpoint (LaTeX-based)
-app.post('/api/generate-direct', authenticateToken, async (req, res) => {
-  try {
-    const { jobDescription } = req.body;
-    const userId = req.userId;
 
-    if (!jobDescription) {
-      return res.status(400).json({ error: 'Job description required' });
-    }
-
-    // Get user profile
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      include: { profile: true }
-    });
-
-    if (!user?.profile) {
-      return res.status(400).json({ error: 'Profile not found' });
-    }
-
-    // Import and use direct generator
-    const { generateResumeDirect } = await import('./lib/direct-generator.js');
-    const result = await generateResumeDirect(user.profile, jobDescription);
-
-    if (result.success) {
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', 'attachment; filename="resume.pdf"');
-      res.send(result.pdf);
-    } else {
-      res.status(500).json({ error: result.error });
-    }
-  } catch (error) {
-    console.error('Direct generation error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// HTML-based resume generation endpoint (NEW - simpler and more reliable)
+// HTML-based resume generation endpoint
 app.post('/api/generate-html', authenticateToken, async (req, res) => {
   try {
-    const { jobDescription, aiMode = 'gpt-5-mini', outputFormat = 'pdf' } = req.body;
-    const userId = req.userId;
+    const { jobDescription, aiMode = 'gpt-5-mini', outputFormat = 'html' } = req.body;
 
     if (!jobDescription) {
       return res.status(400).json({ error: 'Job description required' });
     }
 
     // Get user profile
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      include: { profile: true }
+    const profile = await prisma.profile.findUnique({
+      where: { userId: req.userId }
     });
 
-    if (!user?.profile) {
+    if (!profile?.data) {
       return res.status(400).json({ error: 'Profile not found' });
     }
 
     // Import and use HTML generator
     const { generateResumeHTML } = await import('./lib/html-generator.js');
-    const result = await generateResumeHTML(user.profile, jobDescription, aiMode);
+    const result = await generateResumeHTML(profile.data, jobDescription, aiMode);
 
     if (result.success) {
       if (outputFormat === 'html') {
@@ -1251,21 +1135,8 @@ app.post('/api/generate-html', authenticateToken, async (req, res) => {
         res.send(result.html);
       } else if (outputFormat === 'json') {
         res.json(result.json);
-      } else if (outputFormat === 'pdf' && result.pdf) {
-        // Send PDF if available
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', 'attachment; filename="resume.pdf"');
-        res.send(result.pdf);
-      } else if (outputFormat === 'pdf' && !result.pdf && result.html) {
-        // Fallback: send HTML with warning when PDF generation failed
-        res.json({
-          warning: 'PDF generation failed, returning HTML and JSON instead',
-          html: result.html,
-          json: result.json,
-          error: result.error
-        });
       } else {
-        res.status(500).json({ error: 'Failed to generate resume in requested format' });
+        res.json({ html: result.html, json: result.json });
       }
     } else {
       res.status(500).json({ error: result.error });
@@ -1273,6 +1144,862 @@ app.post('/api/generate-html', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('HTML generation error:', error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================
+// NEW CLERK FRONTEND REQUIRED ENDPOINTS
+// ============================================
+
+/**
+ * GET /api/resumes - Get user's completed resume history
+ * Required by: Dashboard.tsx, DashboardModern.tsx, DashboardUnified.tsx, History.tsx
+ */
+app.get('/api/resumes', authenticateToken, async (req, res) => {
+  try {
+    // Fetch all completed jobs for the user with their artifacts
+    const jobs = await prisma.job.findMany({
+      where: {
+        userId: req.userId,
+        status: 'COMPLETED'
+      },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        artifacts: {
+          where: {
+            type: 'PDF_OUTPUT'
+          },
+          orderBy: { version: 'desc' },
+          take: 1
+        }
+      }
+    });
+
+    // Transform to ResumeEntry format expected by frontend
+    const resumes = jobs.map(job => ({
+      fileName: `resume-${job.id}.pdf`,
+      pdfUrl: `/api/resumes/resume-${job.id}.pdf`,
+      texUrl: `/api/job/${job.id}/download/latex`,
+      role: job.role || undefined,
+      company: job.company || undefined,
+      jobUrl: job.jobUrl || undefined,
+      createdAt: job.createdAt.toISOString()
+    }));
+
+    console.log(`📄 Returning ${resumes.length} resumes for user ${req.userId}`);
+    res.json(resumes);
+  } catch (error) {
+    console.error('❌ Error fetching resumes:', error);
+    res.status(500).json({ error: 'Failed to fetch resumes' });
+  }
+});
+
+/**
+ * GET /api/quota - Get user's monthly quota usage
+ * Required by: Dashboard.tsx, DashboardUnified.tsx
+ */
+app.get('/api/quota', authenticateToken, async (req, res) => {
+  try {
+    // Get current month start and end dates
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+    // Count completed jobs this month
+    const jobCount = await prisma.job.count({
+      where: {
+        userId: req.userId,
+        status: 'COMPLETED',
+        createdAt: {
+          gte: startOfMonth,
+          lte: endOfMonth
+        }
+      }
+    });
+
+    // Define monthly limit (can be adjusted or made configurable per user)
+    const MONTHLY_LIMIT = 50;
+
+    const quota = {
+      month: now.toISOString().slice(0, 7), // YYYY-MM format
+      used: jobCount,
+      remaining: Math.max(0, MONTHLY_LIMIT - jobCount),
+      limit: MONTHLY_LIMIT
+    };
+
+    console.log(`📊 User ${req.userId} quota: ${quota.used}/${quota.limit}`);
+    res.json(quota);
+  } catch (error) {
+    console.error('❌ Error fetching quota:', error);
+    res.status(500).json({ error: 'Failed to fetch quota' });
+  }
+});
+
+/**
+ * POST /api/process-job - Start a new resume generation job (PRODUCTION-READY)
+ * Required by: Dashboard.tsx, DashboardModern.tsx, DashboardUnified.tsx
+ */
+app.post('/api/process-job', authenticateToken, async (req, res) => {
+  try {
+    const { jobDescription, aiMode, matchMode } = req.body;
+
+    // Validation
+    if (!jobDescription || jobDescription.trim().length === 0) {
+      return res.status(400).json({ error: 'Job description is required' });
+    }
+
+    if (jobDescription.trim().length < 50) {
+      return res.status(400).json({ error: 'Job description too short. Please provide more details.' });
+    }
+
+    console.log(`\n${'='.repeat(80)}`);
+    console.log(`🚀 NEW JOB REQUEST - User ${req.userId}`);
+    console.log(`${'='.repeat(80)}`);
+    console.log(`📋 Request body:`, {
+      jobDescriptionLength: jobDescription.length,
+      jobDescriptionPreview: jobDescription.substring(0, 100) + '...',
+      aiMode: aiMode || 'not specified',
+      matchMode: matchMode || 'not specified'
+    });
+
+    // Get user's profile data
+    const profile = await prisma.profile.findUnique({
+      where: { userId: req.userId }
+    });
+
+    // Robust validation
+    if (!profile) {
+      console.error(`❌ No profile record found for user ${req.userId}`);
+      return res.status(400).json({
+        error: 'Profile not found. Please complete your profile first.',
+        action: 'REDIRECT_TO_ONBOARDING'
+      });
+    }
+
+    if (!profile.data || typeof profile.data !== 'object') {
+      console.error(`❌ Invalid profile data structure for user ${req.userId}`);
+      return res.status(400).json({
+        error: 'Invalid profile data. Please update your profile.',
+        action: 'REDIRECT_TO_PROFILE'
+      });
+    }
+
+    // Detailed profile validation
+    const profileData = profile.data;
+    console.log(`\n📊 PROFILE DATA ANALYSIS:`);
+    console.log(`├─ Personal Info:`);
+    console.log(`│  ├─ Name: ${profileData.name || 'MISSING'}`);
+    console.log(`│  ├─ Email: ${profileData.email || 'MISSING'}`);
+    console.log(`│  ├─ Phone: ${profileData.phone || 'MISSING'}`);
+    console.log(`│  └─ Location: ${profileData.location || 'MISSING'}`);
+    console.log(`├─ Professional Data:`);
+    console.log(`│  ├─ Experiences: ${(profileData.experiences || profileData.experience || []).length} items`);
+    console.log(`│  ├─ Skills: ${(profileData.skills || []).length} items`);
+    console.log(`│  ├─ Education: ${(profileData.education || []).length} items`);
+    console.log(`│  ├─ Projects: ${(profileData.projects || []).length} items`);
+    console.log(`│  └─ Resume Text: ${profileData.resumeText ? `${profileData.resumeText.length} chars` : 'NONE'}`);
+    console.log(`└─ Additional Info: ${profileData.additionalInfo ? `${profileData.additionalInfo.length} chars` : 'NONE'}`);
+
+    // Check minimum data requirements
+    const hasExperience = (profileData.experiences || profileData.experience || []).length > 0;
+    const hasEducation = (profileData.education || []).length > 0;
+    const hasResumeText = profileData.resumeText && profileData.resumeText.trim().length > 100;
+    const hasMinimumData = hasExperience || hasEducation || hasResumeText;
+
+    if (!hasMinimumData) {
+      console.error(`❌ Insufficient profile data for user ${req.userId}`);
+      return res.status(400).json({
+        error: 'Insufficient profile data. Please add your work experience or upload a resume.',
+        action: 'ADD_MORE_DATA'
+      });
+    }
+
+    // Normalize profile data structure for consistency
+    const normalizedProfile = {
+      ...profileData,
+      // Ensure 'experience' field exists (some code uses 'experiences', some uses 'experience')
+      experience: profileData.experience || profileData.experiences || [],
+      experiences: profileData.experiences || profileData.experience || [],
+      // Ensure arrays
+      skills: profileData.skills || [],
+      education: profileData.education || [],
+      projects: profileData.projects || [],
+      certifications: profileData.certifications || []
+    };
+
+    console.log(`\n✅ Profile validation passed`);
+    console.log(`📦 Normalized profile ready for LLM (${JSON.stringify(normalizedProfile).length} chars)`);
+
+    // Create the job record
+    const job = await prisma.job.create({
+      data: {
+        userId: req.userId,
+        status: 'PENDING',
+        jobDescription,
+        resumeText: normalizedProfile.resumeText || '', // Include resumeText to satisfy NOT NULL constraint
+        aiMode: 'gpt-5-mini', // Always use gpt-5-mini
+        diagnostics: {
+          startTime: new Date().toISOString(),
+          requestSource: 'production-ready-v2',
+          profileDataSize: JSON.stringify(normalizedProfile).length,
+          hasExperience,
+          hasEducation,
+          hasResumeText
+        }
+      }
+    });
+
+    console.log(`\n✅ Job ${job.id} created and queued`);
+    console.log(`${'='.repeat(80)}\n`);
+
+    // Start async processing with normalized profile data
+    processJobAsyncSimplified(job.id, normalizedProfile, jobDescription);
+
+    // Return immediately with job ID
+    res.json({ jobId: job.id });
+  } catch (error) {
+    console.error(`\n❌ CRITICAL ERROR in /api/process-job:`, error);
+    console.error(`Stack trace:`, error.stack);
+    res.status(500).json({ error: 'Internal server error. Please try again.' });
+  }
+});
+
+/**
+ * Production-ready async job processing - LLM-driven with error feedback loop
+ */
+async function processJobAsyncSimplified(jobId, profileData, jobDescription) {
+  const MAX_RETRIES = 3;
+  let attempt = 0;
+  const startTime = Date.now();
+
+  try {
+    console.log(`\n${'─'.repeat(80)}`);
+    console.log(`🤖 ASYNC PROCESSING STARTED - Job ${jobId}`);
+    console.log(`${'─'.repeat(80)}`);
+
+    // Update job status
+    await prisma.job.update({
+      where: { id: jobId },
+      data: { status: 'PROCESSING', startedAt: new Date() }
+    });
+
+    // Detailed data inspection before sending to LLM
+    console.log(`\n📊 DATA BEING SENT TO LLM:`);
+    console.log(`├─ Profile Data:`);
+    console.log(`│  ├─ Name: "${profileData.name || 'NOT PROVIDED'}"`);
+    console.log(`│  ├─ Email: "${profileData.email || 'NOT PROVIDED'}"`);
+    console.log(`│  ├─ Phone: "${profileData.phone || 'NOT PROVIDED'}"`);
+    console.log(`│  ├─ Location: "${profileData.location || 'NOT PROVIDED'}"`);
+    console.log(`│  ├─ Experience items: ${(profileData.experience || []).length}`);
+    console.log(`│  ├─ Skills: ${(profileData.skills || []).length}`);
+    console.log(`│  ├─ Education: ${(profileData.education || []).length}`);
+    console.log(`│  ├─ Projects: ${(profileData.projects || []).length}`);
+    console.log(`│  ├─ Additional Info: ${profileData.additionalInfo ? profileData.additionalInfo.length + ' chars' : 'none'}`);
+    console.log(`│  └─ Resume Text: ${profileData.resumeText ? profileData.resumeText.length + ' chars' : 'none'}`);
+
+    if (profileData.experience && profileData.experience.length > 0) {
+      console.log(`│`);
+      console.log(`│  📌 First experience: ${profileData.experience[0].title || profileData.experience[0].role || 'untitled'} at ${profileData.experience[0].company || 'unknown'}`);
+    }
+
+    if (profileData.additionalInfo && profileData.additionalInfo.length > 100) {
+      console.log(`│  📝 Additional context preview: "${profileData.additionalInfo.substring(0, 100)}..."`);
+    }
+
+    // Prepare data for LLM - pass everything as structured JSON
+    const userDataForLLM = JSON.stringify(profileData, null, 2);
+    console.log(`\n📦 Total profile data size: ${userDataForLLM.length} characters`);
+    console.log(`📝 Job description length: ${jobDescription.length} characters`);
+
+    // Show a sample of what's being sent
+    console.log(`\n📄 Sample of profile data being sent to LLM:`);
+    console.log(userDataForLLM.substring(0, 500) + '...\n');
+
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+    // Initial generation
+    console.log(`🧠 Calling gpt-5-mini with ultrathink (reasoning_effort: high)...`);
+    const genStart = Date.now();
+    let latexCode = await generateLatexWithLLM(openai, userDataForLLM, jobDescription);
+    const genTime = Date.now() - genStart;
+    console.log(`✅ LaTeX generation completed in ${(genTime / 1000).toFixed(2)}s`);
+    console.log(`📄 Generated LaTeX: ${latexCode.length} characters`);
+
+    // Show first 300 chars of generated LaTeX to verify it has user's actual name
+    console.log(`\n📋 First 300 chars of generated LaTeX:`);
+    console.log(latexCode.substring(0, 300));
+
+    // Verify the LaTeX contains the user's actual name (if provided)
+    if (profileData.name && profileData.name !== 'Candidate' && profileData.name.trim()) {
+      if (latexCode.includes(profileData.name)) {
+        console.log(`✅ Verified: User's name "${profileData.name}" found in LaTeX`);
+      } else {
+        console.warn(`⚠️  WARNING: User's name "${profileData.name}" NOT found in generated LaTeX!`);
+        console.warn(`   This might indicate LLM didn't properly extract user data`);
+      }
+    }
+
+    // Try to compile with error feedback loop
+    let pdfBuffer = null;
+    while (attempt < MAX_RETRIES && !pdfBuffer) {
+      attempt++;
+      console.log(`\n🔨 Compilation attempt ${attempt}/${MAX_RETRIES}`);
+
+      try {
+        const compileStart = Date.now();
+        pdfBuffer = await compileLatex(latexCode);
+        const compileTime = Date.now() - compileStart;
+        console.log(`✅ PDF compiled successfully on attempt ${attempt} (${(compileTime / 1000).toFixed(2)}s)`);
+        console.log(`📊 PDF size: ${(pdfBuffer.length / 1024).toFixed(2)} KB`);
+      } catch (compileError) {
+        console.log(`❌ Compilation failed: ${compileError.message}`);
+        console.log(`📋 Error details:`, compileError.stack ? compileError.stack.split('\n').slice(0, 3).join('\n') : 'No stack trace');
+
+        // Check if this is a LaTeX error (fixable) or a code/system error (not fixable)
+        const isLatexError = compileError.message.includes('LaTeX') ||
+                            compileError.message.includes('Undefined control sequence') ||
+                            compileError.message.includes('Missing') ||
+                            compileError.message.includes('!') ||
+                            compileError.message.includes('error:');
+
+        const isSystemError = compileError.message.includes('not defined') ||
+                             compileError.message.includes('ENOENT') ||
+                             compileError.message.includes('command not found') ||
+                             compileError.message.includes('Permission denied');
+
+        if (isSystemError) {
+          // System error - cannot be fixed by LLM, fail immediately
+          throw new Error(`System error during compilation: ${compileError.message}`);
+        }
+
+        if (attempt < MAX_RETRIES && isLatexError) {
+          console.log(`\n🔄 Sending LaTeX error back to LLM for fixing (attempt ${attempt + 1}/${MAX_RETRIES})...`);
+          const fixStart = Date.now();
+          latexCode = await fixLatexWithLLM(openai, latexCode, compileError.message);
+          const fixTime = Date.now() - fixStart;
+          console.log(`✅ LLM returned fixed LaTeX in ${(fixTime / 1000).toFixed(2)}s`);
+        } else {
+          throw new Error(`Failed to compile after ${MAX_RETRIES} attempts. Last error: ${compileError.message}`);
+        }
+      }
+    }
+
+    // Save artifacts
+    console.log(`\n💾 Saving artifacts to database...`);
+    await prisma.artifact.create({
+      data: {
+        jobId,
+        type: 'PDF_OUTPUT',
+        content: pdfBuffer,
+        metadata: {
+          attempts: attempt,
+          model: 'gpt-5-mini',
+          pdfSizeKB: (pdfBuffer.length / 1024).toFixed(2)
+        }
+      }
+    });
+    console.log(`✅ PDF artifact saved`);
+
+    await prisma.artifact.create({
+      data: {
+        jobId,
+        type: 'LATEX_SOURCE',
+        content: Buffer.from(latexCode, 'utf-8'),
+        metadata: {
+          attempts: attempt,
+          latexSizeChars: latexCode.length
+        }
+      }
+    });
+    console.log(`✅ LaTeX artifact saved`);
+
+    // Mark job as completed
+    const totalTime = Date.now() - startTime;
+    await prisma.job.update({
+      where: { id: jobId },
+      data: {
+        status: 'COMPLETED',
+        completedAt: new Date(),
+        diagnostics: {
+          completedAt: new Date().toISOString(),
+          attempts: attempt,
+          model: 'gpt-5-mini',
+          totalTimeSeconds: (totalTime / 1000).toFixed(2),
+          pdfSizeKB: (pdfBuffer.length / 1024).toFixed(2),
+          success: true
+        }
+      }
+    });
+
+    console.log(`\n${'─'.repeat(80)}`);
+    console.log(`✅ JOB COMPLETED SUCCESSFULLY - ${jobId}`);
+    console.log(`⏱️  Total time: ${(totalTime / 1000).toFixed(2)}s`);
+    console.log(`🔢 Compilation attempts: ${attempt}`);
+    console.log(`${'─'.repeat(80)}\n`);
+
+  } catch (error) {
+    const totalTime = Date.now() - startTime;
+    console.error(`\n${'─'.repeat(80)}`);
+    console.error(`❌ JOB FAILED - ${jobId}`);
+    console.error(`${'─'.repeat(80)}`);
+    console.error(`Error: ${error.message}`);
+    console.error(`Time before failure: ${(totalTime / 1000).toFixed(2)}s`);
+    console.error(`Attempts made: ${attempt}`);
+    console.error(`Stack trace:`, error.stack);
+    console.error(`${'─'.repeat(80)}\n`);
+
+    await prisma.job.update({
+      where: { id: jobId },
+      data: {
+        status: 'FAILED',
+        error: error.message,
+        completedAt: new Date(),
+        diagnostics: {
+          failedAt: new Date().toISOString(),
+          error: error.message,
+          attempts: attempt,
+          totalTimeSeconds: (totalTime / 1000).toFixed(2),
+          success: false
+        }
+      }
+    });
+  }
+}
+
+/**
+ * Generate LaTeX using gpt-5-mini with ultrathink
+ */
+async function generateLatexWithLLM(openai, userDataJSON, jobDescription) {
+  const response = await openai.chat.completions.create({
+    model: 'gpt-5-mini',
+    messages: [
+      {
+        role: 'system',
+        content: `You are an expert ATS-optimized resume writer and LaTeX developer specializing in tailoring resumes for specific roles.
+
+YOUR TASK:
+Analyze ALL available user data (structured fields, resumeText, additionalInfo) and the target job description to create a strategically optimized resume that:
+1. Passes ATS systems with proper keyword matching
+2. Highlights the most relevant experiences for THIS specific role
+3. Reframes accomplishments to align with the job requirements
+4. Uses the candidate's ACTUAL information (never invent or hallucinate)
+
+DATA SOURCES TO USE:
+- name, email, phone, location (use exactly as provided)
+- experiences[] - Work history with companies, roles, dates, and accomplishments
+- skills[] - Technical and soft skills
+- projects[] - Side projects and portfolio work
+- education[] - Degrees and certifications
+- resumeText - Full resume context (may contain additional details)
+- additionalInfo - Extra context the user provided (use this to understand background)
+- summary - Professional summary
+
+INTELLIGENT TAILORING STRATEGY:
+1. **Keyword Optimization**: Extract key requirements from the job description (technologies, methodologies, soft skills) and ensure they appear naturally if the user has that experience
+2. **Experience Selection**: Prioritize experiences most relevant to the target role. If applying to a sales role but user has tech background, emphasize client-facing work, revenue impact, stakeholder communication
+3. **Bullet Reframing**: Rewrite experience bullets to emphasize aspects most relevant to the job (e.g., for PM role: decision-making, roadmap, metrics; for engineering role: architecture, scalability, performance)
+4. **Skills Matching**: Place job-relevant skills prominently
+5. **Additional Context**: Use additionalInfo to fill gaps or understand the user's career narrative
+
+ATS REQUIREMENTS:
+- Use standard section headers: Summary, Experience, Projects, Education, Skills
+- No graphics, tables, or complex formatting
+- Clean LaTeX with standard fonts
+- Keywords from job description naturally integrated
+- Quantified achievements (numbers, percentages, scale)
+
+OUTPUT RULES:
+- Output ONLY valid LaTeX code - no markdown, no explanations
+- Include \\documentclass, \\begin{document}, and \\end{document}
+- Use 10pt article class with tight margins for 1-page fit
+- Use user's ACTUAL name (never "Candidate" or generic names)
+- Never invent experiences, companies, or metrics not in the data`
+      },
+      {
+        role: 'user',
+        content: `Analyze this user's complete profile and create an ATS-optimized resume tailored for the target job.
+
+USER PROFILE DATA:
+${userDataJSON}
+
+TARGET JOB DESCRIPTION:
+${jobDescription}
+
+Instructions:
+1. Read through ALL the user data carefully (including additionalInfo and resumeText)
+2. Identify the 3-5 most important requirements/keywords in the job description
+3. Select and reframe the user's experiences to emphasize relevant skills
+4. Ensure every bullet point is achievement-focused with quantified results
+5. Make sure the resume would pass ATS keyword matching for this specific role
+
+Generate the complete LaTeX document now.`
+      }
+    ],
+    reasoning_effort: 'high' // ultrathink
+  });
+
+  let latex = response.choices[0].message.content.trim();
+
+  // Clean markdown code blocks if present
+  latex = latex.replace(/^```latex?\n?/gm, '').replace(/\n?```$/gm, '').replace(/^```.*$/gm, '');
+
+  console.log(`📝 Generated LaTeX (${latex.length} chars)`);
+  return latex;
+}
+
+/**
+ * Fix LaTeX errors using LLM
+ */
+async function fixLatexWithLLM(openai, brokenLatex, errorMessage) {
+  console.log(`🔧 Asking LLM to fix: ${errorMessage.substring(0, 200)}`);
+
+  const response = await openai.chat.completions.create({
+    model: 'gpt-5-mini',
+    messages: [
+      {
+        role: 'system',
+        content: `You are a LaTeX debugging expert. Fix the LaTeX compilation error and return the corrected LaTeX code.
+
+RULES:
+1. Fix ONLY the error mentioned
+2. Keep all content intact
+3. Return ONLY the corrected LaTeX code
+4. No explanations, no markdown`
+      },
+      {
+        role: 'user',
+        content: `This LaTeX code failed to compile with this error:
+
+ERROR:
+${errorMessage}
+
+LATEX CODE:
+${brokenLatex}
+
+Fix the error and return the corrected LaTeX code.`
+      }
+    ],
+    reasoning_effort: 'high'
+  });
+
+  let fixedLatex = response.choices[0].message.content.trim();
+  fixedLatex = fixedLatex.replace(/^```latex?\n?/gm, '').replace(/\n?```$/gm, '').replace(/^```.*$/gm, '');
+
+  console.log(`✅ LLM returned fixed LaTeX (${fixedLatex.length} chars)`);
+  return fixedLatex;
+}
+
+/**
+ * OLD Async job processing function (keeping for backward compatibility)
+ */
+async function processJobAsync(jobId, userId, jobDescription, aiMode, matchMode, profileData) {
+  try {
+    console.log(`🔄 Starting async processing for job ${jobId} (updated)`);
+    console.log(`📊 Processing with: aiMode=${aiMode}, matchMode=${matchMode}`);
+
+    // Extract company and role from job description if not in job record
+    const job = await prisma.job.findUnique({ where: { id: jobId } });
+    let company = job?.company;
+    let role = job?.role;
+
+    if (!company || !role) {
+      // Enhanced extraction using AI-like patterns
+      const lines = jobDescription.split('\n').slice(0, 10); // Check first 10 lines
+      for (const line of lines) {
+        const cleanLine = line.trim();
+        // Look for role patterns
+        if (!role) {
+          const roleMatch = cleanLine.match(/^(?:Position|Role|Title|Job Title)[:\s]+(.+)/i) ||
+                           cleanLine.match(/^(.+?)\s*(?:Developer|Engineer|Manager|Designer|Analyst|Architect|Lead|Senior|Junior)/i);
+          if (roleMatch) role = roleMatch[1]?.trim();
+        }
+        // Look for company patterns
+        if (!company) {
+          const companyMatch = cleanLine.match(/^(?:Company|Employer|Organization)[:\s]+(.+)/i) ||
+                              cleanLine.match(/^(?:About|Join|At)\s+(.+?)(?:\s|,|\.)/i);
+          if (companyMatch) company = companyMatch[1]?.trim();
+        }
+      }
+
+      // Fallback extraction from first line if it looks like a title
+      if (!role && lines[0]) {
+        const firstLine = lines[0].trim();
+        if (firstLine.length < 100 && !firstLine.includes('.')) {
+          role = firstLine;
+        }
+      }
+
+      // Update job with extracted info
+      if (company || role) {
+        await prisma.job.update({
+          where: { id: jobId },
+          data: {
+            company: company || job?.company,
+            role: role || job?.role
+          }
+        });
+        console.log(`📝 Extracted: Company="${company || 'N/A'}", Role="${role || 'N/A'}"`);
+      }
+    }
+
+    // Initialize AI Resume Generator - using the same pattern as /api/generate endpoint
+    const generator = new AIResumeGenerator(process.env.OPENAI_API_KEY);
+
+    console.log(`🤖 Starting AI generation...`);
+
+    // Process profile data the same way as /api/generate endpoint
+    let processedProfileData = profileData;
+    if (processedProfileData) {
+      // If structured data is under fullData, lift it up (same logic as main endpoint)
+      if (!processedProfileData.experiences && processedProfileData.fullData) {
+        const structuredProfile = {
+          ...processedProfileData,
+          experiences: processedProfileData.fullData.experiences || processedProfileData.experiences,
+          skills: processedProfileData.fullData.skills || processedProfileData.skills,
+          education: processedProfileData.fullData.education || processedProfileData.education,
+          projects: processedProfileData.fullData.projects || processedProfileData.projects,
+          certifications: processedProfileData.fullData.certifications || processedProfileData.certifications
+        };
+        processedProfileData = structuredProfile;
+      }
+
+      console.log(`📊 Profile data structure:`, {
+        hasName: !!processedProfileData.name,
+        hasEmail: !!processedProfileData.email,
+        hasExperiences: !!(processedProfileData.experiences || processedProfileData.experience),
+        experiencesCount: (processedProfileData.experiences || processedProfileData.experience || []).length,
+        hasSkills: !!processedProfileData.skills,
+        skillsCount: (processedProfileData.skills || []).length,
+        hasResumeText: !!processedProfileData.resumeText
+      });
+    }
+
+    // Transform profile data to the format expected by AIResumeGenerator (same as main endpoint)
+    const transformedUserData = processedProfileData ? {
+      // Personal info in a consistent format
+      personalInfo: {
+        name: processedProfileData.name || processedProfileData.fullName || 'Candidate',
+        email: processedProfileData.email || '',
+        phone: processedProfileData.phone || '',
+        location: processedProfileData.location || '',
+        linkedin: processedProfileData.linkedin || '',
+        website: processedProfileData.website || processedProfileData.portfolio || processedProfileData.github || ''
+      },
+      // Profile can be included as backup
+      profile: {
+        name: processedProfileData.name || processedProfileData.fullName || 'Candidate',
+        email: processedProfileData.email || '',
+        phone: processedProfileData.phone || '',
+        location: processedProfileData.location || ''
+      },
+      summary: processedProfileData.summary || '',
+      // Map experiences to experience for consistency (handle both field names)
+      experience: processedProfileData.experiences || processedProfileData.experience || [],
+      education: processedProfileData.education || [],
+      skills: processedProfileData.skills || [],
+      projects: processedProfileData.projects || [],
+      certifications: processedProfileData.certifications || [],
+      awards: processedProfileData.awards || [],
+      publications: processedProfileData.publications || [],
+      // Ensure additionalInfo is included
+      additionalInfo: processedProfileData.additionalInfo || '',
+      // Keep original data for fallback
+      resumeText: processedProfileData.resumeText || '',
+      ...processedProfileData // Keep all original fields as fallback
+    } : {
+      // Fallback mode if no profile data
+      resumeText: '',
+      personalInfo: {
+        name: 'Candidate',
+        email: '',
+        phone: '',
+        location: ''
+      }
+    };
+
+    console.log(`📝 Transformed user data:`, {
+      hasName: !!transformedUserData.personalInfo.name,
+      hasEmail: !!transformedUserData.personalInfo.email,
+      experienceCount: transformedUserData.experience ? transformedUserData.experience.length : 0,
+      educationCount: transformedUserData.education ? transformedUserData.education.length : 0,
+      skillsCount: transformedUserData.skills ? transformedUserData.skills.length : 0,
+      hasResumeText: !!transformedUserData.resumeText,
+      hasSummary: !!transformedUserData.summary
+    });
+
+    // Use SIMPLE generation - just pass raw profile data
+    console.log(`📦 Using SIMPLE generation with raw profile data`);
+    const { latex } = await generator.generateResumeSimple(
+      processedProfileData,  // Pass RAW profile data, let LLM extract everything
+      jobDescription,
+      {
+        targetJobTitle: role || '',
+        model: aiMode === 'gpt-5-mini' ? 'gpt-4o' : aiMode
+      }
+    );
+
+    // Compile to PDF
+    let pdf = null;
+    try {
+      pdf = await generator.compileResume(latex);
+      console.log('✅ PDF compilation successful');
+    } catch (compileError) {
+      console.error('❌ PDF compilation failed:', compileError.message);
+      throw compileError;
+    }
+
+    console.log(`📄 PDF generated, size: ${pdf ? pdf.length : 0} bytes`);
+
+    // Wrap the result in the expected format
+    const result = {
+      success: true,
+      diagnostics: {
+        generatedAt: new Date().toISOString(),
+        aiMode,
+        matchMode,
+        pdfSize: pdf ? pdf.length : 0
+      },
+      artifacts: {
+        pdfBuffer: pdf,
+        latexSource: latex,
+        templateUsed: 'ai-generated',
+        generationType: 'ai-pipeline'
+      }
+    };
+
+    if (result.success && pdf) {
+      console.log(`💾 Saving artifacts for job ${jobId}...`);
+
+      // Save PDF artifact
+      const pdfArtifact = await prisma.artifact.create({
+        data: {
+          jobId,
+          type: 'PDF_OUTPUT',
+          content: Buffer.from(pdf), // Ensure it's a Buffer
+          metadata: {
+            template: result.artifacts.templateUsed || 'default',
+            generationType: result.artifacts.generationType || 'ai-pipeline',
+            size: pdf.length
+          }
+        }
+      });
+      console.log(`✅ PDF artifact saved with ID: ${pdfArtifact.id}`);
+
+      // Save LaTeX source if available
+      if (latex) {
+        const latexArtifact = await prisma.artifact.create({
+          data: {
+            jobId,
+            type: 'LATEX_SOURCE',
+            content: Buffer.from(latex, 'utf-8'),
+            metadata: {
+              size: latex.length
+            }
+          }
+        });
+        console.log(`✅ LaTeX artifact saved with ID: ${latexArtifact.id}`);
+      }
+
+      // Update job status to completed
+      const updatedJob = await prisma.job.update({
+        where: { id: jobId },
+        data: {
+          status: 'COMPLETED',
+          completedAt: new Date(),
+          diagnostics: {
+            ...result.diagnostics,
+            completionTime: new Date().toISOString(),
+            artifactsSaved: true
+          }
+        }
+      });
+
+      console.log(`✅ Job ${jobId} marked as COMPLETED`);
+      console.log(`📊 Job details: Company="${updatedJob.company}", Role="${updatedJob.role}"`);
+    } else {
+      console.error(`❌ Generation failed or no PDF produced for job ${jobId}`);
+      await prisma.job.update({
+        where: { id: jobId },
+        data: {
+          status: 'FAILED',
+          diagnostics: {
+            error: 'PDF generation failed',
+            completionTime: new Date().toISOString()
+          }
+        }
+      });
+    }
+  } catch (error) {
+    console.error(`❌ Error processing job ${jobId}:`, error);
+
+    // Update job status to failed
+    try {
+      await prisma.job.update({
+        where: { id: jobId },
+        data: {
+          status: 'FAILED',
+          error: error.message,
+          completedAt: new Date()
+        }
+      });
+    } catch (updateError) {
+      console.error(`❌ Failed to update job status:`, updateError);
+    }
+  }
+}
+
+/**
+ * GET /api/resumes/:fileName - Download a specific resume file
+ * Required by: Dashboard.tsx, DashboardModern.tsx, DashboardUnified.tsx, History.tsx
+ */
+app.get('/api/resumes/:fileName', authenticateToken, async (req, res) => {
+  try {
+    const { fileName } = req.params;
+
+    // Extract job ID from fileName (format: resume-{jobId}.pdf)
+    const jobIdMatch = fileName.match(/resume-(.+)\.pdf$/);
+    if (!jobIdMatch) {
+      return res.status(400).json({ error: 'Invalid file name format' });
+    }
+
+    const jobId = jobIdMatch[1];
+
+    // Verify job belongs to user
+    const job = await prisma.job.findUnique({
+      where: { id: jobId },
+      select: { userId: true }
+    });
+
+    if (!job) {
+      return res.status(404).json({ error: 'Resume not found' });
+    }
+
+    if (job.userId !== req.userId) {
+      return res.status(403).json({ error: 'Unauthorized access to this resume' });
+    }
+
+    // Fetch the PDF artifact
+    const artifact = await prisma.artifact.findFirst({
+      where: {
+        jobId,
+        type: 'PDF_OUTPUT'
+      },
+      orderBy: { version: 'desc' }
+    });
+
+    if (!artifact) {
+      return res.status(404).json({ error: 'PDF file not found' });
+    }
+
+    // Set appropriate headers and send the PDF
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.send(artifact.content);
+
+    console.log(`📥 Served PDF ${fileName} for user ${req.userId}`);
+  } catch (error) {
+    console.error('❌ Error downloading resume:', error);
+    res.status(500).json({ error: 'Failed to download resume' });
   }
 });
 

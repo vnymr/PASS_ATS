@@ -1,9 +1,48 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { SignedIn, SignedOut, SignInButton, SignUpButton, UserButton } from '@clerk/clerk-react';
+// import { api } from '../api-clerk'; // ONBOARDING DISABLED: API not needed without profile check
 import logoImg from '../logo.png';
 
 export default function Landing() {
   const navigate = useNavigate();
+  // ONBOARDING DISABLED: Profile check bypassed - all users go directly to dashboard
+  // Original logic checked profile status to show different CTAs
+  // To re-enable: Uncomment the profile check code below and update the SignedIn button logic
+  /*
+  const [hasProfile, setHasProfile] = useState<boolean | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  // Check if user has completed onboarding
+  useEffect(() => {
+    async function checkProfile() {
+      if (!isSignedIn) {
+        setHasProfile(null);
+        return;
+      }
+
+      setLoading(true);
+      try {
+        const token = await getToken();
+        const profile = await api.getProfile(token || undefined);
+        setHasProfile(!!profile);
+      } catch (err: any) {
+        // 404 means no profile (onboarding not completed)
+        if (err?.response?.status === 404 || err?.status === 404) {
+          setHasProfile(false);
+        } else {
+          // Other error - assume profile exists
+          console.error('Profile check error:', err);
+          setHasProfile(true);
+        }
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    checkProfile();
+  }, [isSignedIn, getToken]);
+  */
 
   return (
     <div className="landing-hero">
@@ -19,12 +58,17 @@ export default function Landing() {
             <img src={logoImg} alt="" className="logo-img" />
           </div>
           <div className="nav-buttons">
-            <button onClick={() => navigate('/login')} className="btn btn-ghost">
-              Sign In
-            </button>
-            <button onClick={() => navigate('/signup')} className="btn btn-primary">
-              Get Started
-            </button>
+            <SignedOut>
+              <SignInButton mode="modal">
+                <button className="btn btn-ghost">Sign In</button>
+              </SignInButton>
+              <SignUpButton mode="modal">
+                <button className="btn btn-primary">Get Started</button>
+              </SignUpButton>
+            </SignedOut>
+            <SignedIn>
+              <UserButton afterSignOutUrl="/" />
+            </SignedIn>
           </div>
         </div>
       </nav>
@@ -36,9 +80,19 @@ export default function Landing() {
           Every time in under 20 seconds.
         </p>
         <div className="hero-buttons">
-          <button onClick={() => navigate('/signup')} className="btn btn-primary btn-large">
-            Start Building Your Resume
-          </button>
+          <SignedOut>
+            <SignUpButton mode="modal">
+              <button className="btn btn-primary btn-large">
+                Start Building Your Resume
+              </button>
+            </SignUpButton>
+          </SignedOut>
+          <SignedIn>
+            {/* ONBOARDING DISABLED: Always show dashboard button for signed-in users */}
+            <button onClick={() => navigate('/dashboard')} className="btn btn-primary btn-large">
+              Go to Dashboard
+            </button>
+          </SignedIn>
           <button className="btn btn-outline btn-large">
             Download Extension
           </button>

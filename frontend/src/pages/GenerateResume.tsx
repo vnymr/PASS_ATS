@@ -91,7 +91,7 @@ export default function GenerateResume() {
           <span>Please set up your resume text in your </span>
           <button 
             className="link-button"
-            onClick={() => navigate('/memory-profile')}
+            onClick={() => navigate('/profile')}
           >
             profile
           </button>

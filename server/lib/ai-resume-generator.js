@@ -1,10 +1,19 @@
 /**
- * Simplified AI Resume Generator
- * Direct AI generation without templates or structured prompts
+ * Enhanced AI Resume Generator
+ * Strict factual constraints and ATS optimization
  */
 
 import OpenAI from 'openai';
 import { compileLatex } from './latex-compiler.js';
+import {
+  buildResumeContext,
+  extractUserInformation,
+  analyzeJobDescription,
+  matchSkillsToJob
+} from './enhanced-prompt-builder.js';
+import {
+  buildSimpleResumeContext
+} from './simple-prompt-builder.js';
 
 // Example LaTeX resumes for AI to learn from
 const EXAMPLE_RESUMES = {
@@ -167,55 +176,226 @@ class AIResumeGenerator {
   }
 
   /**
-   * Generate a complete LaTeX resume using AI
+   * Generate a complete LaTeX resume using AI with enhanced prompts
    * @param {Object} userData - User profile, experience, education, skills
    * @param {String} jobDescription - Target job description
    * @param {Object} options - Additional options (style preferences, etc.)
    */
   async generateResume(userData, jobDescription, options = {}) {
     try {
-      // Determine which example style to use based on job type
-      const style = this.determineStyle(jobDescription, options);
-      const examples = this.getRelevantExamples(style);
+      console.log('🎯 Starting enhanced resume generation...');
 
-      // Create the prompt with all information
-      const prompt = this.buildPrompt(userData, jobDescription, examples, options);
+      // Preprocess user data for consistency
+      const processedData = this.preprocessUserData(userData);
 
-      // Generate LaTeX code directly
+      // Build complete context with validation
+      const context = buildResumeContext(processedData, jobDescription, options);
+
+      console.log('📊 Extracted user data:', {
+        hasExperience: context.extractedData.experience.length > 0,
+        hasEducation: context.extractedData.education.length > 0,
+        skillsCount: context.extractedData.skills.length,
+        projectsCount: context.extractedData.projects.length,
+        domain: context.jobAnalysis.domain,
+        matchedSkills: context.skillMatch.matched.length,
+        unmatchedKeywords: context.skillMatch.unmatched.length
+      });
+
+      // Validate we have minimum required data
+      // For text-based resumes, we rely on the LLM to parse the raw text
+      if (!context.extractedData.isTextBased) {
+        if (!context.extractedData.personalInfo.name && !context.extractedData.rawText) {
+          throw new Error('User name is required for resume generation');
+        }
+
+        if (context.extractedData.experience.length === 0 &&
+            context.extractedData.education.length === 0 &&
+            context.extractedData.projects.length === 0 &&
+            !context.extractedData.rawText) {
+          throw new Error('Insufficient user data: Need at least experience, education, projects, or resume text');
+        }
+      } else {
+        // For text-based resumes, ensure we have some text to work with
+        if (!context.extractedData.rawText || context.extractedData.rawText.trim().length < 50) {
+          throw new Error('Resume text too short or empty. Please provide more information.');
+        }
+        console.log('📄 Using text-based extraction from resume text');
+      }
+
+      // Generate LaTeX with enhanced prompts
       const response = await this.openai.chat.completions.create({
-        model: options.model || 'gpt-4',
+        model: options.model || 'gpt-4o',
         messages: [
           {
             role: 'system',
-            content: `You are an expert resume writer and LaTeX typesetter. Generate professional, ATS-optimized resumes in LaTeX format. Output ONLY valid, compilable LaTeX code without any explanations or markdown code blocks.`
+            content: context.systemPrompt
           },
           {
             role: 'user',
-            content: prompt
+            content: context.userPrompt
           }
         ],
-        temperature: 0.7,
-        max_tokens: 3000
+        temperature: 0.5, // Lower temperature for more consistent factual output
+        max_tokens: 8000  // Increased significantly for complete resume
       });
 
-      const latexCode = response.choices[0].message.content.trim();
+      let latexCode = response.choices[0].message.content.trim();
+
+      console.log('🔍 Raw LaTeX response length:', latexCode.length);
+      // console.log('🔍 Raw LaTeX response (first 500 chars):', latexCode.substring(0, 500));
+      // console.log('🔍 Raw LaTeX response (last 500 chars):', latexCode.substring(Math.max(0, latexCode.length - 500)));
+
+      // Check if begin{document} is missing and try to find where it should be
+      if (!latexCode.includes('\\begin{document}')) {
+        console.warn('⚠️ Missing \\begin{document}, checking LaTeX structure...');
+        const hasDocClass = latexCode.includes('\\documentclass');
+        const hasEndDoc = latexCode.includes('\\end{document}');
+        console.log('Has documentclass?', hasDocClass);
+        console.log('Has end{document}?', hasEndDoc);
+
+        // Try to fix by finding where document content starts
+        if (hasDocClass && hasEndDoc) {
+          // Find where the actual content starts (usually after all package imports)
+          const beginCenterMatch = latexCode.match(/(%\s*===BEGIN:HEADER===|\\begin{center})/);
+          if (beginCenterMatch) {
+            const insertPosition = beginCenterMatch.index;
+            const fixedLatex = latexCode.substring(0, insertPosition) +
+                             '\\begin{document}\n' +
+                             latexCode.substring(insertPosition);
+            console.log('✅ Auto-fixed missing \\begin{document}');
+            latexCode = fixedLatex;
+          }
+        }
+      }
 
       // Validate and clean the LaTeX
       const cleanedLatex = this.cleanLatex(latexCode);
 
+      // Verify the resume includes key sections
+      this.validateGeneratedResume(cleanedLatex, context.extractedData);
+
       return {
         latex: cleanedLatex,
-        style: style,
         metadata: {
           generatedAt: new Date().toISOString(),
-          model: options.model || 'gpt-4',
-          style: style
+          model: options.model || 'gpt-4o',
+          domain: context.jobAnalysis.domain,
+          matchedSkills: context.skillMatch.matched,
+          unmatchedKeywords: context.skillMatch.unmatched,
+          extractedData: {
+            experienceCount: context.extractedData.experience.length,
+            educationCount: context.extractedData.education.length,
+            skillsCount: context.extractedData.skills.length,
+            projectsCount: context.extractedData.projects.length
+          }
         }
       };
     } catch (error) {
       console.error('AI generation error:', error);
       throw new Error(`Failed to generate resume: ${error.message}`);
     }
+  }
+
+  /**
+   * Generate resume with raw data - let LLM extract everything
+   * @param {Object} rawUserData - Raw user profile data
+   * @param {String} jobDescription - Target job description
+   * @param {Object} options - Additional options
+   */
+  async generateResumeSimple(rawUserData, jobDescription, options = {}) {
+    try {
+      console.log('🎯 Starting SIMPLE resume generation (raw data approach)...');
+
+      // Build simple context - just pass raw data
+      const context = buildSimpleResumeContext(rawUserData, jobDescription, options);
+
+      console.log('📊 Sending raw user data to LLM for extraction');
+      console.log('Data type:', typeof rawUserData);
+      console.log('Has data:', !!rawUserData);
+
+      // Generate LaTeX with simple prompts
+      const response = await this.openai.chat.completions.create({
+        model: options.model || 'gpt-4o',
+        messages: [
+          {
+            role: 'system',
+            content: context.systemPrompt
+          },
+          {
+            role: 'user',
+            content: context.userPrompt
+          }
+        ],
+        temperature: 0.5,
+        max_tokens: 8000
+      });
+
+      let latexCode = response.choices[0].message.content.trim();
+
+      console.log('🔍 Raw LaTeX response length:', latexCode.length);
+
+      // Auto-fix missing \begin{document} if needed
+      if (!latexCode.includes('\\begin{document}')) {
+        console.warn('⚠️ Missing \\begin{document}, auto-fixing...');
+        const beginCenterMatch = latexCode.match(/(%\s*===BEGIN:HEADER===|\\begin{center})/);
+        if (beginCenterMatch) {
+          const insertPosition = beginCenterMatch.index;
+          latexCode = latexCode.substring(0, insertPosition) +
+                     '\\begin{document}\n' +
+                     latexCode.substring(insertPosition);
+        }
+      }
+
+      // Clean and validate
+      const cleanedLatex = this.cleanLatex(latexCode);
+
+      return {
+        latex: cleanedLatex,
+        metadata: {
+          generatedAt: new Date().toISOString(),
+          model: options.model || 'gpt-4o',
+          approach: 'simple-raw-data',
+          dataSize: JSON.stringify(rawUserData).length
+        }
+      };
+    } catch (error) {
+      console.error('Simple generation error:', error);
+      throw new Error(`Failed to generate resume (simple): ${error.message}`);
+    }
+  }
+
+  /**
+   * Validate generated resume contains expected content
+   */
+  validateGeneratedResume(latex, extractedData) {
+    const validationErrors = [];
+
+    // Check for required sections
+    if (!latex.includes('\\section') && !latex.includes('\\section*')) {
+      validationErrors.push('No sections found in generated resume');
+    }
+
+    // Check for user name
+    if (extractedData.personalInfo.name && !latex.includes(extractedData.personalInfo.name)) {
+      console.warn('Warning: User name might not be properly included in resume');
+    }
+
+    // Check for begin/end document
+    if (!latex.includes('\\begin{document}') || !latex.includes('\\end{document}')) {
+      validationErrors.push('Missing document environment');
+    }
+
+    // Check for documentclass
+    if (!latex.includes('\\documentclass')) {
+      validationErrors.push('Missing documentclass declaration');
+    }
+
+    if (validationErrors.length > 0) {
+      throw new Error(`Resume validation failed: ${validationErrors.join(', ')}`);
+    }
+
+    // Log successful validation
+    console.log('✅ Resume validation passed');
   }
 
   /**
@@ -226,12 +406,77 @@ class AIResumeGenerator {
   }
 
   /**
-   * Generate and compile in one step
+   * Generate and compile in one step with fallback
    */
   async generateAndCompile(userData, jobDescription, options = {}) {
-    const { latex } = await this.generateResume(userData, jobDescription, options);
-    const pdf = await this.compileResume(latex);
-    return { latex, pdf };
+    // Use enhanced generation
+    const result = await this.generateResume(userData, jobDescription, options);
+
+    let pdf = null;
+    try {
+      pdf = await this.compileResume(result.latex);
+      console.log('✅ PDF compilation successful');
+    } catch (compilationError) {
+      console.log('⚠️ LaTeX compilation failed, generating fallback PDF...');
+      console.error('PDF generation failed:', compilationError.message);
+
+      // Throw error if PDF compilation fails - no fallback
+      throw compilationError;
+    }
+
+    return {
+      latex: result.latex,
+      pdf,
+      metadata: result.metadata
+    };
+  }
+
+  /**
+   * Enhanced data preprocessing for better extraction
+   */
+  preprocessUserData(userData) {
+    // Ensure consistent data structure
+    const processed = { ...userData };
+
+    // Handle different data formats for profile/personal info
+    if (!processed.personalInfo && processed.profile) {
+      processed.personalInfo = processed.profile;
+    }
+
+    // Ensure arrays for list fields
+    const arrayFields = ['experience', 'education', 'projects', 'skills', 'certifications'];
+    arrayFields.forEach(field => {
+      if (!processed[field]) {
+        processed[field] = [];
+      } else if (!Array.isArray(processed[field])) {
+        processed[field] = [processed[field]];
+      }
+    });
+
+    // Process experience data to ensure consistency
+    if (processed.experience) {
+      processed.experience = processed.experience.map(exp => {
+        const processedExp = { ...exp };
+
+        // Convert description to responsibilities if needed
+        if (exp.description && !exp.responsibilities) {
+          processedExp.responsibilities = typeof exp.description === 'string'
+            ? exp.description.split(/[•\n]/).filter(r => r.trim())
+            : exp.description;
+        }
+
+        // Ensure arrays for list fields
+        ['responsibilities', 'achievements', 'technologies'].forEach(field => {
+          if (processedExp[field] && !Array.isArray(processedExp[field])) {
+            processedExp[field] = [processedExp[field]];
+          }
+        });
+
+        return processedExp;
+      });
+    }
+
+    return processed;
   }
 
   /**
@@ -310,13 +555,25 @@ Generate the complete LaTeX code for this resume. Output only the LaTeX code, no
     // Remove markdown code blocks if present
     let cleaned = latex.replace(/^```latex?\n?/gm, '').replace(/\n?```$/gm, '');
 
+    // Also remove any markdown formatting
+    cleaned = cleaned.replace(/^```.*$/gm, '');
+
+    // Log what we're checking for debugging
+    console.log('Checking LaTeX validity...');
+    console.log('Has documentclass?', cleaned.includes('\\documentclass'));
+    console.log('Has begin document?', cleaned.includes('\\begin{document}'));
+    console.log('Has end document?', cleaned.includes('\\end{document}'));
+
     // Ensure it starts with documentclass
     if (!cleaned.includes('\\documentclass')) {
+      console.error('LaTeX validation failed: missing documentclass');
+      console.error('First 200 chars of cleaned LaTeX:', cleaned.substring(0, 200));
       throw new Error('Invalid LaTeX: missing documentclass');
     }
 
     // Ensure it has begin and end document
     if (!cleaned.includes('\\begin{document}') || !cleaned.includes('\\end{document}')) {
+      console.error('LaTeX validation failed: missing document environment');
       throw new Error('Invalid LaTeX: missing document environment');
     }
 

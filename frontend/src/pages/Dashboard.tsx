@@ -1,12 +1,19 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api, type Quota, type ResumeEntry } from '../api-adapter';
+import { useAuth } from '@clerk/clerk-react';
+import { api, type Quota, type ResumeEntry } from '../api-clerk';
 import Icons from '../components/ui/icons';
 
 export default function Dashboard() {
+  const { getToken } = useAuth();
   const [quota, setQuota] = useState<Quota | null>(null);
   const [resumes, setResumes] = useState<ResumeEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [jobDescription, setJobDescription] = useState('');
+  const [aiMode, setAiMode] = useState('claude');
+  const [matchMode, setMatchMode] = useState('Standard');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const resumesRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -15,17 +22,22 @@ export default function Dashboard() {
 
   async function loadDashboardData() {
     try {
-      console.log('Loading dashboard data...');
+      const token = await getToken();
       const [quotaData, resumesData] = await Promise.all([
-        api.getQuota(),
-        api.getResumes()
+        api.getQuota(token || undefined),
+        api.getResumes(token || undefined)
       ]);
-      console.log('Dashboard data loaded:', { quotaData, resumesData });
       setQuota(quotaData);
-      setResumes(resumesData || []);
+
+      if (Array.isArray(resumesData)) {
+        setResumes(resumesData);
+      } else if (resumesData && typeof resumesData === 'object' && 'resumes' in resumesData) {
+        setResumes((resumesData as any).resumes || []);
+      } else {
+        setResumes([]);
+      }
     } catch (err) {
       console.error('Failed to load dashboard:', err);
-      // Set default values if API fails
       setQuota({ month: '2024-01', used: 0, remaining: 9, limit: 10 });
       setResumes([]);
     } finally {
@@ -33,9 +45,82 @@ export default function Dashboard() {
     }
   }
 
+  const handleGenerate = async () => {
+    const trimmedJD = jobDescription.trim();
+    if (!trimmedJD || isGenerating) return;
+
+    setIsGenerating(true);
+    try {
+      const token = await getToken();
+
+      // Start job
+      const result = await api.processJob(trimmedJD, aiMode, matchMode, token || undefined);
+      const jobId = result.jobId;
+
+      console.log(`📋 Job created: ${jobId}. Starting status polling...`);
+
+      // Poll for job completion
+      let attempts = 0;
+      const maxAttempts = 90; // 90 * 2s = 3 minutes max (for ultrathink LLM)
+      const pollInterval = 2000; // 2 seconds
+
+      const checkStatus = async (): Promise<void> => {
+        attempts++;
+        if (attempts > maxAttempts) {
+          throw new Error('Resume generation timed out. Please try again.');
+        }
+
+        try {
+          const status = await api.getJobStatus(jobId, token || undefined);
+          console.log(`📊 Job ${jobId} status: ${status.status} (attempt ${attempts})`);
+
+          if (status.status === 'COMPLETED') {
+            // Success! Reload resumes
+            const resumesData = await api.getResumes(token || undefined);
+            if (Array.isArray(resumesData)) {
+              setResumes(resumesData);
+            } else if (resumesData && typeof resumesData === 'object' && 'resumes' in resumesData) {
+              setResumes((resumesData as any).resumes || []);
+            }
+
+            // Clear textarea and scroll
+            setJobDescription('');
+            setTimeout(() => {
+              resumesRef.current?.scrollIntoView({ behavior: 'smooth' });
+            }, 100);
+
+            showToast('✅ Resume generated successfully!', 'success');
+            setIsGenerating(false);
+
+          } else if (status.status === 'FAILED') {
+            throw new Error(status.error || 'Resume generation failed');
+
+          } else {
+            // Still processing, poll again
+            setTimeout(checkStatus, pollInterval);
+          }
+
+        } catch (pollError) {
+          console.error('Status poll error:', pollError);
+          throw pollError;
+        }
+      };
+
+      // Start polling
+      await checkStatus();
+
+    } catch (err: any) {
+      console.error('Failed to generate resume:', err);
+      const errorMsg = err?.message || 'Failed to generate resume. Please try again.';
+      showToast(`❌ ${errorMsg}`, 'error');
+      setIsGenerating(false);
+    }
+  };
+
   const downloadResume = async (fileName: string) => {
     try {
-      const blob = await api.downloadResume(fileName);
+      const token = await getToken();
+      const blob = await api.downloadResume(fileName, token || undefined);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -45,26 +130,29 @@ export default function Dashboard() {
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
 
-      // Show success notification
-      const notification = document.createElement('div');
-      notification.className = 'fixed bottom-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
-      notification.innerHTML = `
-        <div class="flex items-center gap-2">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-          </svg>
-          <span>Resume downloaded successfully!</span>
-        </div>
-      `;
-      document.body.appendChild(notification);
-      setTimeout(() => notification.remove(), 3000);
-
+      showToast('Resume downloaded successfully!', 'success');
       return true;
     } catch (err) {
       console.error('Failed to download resume:', err);
-      alert('Failed to download resume. Please try again.');
+      showToast('Failed to download resume. Please try again.', 'error');
       return false;
     }
+  };
+
+  const showToast = (message: string, type: 'success' | 'error') => {
+    const toast = document.createElement('div');
+    toast.className = `ai-toast ${type === 'success' ? 'ai-toast-success' : 'ai-toast-error'}`;
+    toast.innerHTML = `
+      <div class="ai-toast-content">
+        ${type === 'success' ?
+          '<svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>' :
+          '<svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>'
+        }
+        <span>${message}</span>
+      </div>
+    `;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
   };
 
   const getATSScore = () => {
@@ -78,213 +166,196 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="loading-container">
+      <div className="ai-loading">
         <Icons.loader className="animate-spin" size={48} />
-        <p>Loading dashboard...</p>
+        <p>Loading workspace...</p>
       </div>
     );
   }
 
   return (
-    <div style={{ padding: '2rem', background: 'white', minHeight: '100vh' }}>
-      <h1 style={{ color: 'black', fontSize: '2rem', marginBottom: '1rem' }}>Dashboard</h1>
-
-      <div className="dashboard-container">
-        {/* Header Section */}
-        <div className="dashboard-header">
-          <div className="dashboard-header-content">
-            <div className="dashboard-header-icon">
-              <Icons.briefcase size={32} />
+    <div className="ai-dashboard">
+      {/* Header Section */}
+      <div className="ai-header">
+        <div className="ai-header-left">
+          <h1 className="ai-header-title">Workspace</h1>
+          <div className="ai-header-stats">
+            <span className="ai-stat-pill">
+              Generated: <strong>{resumes.length}</strong>
+            </span>
+          </div>
+        </div>
+        <div className="ai-header-right">
+          {quota && (
+            <div className="ai-usage-pill">
+              Usage: <strong>{quota.used}/{quota.limit}</strong>
             </div>
-            <div className="dashboard-header-text">
-              <h1 className="dashboard-title">Dashboard</h1>
-              <p className="dashboard-subtitle">
-                Track your resume generation progress and manage your applications
-              </p>
-            </div>
-          </div>
-          <div className="dashboard-actions">
-            <button
-              onClick={() => navigate('/generate')}
-              className="btn btn-primary btn-generate"
-            >
-              <Icons.plus size={18} className="mr-2" />
-              Generate Resume
-            </button>
-          </div>
-        </div>
-
-      {/* Stats Cards */}
-      <div className="stats-grid">
-        <div className="stat-card">
-          <div className="stat-card-icon">
-            <Icons.award size={24} />
-          </div>
-          <div className="stat-card-content">
-            <div className="stat-card-label">Credits Remaining</div>
-            <div className="stat-card-value">{quota?.remaining || 9}</div>
-            <div className="stat-card-subtext">Resume generations left</div>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-card-icon">
-            <Icons.fileText size={24} />
-          </div>
-          <div className="stat-card-content">
-            <div className="stat-card-label">Total Generated</div>
-            <div className="stat-card-value">{resumes.length || 0}</div>
-            <div className="stat-card-subtext">Resumes created</div>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-card-icon">
-            <Icons.trendingUp size={24} />
-          </div>
-          <div className="stat-card-content">
-            <div className="stat-card-label">Average ATS Score</div>
-            <div className="stat-card-value">85%</div>
-            <div className="stat-card-subtext">Optimization level</div>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-card-icon">
-            <Icons.calendar size={24} />
-          </div>
-          <div className="stat-card-content">
-            <div className="stat-card-label">This Month</div>
-            <div className="stat-card-value">{resumes.filter(r => {
-              if (!r.createdAt) return false;
-              const created = new Date(r.createdAt);
-              const now = new Date();
-              return created.getMonth() === now.getMonth() && created.getFullYear() === now.getFullYear();
-            }).length}</div>
-            <div className="stat-card-subtext">Resumes generated</div>
-          </div>
+          )}
         </div>
       </div>
 
-      {/* Recent Resumes Section */}
-      <div className="resumes-section">
-        <div className="resumes-header">
-          <div className="resumes-header-content">
-            <Icons.clock size={24} />
-            <h2 className="resumes-title">Recent Resumes</h2>
+      {/* AI Input Section */}
+      <div className="ai-input-section">
+        <div className="ai-input-panel">
+          <div className="ai-input-header">
+            <Icons.zap size={20} />
+            <span>AI Resume Generator</span>
           </div>
-          <div className="resumes-controls">
+
+          <textarea
+            className="ai-textarea"
+            placeholder="Paste the job description here..."
+            value={jobDescription}
+            onChange={(e) => setJobDescription(e.target.value)}
+            disabled={isGenerating}
+          />
+
+          <div className="ai-controls">
+            <div className="ai-control-group">
+              <div className="ai-select-wrapper">
+                <label className="ai-label">AI Model</label>
+                <select
+                  className="ai-select"
+                  value={aiMode}
+                  onChange={(e) => setAiMode(e.target.value)}
+                  disabled={isGenerating}
+                >
+                  <option value="claude">Claude</option>
+                  <option value="openai">OpenAI</option>
+                  <option value="local">Local</option>
+                </select>
+              </div>
+
+              <div className="ai-select-wrapper">
+                <label className="ai-label">Match Mode</label>
+                <select
+                  className="ai-select"
+                  value={matchMode}
+                  onChange={(e) => setMatchMode(e.target.value)}
+                  disabled={isGenerating}
+                >
+                  <option value="Standard">Standard</option>
+                  <option value="Aggressive">Aggressive</option>
+                  <option value="Conservative">Conservative</option>
+                </select>
+              </div>
+            </div>
+
             <button
-              onClick={() => navigate('/history')}
-              className="btn btn-ghost btn-sm"
+              className="ai-generate-btn"
+              onClick={handleGenerate}
+              disabled={!jobDescription.trim() || isGenerating}
             >
-              <Icons.eye size={16} className="mr-2" />
-              View All
+              {isGenerating ? (
+                <>
+                  <Icons.loader className="animate-spin" size={18} />
+                  <span>Generating...</span>
+                </>
+              ) : (
+                <>
+                  <Icons.zap size={18} />
+                  <span>Generate</span>
+                </>
+              )}
             </button>
           </div>
+
+          {isGenerating && (
+            <div className="ai-progress">
+              <div className="ai-progress-bar">
+                <div className="ai-progress-fill"></div>
+              </div>
+              <span className="ai-progress-text">Analyzing job description and generating optimized resume...</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Resume History Section */}
+      <div className="ai-resumes-section" ref={resumesRef}>
+        <div className="ai-resumes-header">
+          <div className="ai-resumes-title">
+            <Icons.clock size={20} />
+            <h2>Resume History</h2>
+          </div>
+          <button
+            onClick={() => navigate('/history')}
+            className="ai-view-all-btn"
+          >
+            View All
+            <Icons.chevronRight size={16} />
+          </button>
         </div>
 
         {resumes.length > 0 ? (
-          <div className="resumes-table-container">
-            <table className="resumes-table">
-              <thead>
-                <tr className="resumes-table-header">
-                  <th className="resumes-table-cell">Company</th>
-                  <th className="resumes-table-cell">Role</th>
-                  <th className="resumes-table-cell">Created</th>
-                  <th className="resumes-table-cell">ATS Score</th>
-                  <th className="resumes-table-cell">Status</th>
-                  <th className="resumes-table-cell">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {resumes.slice(0, 10).map((resume, idx) => {
-                  const score = getATSScore();
-                  const status = getStatus();
-                  return (
-                    <tr key={idx} className="resumes-table-row">
-                      <td className="resumes-table-cell">
-                        <div className="company-cell">
-                          {resume.jobUrl ? (
-                            <a 
-                              href={resume.jobUrl} 
-                              target="_blank" 
-                              rel="noopener noreferrer"
-                              className="company-link"
-                            >
-                              {resume.company || 'Unknown Company'}
-                            </a>
-                          ) : (
-                            <span className="company-name">{resume.company || 'Unknown Company'}</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="resumes-table-cell">
-                        <span className="role-text">{resume.role || 'N/A'}</span>
-                      </td>
-                      <td className="resumes-table-cell">
-                        <span className="date-text">
-                          {resume.createdAt ? new Date(resume.createdAt).toLocaleDateString() : 'N/A'}
-                        </span>
-                      </td>
-                      <td className="resumes-table-cell">
-                        <div className="score-container">
-                          <div className="score-bar">
-                            <div
-                              className={`score-fill ${
-                                score >= 80 ? 'score-high' : 
-                                score >= 60 ? 'score-medium' : 'score-low'
-                              }`}
-                              style={{ width: `${score}%` }}
-                            />
-                          </div>
-                          <span className="score-text">{score}%</span>
-                        </div>
-                      </td>
-                      <td className="resumes-table-cell">
-                        <span className={`status-badge ${
-                          status === 'Completed' ? 'status-completed' :
-                          status === 'Submitted' ? 'status-submitted' :
-                          'status-review'
-                        }`}>
-                          {status}
-                        </span>
-                      </td>
-                      <td className="resumes-table-cell">
-                        <button
-                          onClick={() => downloadResume(resume.fileName)}
-                          className="action-btn"
-                          title="Download PDF"
+          <div className="ai-resumes-grid">
+            {resumes.slice(0, 6).map((resume, idx) => {
+              const score = getATSScore();
+              const status = getStatus();
+              return (
+                <div key={idx} className="ai-resume-card">
+                  <div className="ai-resume-header">
+                    <div className="ai-resume-company">
+                      {resume.jobUrl ? (
+                        <a
+                          href={resume.jobUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="ai-company-link"
                         >
-                          <Icons.download size={16} className="mr-1" />
-                          Download
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                          <Icons.externalLink size={14} />
+                          {resume.company || 'Unknown Company'}
+                        </a>
+                      ) : (
+                        <span>{resume.company || 'Unknown Company'}</span>
+                      )}
+                    </div>
+                    <span className={`ai-status-badge ai-status-${status.toLowerCase().replace(' ', '-')}`}>
+                      {status}
+                    </span>
+                  </div>
+
+                  <div className="ai-resume-body">
+                    <h3 className="ai-resume-role">{resume.role || 'N/A'}</h3>
+                    <div className="ai-resume-date">
+                      <Icons.calendar size={14} />
+                      {resume.createdAt ? new Date(resume.createdAt).toLocaleDateString() : 'N/A'}
+                    </div>
+
+                    <div className="ai-ats-container">
+                      <div className="ai-ats-label">
+                        <span>ATS Score</span>
+                        <span className="ai-ats-value">{score}%</span>
+                      </div>
+                      <div className="ai-ats-bar">
+                        <div
+                          className={`ai-ats-fill ${score >= 80 ? 'ai-ats-high' : score >= 60 ? 'ai-ats-medium' : 'ai-ats-low'}`}
+                          style={{ width: `${score}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => downloadResume(resume.fileName)}
+                    className="ai-download-btn"
+                  >
+                    <Icons.download size={16} />
+                    Download
+                  </button>
+                </div>
+              );
+            })}
           </div>
         ) : (
-          <div className="empty-state">
-            <div className="empty-state-icon">
+          <div className="ai-empty-state">
+            <div className="ai-empty-icon">
               <Icons.fileText size={64} />
             </div>
-            <h3 className="empty-state-title">No resumes yet</h3>
-            <p className="empty-state-text">
-              Generate your first resume to get started with your job applications
-            </p>
-            <button
-              onClick={() => navigate('/generate')}
-              className="btn btn-primary btn-large"
-            >
-              <Icons.plus size={20} className="mr-2" />
-              Generate Your First Resume
-            </button>
+            <h3>No resumes generated yet</h3>
+            <p>Paste a job description above to generate your first AI-optimized resume</p>
           </div>
         )}
-      </div>
       </div>
     </div>
   );

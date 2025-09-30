@@ -8,12 +8,7 @@ export const config = {
       quality: process.env.OPENAI_TEXT_MODEL_QUALITY || 'gpt-5',
       default: process.env.OPENAI_TEXT_MODEL || 'gpt-5-mini',
       // Available models (as of August 2025)
-      'gpt-5': 'gpt-5',
       'gpt-5-mini': 'gpt-5-mini',
-      'gpt-5-nano': 'gpt-5-nano',
-      // Legacy models
-      'gpt-4': 'gpt-4',
-      'gpt-3.5-turbo': 'gpt-3.5-turbo',
     },
     // Embedding model
     embeddingModel: process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-small',

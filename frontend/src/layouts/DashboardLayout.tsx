@@ -1,6 +1,6 @@
 import React from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { clearAuth } from '../auth';
+import { Link, useLocation } from 'react-router-dom';
+import { UserButton } from '@clerk/clerk-react';
 import logoImg from '../logo.png';
 import Icons from '../components/ui/icons';
 
@@ -10,12 +10,6 @@ interface DashboardLayoutProps {
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const location = useLocation();
-  const navigate = useNavigate();
-
-  const handleLogout = () => {
-    clearAuth();
-    navigate('/');
-  };
 
   return (
     <div className="app-container">
@@ -58,9 +52,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         </nav>
 
         <div className="sidebar-footer">
-          <button onClick={handleLogout} className="sidebar-item logout">
-            <Icons.logOut className="sidebar-icon" size={18} /> Log Out
-          </button>
+          <div className="sidebar-item">
+            <UserButton afterSignOutUrl="/" />
+          </div>
         </div>
       </aside>
 
