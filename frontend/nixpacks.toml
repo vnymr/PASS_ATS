@@ -2,9 +2,10 @@
 nixPkgs = ["nodejs-18_x"]
 
 [phases.install]
+cmds = ["npm ci"]
 
 [phases.build]
-cmds = ["npm run build"]
+cmds = ["echo 'VITE_CLERK_PUBLISHABLE_KEY='$VITE_CLERK_PUBLISHABLE_KEY", "npm run build"]
 
 [start]
 cmd = "npm start"
