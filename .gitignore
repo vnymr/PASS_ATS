@@ -1,104 +1,53 @@
 # Dependencies
 node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+package-lock.json
 
 # Environment variables
 .env
 .env.local
-.env.production
-.env.staging
-
-# Generated files
-server/generated/
-server/temp/
-*.pdf
-*.tex
-*.log
+.env.*.local
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
+*~
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Database
-server/db.json
-
-# Test files
-test_resume.pdf
-cookies.txt
-session.json
-
-# Keep test files in repo
-# *.test.js
-# *.spec.js
-
-# Documentation - keep all markdown files
-# *.md
-
 # Logs
-logs
 *.log
+logs/
 npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
 
-# Runtime data
-pids
-*.pid
-*.seed
-*.pid.lock
+# Build outputs
+dist/
+build/
+*.tsbuildinfo
 
-# Coverage directory used by tools like istanbul
-coverage/
-*.lcov
+# Test files (keep test suites, remove temp test files)
+test-*.js
+test-*.json
+test-*.sh
+monitor-*.sh
 
-# nyc test coverage
-.nyc_output
+# Temporary documentation (keep main docs)
+CACHING_IMPLEMENTATION.md
+PERFORMANCE_FIXES_SUMMARY.md
+SPEED_OPTIMIZATIONS_FINAL.md
+EXTENSION_BUILD_SUMMARY.md
+NEXT_STEPS.md
+QUICK_START.md
 
-# Dependency directories
-jspm_packages/
+# Extension (if not needed in repo)
+extension/
 
-# Optional npm cache directory
-.npm
+# Server routes (if temporary)
+server/routes/
 
-# Optional eslint cache
-.eslintcache
-
-# Output of 'npm pack'
-*.tgz
-
-# Yarn Integrity file
-.yarn-integrity
-
-# dotenv environment variables file
-.env.test
-
-# parcel-bundler cache (https://parceljs.org/)
-.cache
-.parcel-cache
-
-# next.js build output
-.next
-
-# nuxt.js build output
-.nuxt
-
-# vuepress build output
-.vuepress/dist
-
-# Serverless directories
-.serverless
-
-# FuseBox cache
-.fusebox/
-
-# DynamoDB Local files
-.dynamodb/
-RAILWAY_SECRETS.env
+# Temp files
+*.tmp
+*.temp
