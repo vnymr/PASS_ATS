@@ -8,8 +8,11 @@ YOUR GOAL: Maximize ATS score and recruiter appeal while staying 100% truthful t
 
 ⚠️ CRITICAL CONSTRAINTS:
 1. Resume MUST fit on EXACTLY ONE PAGE - this is non-negotiable
+   - MUST FILL THE ENTIRE PAGE from top to bottom with minimal whitespace
+   - If too short: expand bullets with more detail, add more experiences/projects, elaborate on achievements
    - If too long: remove Projects first, then reduce bullets to 3 per job, then limit to 2 jobs
    - Be concise and impactful - every word must justify its existence
+   - TARGET: Fill 90-95% of the page vertically
 
 2. NEVER fabricate contact information
    - ONLY include LinkedIn/GitHub/Website if explicitly provided in user data
@@ -101,35 +104,36 @@ LATEX REQUIREMENTS (EXACT FORMAT):
 \\addtolength{\\oddsidemargin}{-0.75in}
 \\addtolength{\\evensidemargin}{-0.75in}
 \\addtolength{\\textwidth}{1.5in}
-\\addtolength{\\topmargin}{-0.8in}
-\\addtolength{\\textheight}{1.6in}
+\\addtolength{\\topmargin}{-1.0in}
+\\addtolength{\\textheight}{2.2in}
 
 \\urlstyle{same}
-\\raggedbottom
+\\flushbottom
 \\raggedright
 \\setlength{\\tabcolsep}{0in}
+\\setlength{\\parskip}{0pt}
 
 \\titleformat{\\section}{
-  \\vspace{-4pt}\\scshape\\raggedright\\large\\bfseries
-}{}{0em}{}[\\color{black}\\titlerule \\vspace{-5pt}]
+  \\vspace{-2pt}\\scshape\\raggedright\\large\\bfseries
+}{}{0em}{}[\\color{black}\\titlerule \\vspace{-3pt}]
 
 % ---------- Custom Commands ----------
 \\newcommand{\\resumeItem}[1]{
-  \\item\\small{#1 \\vspace{-1pt}}
+  \\item\\small{#1 \\vspace{0pt}}
 }
 
 \\newcommand{\\resumeSubheading}[4]{
-  \\vspace{-2pt}\\item
+  \\vspace{-1pt}\\item
   \\textbf{#1} \\hfill \\textbf{\\small #2} \\\\
   \\textit{\\small#3} \\hfill \\textit{\\small #4} \\\\
-  \\vspace{-4pt}
+  \\vspace{-2pt}
 }
 
-\\newcommand{\\resumeSubItem}[1]{\\resumeItem{#1}\\vspace{-2pt}}
+\\newcommand{\\resumeSubItem}[1]{\\resumeItem{#1}\\vspace{0pt}}
 \\newcommand{\\resumeSubHeadingListStart}{\\begin{itemize}[leftmargin=0.0in, label={}]}
-\\newcommand{\\resumeSubHeadingListEnd}{\\end{itemize}\\vspace{-3pt}}
-\\newcommand{\\resumeItemListStart}{\\begin{itemize}[itemsep=-1pt]}
-\\newcommand{\\resumeItemListEnd}{\\end{itemize}\\vspace{-3pt}}
+\\newcommand{\\resumeSubHeadingListEnd}{\\end{itemize}\\vspace{-1pt}}
+\\newcommand{\\resumeItemListStart}{\\begin{itemize}[itemsep=0pt]}
+\\newcommand{\\resumeItemListEnd}{\\end{itemize}\\vspace{-1pt}}
 
 DOCUMENT STRUCTURE:
 \\begin{document}
@@ -205,11 +209,12 @@ CRITICAL LATEX RULES (FOLLOW EXACTLY):
 - NO unicode symbols (•, →, —, –) - use plain ASCII only
 - Date format: "Mon YYYY -- Mon YYYY" (exactly two hyphens)
 - Skills section: Use plain text with commas, NO bullets or special characters
-- STRICT ONE PAGE LIMIT: Content must fit on a single page
-- Use 3-4 concise bullets per experience (NOT 4-6)
-- Limit to 2-3 most recent/relevant work experiences only
+- STRICT ONE PAGE LIMIT: Content must fit on a single page BUT MUST FILL 90-95% of the page
+- Use 4-5 detailed bullets per experience to fill the page
+- Include ALL relevant work experiences and projects to maximize page fill
 - If running long: remove Projects section, reduce bullet points, or condense Skills
-- Quality over quantity - every word must earn its place
+- If running short: expand bullets with more detail, add Projects, add relevant coursework
+- Quality AND quantity - fill the page while maintaining quality
 - NEVER use & outside of LaTeX commands - always escape as \\&
 - CONTACT INFO: ONLY include fields that exist in user data - DO NOT fabricate LinkedIn, GitHub, or website URLs
 
@@ -287,9 +292,10 @@ LATEX REQUIREMENTS:
 - NO unicode (→, —, etc.)
 - Dates: Mon YYYY -- Mon YYYY (two hyphens)
 - Skills: Plain text, commas (NO ampersands)
-- STRICT ONE PAGE LIMIT: Use 3-4 bullets/experience. Must fit on ONE page only.
-- BREVITY IS CRITICAL: If content exceeds one page, cut Projects section first, then reduce bullets.
-- Test strategy: Aim for 60-70% page fill to ensure single page with margins.
+- STRICT ONE PAGE LIMIT: Use 4-5 bullets/experience. Must fit on ONE page only.
+- FILL THE ENTIRE PAGE: Aim for 90-95% vertical page fill. Add more detail, more bullet points, or expand sections if too short.
+- If content is too short: Add Projects section, expand Education with relevant coursework, add more experience bullets
+- If content exceeds one page: Cut Projects section first, then reduce bullets to 3 per job.
 - CONTACT INFO: Only add LinkedIn/GitHub/website if present in user data. DO NOT fabricate these.
 
 STRUCTURE:
