@@ -537,7 +537,7 @@ REQUIREMENTS:
 - Include all relevant sections: contact info, summary/objective, experience, education, skills
 - Quantify achievements where possible
 - Use action verbs for bullet points
-- Keep to 1-2 pages maximum
+- CRITICAL: Must fit on exactly ONE page only (not 1-2, strictly ONE page)
 
 EXAMPLE LATEX RESUMES FOR REFERENCE:
 ${examples.map((ex, i) => `Example ${i + 1}:\n${ex}`).join('\n\n')}
