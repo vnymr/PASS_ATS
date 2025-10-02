@@ -1073,7 +1073,7 @@ app.get('/api/job/:jobId/download/:type', authenticateToken, async (req, res) =>
   }
 });
 
-// Simple status endpoint for polling if needed
+// Enhanced status endpoint with queue progress
 app.get('/api/job/:jobId/status', authenticateToken, async (req, res) => {
   try {
     const job = await prisma.job.findUnique({
@@ -1083,7 +1083,11 @@ app.get('/api/job/:jobId/status', authenticateToken, async (req, res) => {
         status: true,
         userId: true,
         createdAt: true,
-        updatedAt: true
+        updatedAt: true,
+        startedAt: true,
+        completedAt: true,
+        error: true,
+        diagnostics: true
       }
     });
 
@@ -1095,7 +1099,23 @@ app.get('/api/job/:jobId/status', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
-    res.json(job);
+    // Get queue status for additional progress info
+    const { getJobStatus } = await import('./lib/queue.js');
+    const queueStatus = await getJobStatus(req.params.jobId);
+
+    res.json({
+      id: job.id,
+      status: job.status,
+      progress: queueStatus.found ? queueStatus.progress : 0,
+      createdAt: job.createdAt,
+      updatedAt: job.updatedAt,
+      startedAt: job.startedAt,
+      completedAt: job.completedAt,
+      error: job.error,
+      diagnostics: job.diagnostics,
+      queueState: queueStatus.found ? queueStatus.state : null,
+      attemptsMade: queueStatus.attemptsMade || 0
+    });
   } catch (error) {
     console.error('Status error:', error);
     res.status(500).json({ error: 'Failed to fetch status' });
@@ -1154,6 +1174,7 @@ app.get('/api/jobs', authenticateToken, async (req, res) => {
 // Queue metrics endpoint
 app.get('/api/metrics/queue', authenticateToken, async (req, res) => {
   try {
+    const { getQueueMetrics } = await import('./lib/queue.js');
     const metrics = await getQueueMetrics();
     res.json(metrics);
   } catch (error) {
@@ -1400,8 +1421,14 @@ app.post('/api/process-job', authenticateToken, async (req, res) => {
 
     jobLogger.start(job.id, req.userId);
 
-    // Start async processing with normalized profile data
-    processJobAsyncSimplified(job.id, normalizedProfile, jobDescription);
+    // Add job to queue for async processing
+    const { addResumeJob } = await import('./lib/queue.js');
+    await addResumeJob({
+      jobId: job.id,
+      userId: req.userId,
+      profileData: normalizedProfile,
+      jobDescription
+    });
 
     // Return immediately with job ID
     res.json({ jobId: job.id });

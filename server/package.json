@@ -6,7 +6,9 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
+    "worker": "node worker.js",
     "dev": "nodemon server.js",
+    "dev:worker": "nodemon worker.js",
     "test": "NODE_ENV=test jest --runInBand --detectOpenHandles",
     "test:watch": "NODE_ENV=test jest --watch",
     "test:coverage": "NODE_ENV=test jest --coverage",
