@@ -45,9 +45,6 @@ QUICK_START.md
 # Extension (if not needed in repo)
 extension/
 
-# Server routes (if temporary)
-server/routes/
-
 # Temp files
 *.tmp
 *.temp
