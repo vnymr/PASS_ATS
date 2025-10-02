@@ -20,6 +20,8 @@ import dataValidator from './lib/utils/dataValidator.js';
 import ResumeParser from './lib/resume-parser.js';
 // Import LaTeX compiler
 import { compileLatex } from './lib/latex-compiler.js';
+// Import production logger
+import logger, { authLogger, jobLogger, requestLogger, compileLogger, aiLogger } from './lib/logger.js';
 
 // Load environment variables - .env first, then .env.local to override
 dotenv.config();
@@ -78,16 +80,10 @@ const corsOptions = {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
 
-    console.log('CORS check - Origin:', origin);
-    console.log('CORS check - Allowed origins:', config.server.allowedOrigins);
+    const allowed = config.server.allowedOrigins.indexOf(origin) !== -1;
+    requestLogger.cors(origin, allowed);
 
-    if (config.server.allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      console.warn('⚠️ CORS blocked origin:', origin);
-      // Don't throw error, just reject with false
-      callback(null, false);
-    }
+    callback(null, allowed);
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
@@ -148,25 +144,25 @@ const authenticateToken = async (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
-  console.log('🔐 Auth attempt:', {
+  authLogger.attempt({
     hasAuthHeader: !!authHeader,
     hasToken: !!token,
-    tokenPrefix: token ? token.substring(0, 20) + '...' : 'none',
     hasClerkClient: !!clerkClient
   });
 
   if (!token) {
-    console.log('❌ No token provided');
+    authLogger.failure('No token provided', 'none');
     return res.status(401).json({ error: 'Access token required' });
   }
 
   // Try Clerk authentication first if available
   if (clerkClient) {
     try {
-      console.log('🔍 Attempting Clerk verification...');
-      // Verify the Clerk session token
-      const sessionClaims = await clerkClient.verifyToken(token);
-      console.log('✅ Clerk verification successful:', sessionClaims.sub);
+      // Verify the Clerk session token with options to handle expiration
+      const sessionClaims = await clerkClient.verifyToken(token, {
+        // Allow some clock skew (5 minutes) to handle minor time sync issues
+        clockSkewInMs: 300000
+      });
 
       // Get or create user in our database
       let user = await prisma.user.findUnique({
@@ -186,22 +182,30 @@ const authenticateToken = async (req, res, next) => {
 
       req.user = { id: user.id, email: user.email, clerkId: user.clerkId };
       req.userId = user.id;
+      authLogger.success(user.id, 'clerk');
       return next();
     } catch (clerkError) {
-      console.log('⚠️ Clerk auth failed:', clerkError.message);
-      // Fall through to legacy JWT auth
+      // If token is expired, return 401 with specific error for client to refresh
+      if (clerkError.message && clerkError.message.includes('expired')) {
+        authLogger.tokenExpired(clerkError.message);
+        return res.status(401).json({
+          error: 'Token expired',
+          code: 'TOKEN_EXPIRED',
+          message: 'Your session has expired. Please refresh the page.'
+        });
+      }
+
+      authLogger.failure(clerkError.message, 'clerk');
+      // For other Clerk errors, fall through to legacy JWT auth
     }
   }
 
   // Legacy JWT authentication
-  console.log('🔑 Attempting legacy JWT verification...');
   jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
     if (err) {
-      console.log('❌ JWT verification failed:', err.message);
+      authLogger.failure(err.message, 'jwt');
       return res.status(403).json({ error: 'Invalid or expired token' });
     }
-
-    console.log('✅ JWT verification successful for user:', decoded.id);
 
     // For legacy tokens, ensure user exists
     const user = await prisma.user.findUnique({
@@ -209,11 +213,13 @@ const authenticateToken = async (req, res, next) => {
     });
 
     if (!user) {
+      authLogger.failure('User not found', 'jwt');
       return res.status(403).json({ error: 'User not found' });
     }
 
     req.user = decoded;
     req.userId = decoded.id;
+    authLogger.success(decoded.id, 'jwt');
     next();
   });
 };
@@ -1302,15 +1308,12 @@ app.post('/api/process-job', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Job description too short. Please provide more details.' });
     }
 
-    console.log(`\n${'='.repeat(80)}`);
-    console.log(`🚀 NEW JOB REQUEST - User ${req.userId}`);
-    console.log(`${'='.repeat(80)}`);
-    console.log(`📋 Request body:`, {
+    logger.info({
+      userId: req.userId,
       jobDescriptionLength: jobDescription.length,
-      jobDescriptionPreview: jobDescription.substring(0, 100) + '...',
-      aiMode: aiMode || 'not specified',
-      matchMode: matchMode || 'not specified'
-    });
+      aiMode: aiMode || 'gpt-5-mini',
+      matchMode: matchMode || 'standard'
+    }, 'New job request');
 
     // Get user's profile data
     const profile = await prisma.profile.findUnique({
@@ -1336,19 +1339,16 @@ app.post('/api/process-job', authenticateToken, async (req, res) => {
 
     // Detailed profile validation
     const profileData = profile.data;
-    console.log(`\n📊 PROFILE DATA ANALYSIS:`);
-    console.log(`├─ Personal Info:`);
-    console.log(`│  ├─ Name: ${profileData.name || 'MISSING'}`);
-    console.log(`│  ├─ Email: ${profileData.email || 'MISSING'}`);
-    console.log(`│  ├─ Phone: ${profileData.phone || 'MISSING'}`);
-    console.log(`│  └─ Location: ${profileData.location || 'MISSING'}`);
-    console.log(`├─ Professional Data:`);
-    console.log(`│  ├─ Experiences: ${(profileData.experiences || profileData.experience || []).length} items`);
-    console.log(`│  ├─ Skills: ${(profileData.skills || []).length} items`);
-    console.log(`│  ├─ Education: ${(profileData.education || []).length} items`);
-    console.log(`│  ├─ Projects: ${(profileData.projects || []).length} items`);
-    console.log(`│  └─ Resume Text: ${profileData.resumeText ? `${profileData.resumeText.length} chars` : 'NONE'}`);
-    console.log(`└─ Additional Info: ${profileData.additionalInfo ? `${profileData.additionalInfo.length} chars` : 'NONE'}`);
+    logger.debug({
+      hasName: !!profileData.name,
+      hasEmail: !!profileData.email,
+      experiences: (profileData.experiences || profileData.experience || []).length,
+      skills: (profileData.skills || []).length,
+      education: (profileData.education || []).length,
+      projects: (profileData.projects || []).length,
+      hasResumeText: !!profileData.resumeText,
+      hasAdditionalInfo: !!profileData.additionalInfo
+    }, 'Profile data validation');
 
     // Check minimum data requirements
     const hasExperience = (profileData.experiences || profileData.experience || []).length > 0;
@@ -1377,8 +1377,7 @@ app.post('/api/process-job', authenticateToken, async (req, res) => {
       certifications: profileData.certifications || []
     };
 
-    console.log(`\n✅ Profile validation passed`);
-    console.log(`📦 Normalized profile ready for LLM (${JSON.stringify(normalizedProfile).length} chars)`);
+    logger.info({ profileSize: JSON.stringify(normalizedProfile).length }, 'Profile validated and normalized');
 
     // Create the job record
     const job = await prisma.job.create({
@@ -1399,8 +1398,7 @@ app.post('/api/process-job', authenticateToken, async (req, res) => {
       }
     });
 
-    console.log(`\n✅ Job ${job.id} created and queued`);
-    console.log(`${'='.repeat(80)}\n`);
+    jobLogger.start(job.id, req.userId);
 
     // Start async processing with normalized profile data
     processJobAsyncSimplified(job.id, normalizedProfile, jobDescription);
@@ -1423,47 +1421,22 @@ async function processJobAsyncSimplified(jobId, profileData, jobDescription) {
   const startTime = Date.now();
 
   try {
-    console.log(`\n${'─'.repeat(80)}`);
-    console.log(`🤖 ASYNC PROCESSING STARTED - Job ${jobId}`);
-    console.log(`${'─'.repeat(80)}`);
-
     // Update job status
     await prisma.job.update({
       where: { id: jobId },
       data: { status: 'PROCESSING', startedAt: new Date() }
     });
 
-    // Detailed data inspection before sending to LLM
-    console.log(`\n📊 DATA BEING SENT TO LLM:`);
-    console.log(`├─ Profile Data:`);
-    console.log(`│  ├─ Name: "${profileData.name || 'NOT PROVIDED'}"`);
-    console.log(`│  ├─ Email: "${profileData.email || 'NOT PROVIDED'}"`);
-    console.log(`│  ├─ Phone: "${profileData.phone || 'NOT PROVIDED'}"`);
-    console.log(`│  ├─ Location: "${profileData.location || 'NOT PROVIDED'}"`);
-    console.log(`│  ├─ Experience items: ${(profileData.experience || []).length}`);
-    console.log(`│  ├─ Skills: ${(profileData.skills || []).length}`);
-    console.log(`│  ├─ Education: ${(profileData.education || []).length}`);
-    console.log(`│  ├─ Projects: ${(profileData.projects || []).length}`);
-    console.log(`│  ├─ Additional Info: ${profileData.additionalInfo ? profileData.additionalInfo.length + ' chars' : 'none'}`);
-    console.log(`│  └─ Resume Text: ${profileData.resumeText ? profileData.resumeText.length + ' chars' : 'none'}`);
-
-    if (profileData.experience && profileData.experience.length > 0) {
-      console.log(`│`);
-      console.log(`│  📌 First experience: ${profileData.experience[0].title || profileData.experience[0].role || 'untitled'} at ${profileData.experience[0].company || 'unknown'}`);
-    }
-
-    if (profileData.additionalInfo && profileData.additionalInfo.length > 100) {
-      console.log(`│  📝 Additional context preview: "${profileData.additionalInfo.substring(0, 100)}..."`);
-    }
-
     // Prepare data for LLM - pass everything as structured JSON
     const userDataForLLM = JSON.stringify(profileData, null, 2);
-    console.log(`\n📦 Total profile data size: ${userDataForLLM.length} characters`);
-    console.log(`📝 Job description length: ${jobDescription.length} characters`);
-
-    // Show a sample of what's being sent
-    console.log(`\n📄 Sample of profile data being sent to LLM:`);
-    console.log(userDataForLLM.substring(0, 500) + '...\n');
+    logger.debug({
+      jobId,
+      profileDataSize: userDataForLLM.length,
+      jobDescriptionSize: jobDescription.length,
+      hasName: !!profileData.name,
+      experienceCount: (profileData.experience || []).length,
+      skillsCount: (profileData.skills || []).length
+    }, 'Preparing LLM request');
 
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -1473,31 +1446,23 @@ async function processJobAsyncSimplified(jobId, profileData, jobDescription) {
 
     let genTime = 0;
     if (latexCode) {
-      console.log(`💾 Using cached LaTeX (skipped LLM call)`);
+      logger.info({ jobId, cached: true }, 'Using cached LaTeX');
     } else {
       // Initial generation
-      console.log(`🧠 Calling gpt-5-mini...`);
+      aiLogger.request('gpt-5-mini', 'resume_generation');
       const genStart = Date.now();
       latexCode = await generateLatexWithLLM(openai, userDataForLLM, jobDescription);
       genTime = Date.now() - genStart;
-      console.log(`✅ LaTeX generation completed in ${(genTime / 1000).toFixed(2)}s`);
+      logger.info({ jobId, genTimeMs: genTime, latexSize: latexCode.length }, 'LaTeX generation completed');
 
       // Cache the result
       latexCache.set(jobDescription, profileData, latexCode);
     }
-    console.log(`📄 Generated LaTeX: ${latexCode.length} characters`);
-
-    // Show first 300 chars of generated LaTeX to verify it has user's actual name
-    console.log(`\n📋 First 300 chars of generated LaTeX:`);
-    console.log(latexCode.substring(0, 300));
 
     // Verify the LaTeX contains the user's actual name (if provided)
     if (profileData.name && profileData.name !== 'Candidate' && profileData.name.trim()) {
-      if (latexCode.includes(profileData.name)) {
-        console.log(`✅ Verified: User's name "${profileData.name}" found in LaTeX`);
-      } else {
-        console.warn(`⚠️  WARNING: User's name "${profileData.name}" NOT found in generated LaTeX!`);
-        console.warn(`   This might indicate LLM didn't properly extract user data`);
+      if (!latexCode.includes(profileData.name)) {
+        logger.warn({ jobId, expectedName: profileData.name }, 'User name not found in generated LaTeX');
       }
     }
 
@@ -1505,17 +1470,19 @@ async function processJobAsyncSimplified(jobId, profileData, jobDescription) {
     let pdfBuffer = null;
     while (attempt < MAX_RETRIES && !pdfBuffer) {
       attempt++;
-      console.log(`\n🔨 Compilation attempt ${attempt}/${MAX_RETRIES}`);
+      compileLogger.start(jobId, attempt);
 
       try {
         const compileStart = Date.now();
         pdfBuffer = await compileLatex(latexCode);
         const compileTime = Date.now() - compileStart;
-        console.log(`✅ PDF compiled successfully on attempt ${attempt} (${(compileTime / 1000).toFixed(2)}s)`);
-        console.log(`📊 PDF size: ${(pdfBuffer.length / 1024).toFixed(2)} KB`);
+        compileLogger.success(jobId, {
+          attempt,
+          compileTimeMs: compileTime,
+          pdfSizeKB: (pdfBuffer.length / 1024).toFixed(2)
+        });
       } catch (compileError) {
-        console.log(`❌ Compilation failed: ${compileError.message}`);
-        console.log(`📋 Error details:`, compileError.stack ? compileError.stack.split('\n').slice(0, 3).join('\n') : 'No stack trace');
+        compileLogger.failed(jobId, compileError.message, attempt);
 
         // Check if this is a LaTeX error (fixable) or a code/system error (not fixable)
         const isLatexError = compileError.message.includes('LaTeX') ||
@@ -1535,17 +1502,15 @@ async function processJobAsyncSimplified(jobId, profileData, jobDescription) {
         }
 
         if (attempt < MAX_RETRIES && isLatexError) {
-          console.log(`\n🔄 Sending LaTeX error back to LLM for fixing (attempt ${attempt + 1}/${MAX_RETRIES})...`);
+          compileLogger.retry(jobId, attempt + 1);
           const fixStart = Date.now();
 
           try {
             latexCode = await fixLatexWithLLM(openai, latexCode, compileError.message);
             const fixTime = Date.now() - fixStart;
-            console.log(`✅ LLM returned fixed LaTeX in ${(fixTime / 1000).toFixed(2)}s`);
-            console.log(`📋 Fixed LaTeX preview (first 200 chars): ${latexCode.substring(0, 200)}`);
+            logger.info({ jobId, fixTimeMs: fixTime }, 'LLM returned fixed LaTeX');
           } catch (fixError) {
-            console.error(`❌ LLM fix attempt failed: ${fixError.message}`);
-            console.error(`📋 Full error:`, fixError);
+            logger.error({ jobId, error: fixError.message }, 'LLM fix attempt failed');
             throw new Error(`Failed to fix LaTeX: ${fixError.message}. Original error: ${compileError.message}`);
           }
         } else {
@@ -1555,7 +1520,7 @@ async function processJobAsyncSimplified(jobId, profileData, jobDescription) {
     }
 
     // Save artifacts
-    console.log(`\n💾 Saving artifacts to database...`);
+    logger.debug({ jobId }, 'Saving artifacts to database');
     await prisma.artifact.create({
       data: {
         jobId,
@@ -1568,7 +1533,6 @@ async function processJobAsyncSimplified(jobId, profileData, jobDescription) {
         }
       }
     });
-    console.log(`✅ PDF artifact saved`);
 
     await prisma.artifact.create({
       data: {
@@ -1581,7 +1545,6 @@ async function processJobAsyncSimplified(jobId, profileData, jobDescription) {
         }
       }
     });
-    console.log(`✅ LaTeX artifact saved`);
 
     // Mark job as completed
     const totalTime = Date.now() - startTime;
@@ -1601,22 +1564,15 @@ async function processJobAsyncSimplified(jobId, profileData, jobDescription) {
       }
     });
 
-    console.log(`\n${'─'.repeat(80)}`);
-    console.log(`✅ JOB COMPLETED SUCCESSFULLY - ${jobId}`);
-    console.log(`⏱️  Total time: ${(totalTime / 1000).toFixed(2)}s`);
-    console.log(`🔢 Compilation attempts: ${attempt}`);
-    console.log(`${'─'.repeat(80)}\n`);
+    jobLogger.complete(jobId, {
+      totalTimeMs: totalTime,
+      attempts: attempt,
+      pdfSizeKB: (pdfBuffer.length / 1024).toFixed(2)
+    });
 
   } catch (error) {
     const totalTime = Date.now() - startTime;
-    console.error(`\n${'─'.repeat(80)}`);
-    console.error(`❌ JOB FAILED - ${jobId}`);
-    console.error(`${'─'.repeat(80)}`);
-    console.error(`Error: ${error.message}`);
-    console.error(`Time before failure: ${(totalTime / 1000).toFixed(2)}s`);
-    console.error(`Attempts made: ${attempt}`);
-    console.error(`Stack trace:`, error.stack);
-    console.error(`${'─'.repeat(80)}\n`);
+    jobLogger.failed(jobId, error);
 
     await prisma.job.update({
       where: { id: jobId },
@@ -1703,14 +1659,13 @@ async function generateLatexWithLLM(openai, userDataJSON, jobDescription, onProg
 
   // Log cache usage for monitoring
   if (response.usage) {
-    const { prompt_tokens, completion_tokens, total_tokens } = response.usage;
     const cached_tokens = response.usage.prompt_tokens_details?.cached_tokens || 0;
-
-    console.log(`🔍 Token Usage:
-    - Prompt tokens: ${prompt_tokens}
-    - Cached tokens: ${cached_tokens} (${cached_tokens > 0 ? `💰 ${((cached_tokens / prompt_tokens) * 100).toFixed(1)}% cached!` : 'no cache hit'})
-    - Completion tokens: ${completion_tokens}
-    - Total tokens: ${total_tokens}`);
+    aiLogger.response('gpt-5-mini', {
+      prompt_tokens: response.usage.prompt_tokens,
+      completion_tokens: response.usage.completion_tokens,
+      total_tokens: response.usage.total_tokens,
+      cached_tokens
+    });
   }
 
   let latex = response.choices[0].message.content.trim();
@@ -1718,7 +1673,6 @@ async function generateLatexWithLLM(openai, userDataJSON, jobDescription, onProg
   // Clean markdown code blocks if present
   latex = latex.replace(/^```latex?\n?/gm, '').replace(/\n?```$/gm, '').replace(/^```.*$/gm, '');
 
-  console.log(`📝 Generated LaTeX (${latex.length} chars)`);
   return latex;
 }
 
@@ -1726,7 +1680,7 @@ async function generateLatexWithLLM(openai, userDataJSON, jobDescription, onProg
  * Fix LaTeX errors using LLM
  */
 async function fixLatexWithLLM(openai, brokenLatex, errorMessage) {
-  console.log(`🔧 Asking LLM to fix: ${errorMessage.substring(0, 200)}`);
+  logger.debug({ error: errorMessage.substring(0, 200) }, 'Requesting LaTeX fix from LLM');
 
   const response = await openai.chat.completions.create({
     model: 'gpt-5-mini',
@@ -1805,20 +1759,18 @@ Fix the error and return the corrected LaTeX code.`
 
   // Log cache usage for monitoring
   if (response.usage) {
-    const { prompt_tokens, completion_tokens, total_tokens } = response.usage;
     const cached_tokens = response.usage.prompt_tokens_details?.cached_tokens || 0;
-
-    console.log(`🔍 Fix Token Usage:
-    - Prompt tokens: ${prompt_tokens}
-    - Cached tokens: ${cached_tokens} (${cached_tokens > 0 ? `💰 ${((cached_tokens / prompt_tokens) * 100).toFixed(1)}% cached!` : 'no cache hit'})
-    - Completion tokens: ${completion_tokens}
-    - Total tokens: ${total_tokens}`);
+    aiLogger.response('gpt-5-mini', {
+      prompt_tokens: response.usage.prompt_tokens,
+      completion_tokens: response.usage.completion_tokens,
+      total_tokens: response.usage.total_tokens,
+      cached_tokens
+    });
   }
 
   let fixedLatex = response.choices[0].message.content.trim();
   fixedLatex = fixedLatex.replace(/^```latex?\n?/gm, '').replace(/\n?```$/gm, '').replace(/^```.*$/gm, '');
 
-  console.log(`✅ LLM returned fixed LaTeX (${fixedLatex.length} chars)`);
   return fixedLatex;
 }
 

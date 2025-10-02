@@ -29,10 +29,10 @@ async function compileLatex(latexCode) {
     await fs.writeFile(texFile, latexCode);
 
     // Try to compile with different engines in order of preference
-    // Include full path for tectonic on Mac (homebrew installation)
     const compilers = [
-      { cmd: '/opt/homebrew/bin/tectonic', args: '--outdir . --keep-logs resume.tex', name: 'tectonic (homebrew)' },
       { cmd: 'tectonic', args: '--outdir . --keep-logs resume.tex', name: 'tectonic' },
+      { cmd: '/opt/homebrew/bin/tectonic', args: '--outdir . --keep-logs resume.tex', name: 'tectonic (homebrew)' },
+      { cmd: '/usr/local/bin/tectonic', args: '--outdir . --keep-logs resume.tex', name: 'tectonic (usr/local)' },
       { cmd: 'pdflatex', args: '-interaction=nonstopmode -output-directory=. resume.tex', name: 'pdflatex' },
       { cmd: 'xelatex', args: '-interaction=nonstopmode -output-directory=. resume.tex', name: 'xelatex' }
     ];
@@ -42,16 +42,29 @@ async function compileLatex(latexCode) {
 
     for (const compiler of compilers) {
       try {
-        // Check if compiler exists (skip 'which' check for absolute paths)
-        if (!compiler.cmd.startsWith('/')) {
-          await execAsync(`which ${compiler.cmd}`);
+        // For absolute paths, check if file exists before trying
+        if (compiler.cmd.startsWith('/')) {
+          try {
+            await execAsync(`test -f ${compiler.cmd}`);
+          } catch {
+            // Binary doesn't exist at this path, skip silently
+            continue;
+          }
+        } else {
+          // For relative paths, use 'which' to check availability
+          try {
+            await execAsync(`which ${compiler.cmd}`);
+          } catch {
+            // Command not in PATH, skip silently
+            continue;
+          }
         }
 
         // Run compilation (twice for references)
         const result = await execAsync(`cd ${tempDir} && ${compiler.cmd} ${compiler.args}`);
 
         // Some compilers need a second pass for references
-        if (compiler.cmd !== 'tectonic') {
+        if (!compiler.name.includes('tectonic')) {
           await execAsync(`cd ${tempDir} && ${compiler.cmd} ${compiler.args}`);
         }
 
@@ -60,18 +73,14 @@ async function compileLatex(latexCode) {
         break;
       } catch (error) {
         lastError = error;
-        // Log tectonic errors for debugging
-        if (compiler.cmd === '/opt/homebrew/bin/tectonic' || compiler.name === 'tectonic') {
-          console.log(`⚠️ Tectonic compilation failed: ${error.message.substring(0, 300)}`);
-          // Show stderr if available (contains LaTeX errors)
-          if (error.stderr && error.stderr.length > 0) {
-            console.log(`📋 Stderr output:`, error.stderr.substring(0, 500));
+        // Only log errors that aren't about missing binaries
+        if (error.message && !error.message.includes('not found') && !error.message.includes('ENOENT')) {
+          if (compiler.name.includes('tectonic')) {
+            console.log(`⚠️ ${compiler.name} compilation failed: ${error.message.substring(0, 200)}`);
+            if (error.stderr && error.stderr.length > 0) {
+              console.log(`📋 Stderr: ${error.stderr.substring(0, 300)}`);
+            }
           }
-          if (error.stdout && error.stdout.length > 0) {
-            console.log(`📋 Stdout output:`, error.stdout.substring(0, 500));
-          }
-        } else if (!compiled) {
-          console.log(`⚠️ ${compiler.name || compiler.cmd} not available, trying next...`);
         }
         continue;
       }
