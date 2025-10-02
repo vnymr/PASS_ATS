@@ -1160,7 +1160,7 @@ app.get('/api/metrics/queue', authenticateToken, async (req, res) => {
 // HTML-based resume generation endpoint
 app.post('/api/generate-html', authenticateToken, async (req, res) => {
   try {
-    const { jobDescription, aiMode = 'gpt-5-mini', outputFormat = 'html' } = req.body;
+    const { jobDescription, aiMode = 'gpt-4o-mini', outputFormat = 'html' } = req.body;
 
     if (!jobDescription) {
       return res.status(400).json({ error: 'Job description required' });
@@ -1467,12 +1467,24 @@ async function processJobAsyncSimplified(jobId, profileData, jobDescription) {
 
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-    // Initial generation
-    console.log(`🧠 Calling gpt-5-mini (no reasoning effort for speed)...`);
-    const genStart = Date.now();
-    let latexCode = await generateLatexWithLLM(openai, userDataForLLM, jobDescription);
-    const genTime = Date.now() - genStart;
-    console.log(`✅ LaTeX generation completed in ${(genTime / 1000).toFixed(2)}s`);
+    // Check cache first
+    const { latexCache } = await import('./lib/latex-cache.js');
+    let latexCode = latexCache.get(jobDescription, profileData);
+
+    let genTime = 0;
+    if (latexCode) {
+      console.log(`💾 Using cached LaTeX (skipped LLM call)`);
+    } else {
+      // Initial generation
+      console.log(`🧠 Calling gpt-5-mini...`);
+      const genStart = Date.now();
+      latexCode = await generateLatexWithLLM(openai, userDataForLLM, jobDescription);
+      genTime = Date.now() - genStart;
+      console.log(`✅ LaTeX generation completed in ${(genTime / 1000).toFixed(2)}s`);
+
+      // Cache the result
+      latexCache.set(jobDescription, profileData, latexCode);
+    }
     console.log(`📄 Generated LaTeX: ${latexCode.length} characters`);
 
     // Show first 300 chars of generated LaTeX to verify it has user's actual name
@@ -1525,9 +1537,17 @@ async function processJobAsyncSimplified(jobId, profileData, jobDescription) {
         if (attempt < MAX_RETRIES && isLatexError) {
           console.log(`\n🔄 Sending LaTeX error back to LLM for fixing (attempt ${attempt + 1}/${MAX_RETRIES})...`);
           const fixStart = Date.now();
-          latexCode = await fixLatexWithLLM(openai, latexCode, compileError.message);
-          const fixTime = Date.now() - fixStart;
-          console.log(`✅ LLM returned fixed LaTeX in ${(fixTime / 1000).toFixed(2)}s`);
+
+          try {
+            latexCode = await fixLatexWithLLM(openai, latexCode, compileError.message);
+            const fixTime = Date.now() - fixStart;
+            console.log(`✅ LLM returned fixed LaTeX in ${(fixTime / 1000).toFixed(2)}s`);
+            console.log(`📋 Fixed LaTeX preview (first 200 chars): ${latexCode.substring(0, 200)}`);
+          } catch (fixError) {
+            console.error(`❌ LLM fix attempt failed: ${fixError.message}`);
+            console.error(`📋 Full error:`, fixError);
+            throw new Error(`Failed to fix LaTeX: ${fixError.message}. Original error: ${compileError.message}`);
+          }
         } else {
           throw new Error(`Failed to compile after ${MAX_RETRIES} attempts. Last error: ${compileError.message}`);
         }
@@ -1543,7 +1563,7 @@ async function processJobAsyncSimplified(jobId, profileData, jobDescription) {
         content: pdfBuffer,
         metadata: {
           attempts: attempt,
-          model: 'gpt-5-mini',
+          model: 'gpt-4o-mini',
           pdfSizeKB: (pdfBuffer.length / 1024).toFixed(2)
         }
       }
@@ -1573,7 +1593,7 @@ async function processJobAsyncSimplified(jobId, profileData, jobDescription) {
         diagnostics: {
           completedAt: new Date().toISOString(),
           attempts: attempt,
-          model: 'gpt-5-mini',
+          model: 'gpt-4o-mini',
           totalTimeSeconds: (totalTime / 1000).toFixed(2),
           pdfSizeKB: (pdfBuffer.length / 1024).toFixed(2),
           success: true
@@ -1617,88 +1637,81 @@ async function processJobAsyncSimplified(jobId, profileData, jobDescription) {
 }
 
 /**
- * Generate LaTeX using gpt-5-mini with ultrathink
+ * Generate LaTeX using gpt-4o-mini (fastest model)
+ * Uses prompts from simple-prompt-builder.js (which now delegates to enhanced-prompt-builder.js)
  */
-async function generateLatexWithLLM(openai, userDataJSON, jobDescription) {
+async function generateLatexWithLLM(openai, userDataJSON, jobDescription, onProgress = null) {
+  // Import simple prompt builder (which uses enhanced prompts internally)
+  const { buildSimpleSystemPrompt, buildSimpleUserPrompt } = await import('./lib/simple-prompt-builder.js');
+
+  const systemPrompt = buildSimpleSystemPrompt();
+  const userPrompt = buildSimpleUserPrompt(userDataJSON, jobDescription, {});
+
+  // Use streaming if progress callback provided
+  if (onProgress) {
+    const stream = await openai.chat.completions.create({
+      model: 'gpt-5-mini',
+      messages: [
+        {
+          role: 'system',
+          content: systemPrompt
+        },
+        {
+          role: 'user',
+          content: userPrompt
+        }
+      ],
+      stream: true
+    });
+
+    let latex = '';
+    let chunkCount = 0;
+
+    for await (const chunk of stream) {
+      const content = chunk.choices[0]?.delta?.content || '';
+      latex += content;
+      chunkCount++;
+
+      // Report progress every 10 chunks
+      if (chunkCount % 10 === 0 && onProgress) {
+        onProgress({ type: 'generating', progress: Math.min(90, chunkCount * 2) });
+      }
+    }
+
+    console.log(`📝 Streamed LaTeX (${latex.length} chars)`);
+
+    // Clean markdown code blocks
+    latex = latex.replace(/^```latex?\n?/gm, '').replace(/\n?```$/gm, '').replace(/^```.*$/gm, '');
+    return latex;
+  }
+
+  // Non-streaming fallback
   const response = await openai.chat.completions.create({
     model: 'gpt-5-mini',
     messages: [
       {
         role: 'system',
-        content: [
-          {
-            type: 'text',
-            text: `You are an expert ATS-optimized resume writer and LaTeX developer specializing in tailoring resumes for specific roles.
-
-YOUR TASK:
-Analyze ALL available user data (structured fields, resumeText, additionalInfo) and the target job description to create a strategically optimized resume that:
-1. Passes ATS systems with proper keyword matching
-2. Highlights the most relevant experiences for THIS specific role
-3. Reframes accomplishments to align with the job requirements
-4. Uses the candidate's ACTUAL information (never invent or hallucinate)
-
-DATA SOURCES TO USE:
-- name, email, phone, location (use exactly as provided)
-- experiences[] - Work history with companies, roles, dates, and accomplishments
-- skills[] - Technical and soft skills
-- projects[] - Side projects and portfolio work
-- education[] - Degrees and certifications
-- resumeText - Full resume context (may contain additional details)
-- additionalInfo - Extra context the user provided (use this to understand background)
-- summary - Professional summary
-
-INTELLIGENT TAILORING STRATEGY:
-1. **Keyword Optimization**: Extract key requirements from the job description (technologies, methodologies, soft skills) and ensure they appear naturally if the user has that experience
-2. **Experience Selection**: Prioritize experiences most relevant to the target role. If applying to a sales role but user has tech background, emphasize client-facing work, revenue impact, stakeholder communication
-3. **Bullet Reframing**: Rewrite experience bullets to emphasize aspects most relevant to the job (e.g., for PM role: decision-making, roadmap, metrics; for engineering role: architecture, scalability, performance)
-4. **Skills Matching**: Place job-relevant skills prominently
-5. **Additional Context**: Use additionalInfo to fill gaps or understand the user's career narrative
-
-ATS REQUIREMENTS:
-- Use standard section headers: Summary, Experience, Projects, Education, Skills
-- No graphics, tables, or complex formatting
-- Clean LaTeX with standard fonts
-- Keywords from job description naturally integrated
-- Quantified achievements (numbers, percentages, scale)
-
-OUTPUT RULES:
-- Output ONLY valid LaTeX code - no markdown, no explanations
-- Include \\documentclass, \\begin{document}, and \\end{document}
-- Use 10pt article class with tight margins for 1-page fit
-- Use user's ACTUAL name (never "Candidate" or generic names)
-- Never invent experiences, companies, or metrics not in the data`,
-            cache_control: { type: 'ephemeral' }
-          }
-        ]
+        content: systemPrompt
       },
       {
         role: 'user',
-        content: [
-          {
-            type: 'text',
-            text: `USER PROFILE DATA (cached):
-${userDataJSON}`,
-            cache_control: { type: 'ephemeral' }
-          },
-          {
-            type: 'text',
-            text: `TARGET JOB DESCRIPTION:
-${jobDescription}
-
-Instructions:
-1. Read through ALL the user data carefully (including additionalInfo and resumeText)
-2. Identify the 3-5 most important requirements/keywords in the job description
-3. Select and reframe the user's experiences to emphasize relevant skills
-4. Ensure every bullet point is achievement-focused with quantified results
-5. Make sure the resume would pass ATS keyword matching for this specific role
-
-Generate the complete LaTeX document now.`
-          }
-        ]
+        content: userPrompt
       }
     ]
-    // Note: gpt-5-mini doesn't support temperature parameter, only default (1) is allowed
+    // Note: gpt-5-mini doesn't support temperature parameter
   });
+
+  // Log cache usage for monitoring
+  if (response.usage) {
+    const { prompt_tokens, completion_tokens, total_tokens } = response.usage;
+    const cached_tokens = response.usage.prompt_tokens_details?.cached_tokens || 0;
+
+    console.log(`🔍 Token Usage:
+    - Prompt tokens: ${prompt_tokens}
+    - Cached tokens: ${cached_tokens} (${cached_tokens > 0 ? `💰 ${((cached_tokens / prompt_tokens) * 100).toFixed(1)}% cached!` : 'no cache hit'})
+    - Completion tokens: ${completion_tokens}
+    - Total tokens: ${total_tokens}`);
+  }
 
   let latex = response.choices[0].message.content.trim();
 
@@ -1720,19 +1733,55 @@ async function fixLatexWithLLM(openai, brokenLatex, errorMessage) {
     messages: [
       {
         role: 'system',
-        content: `You are a LaTeX debugging expert. Fix the LaTeX compilation error and return the corrected LaTeX code.
+        content: `You are a LaTeX debugging expert. Fix the compilation error by escaping special characters.
 
-COMMON LATEX ERRORS AND FIXES:
-- "Missing $ inserted" → Escape special characters: _ → \_ , & → \& , % → \% , $ → \$ , # → \#
-- Unescaped underscores in text → Wrap in \texttt{} or escape with \_
-- Math mode characters outside $ $ → Either escape them or wrap in math mode
-- Undefined control sequences → Check for typos in commands
+CRITICAL: LaTeX has special characters that MUST be escaped in regular text:
+  & → \\&  (VERY common mistake in "A & B", "R&D", "marketing & sales")
+  % → \\%  (in percentages like "30%")
+  $ → \\$  (in dollar amounts)
+  # → \\#  (in numbers or tags)
+  _ → \\_  (EXTREMELY common in emails, URLs, technical terms)
+  { → \\{
+  } → \\}
+  ~ → \\textasciitilde{} or \\,\\,
+  ^ → \\textasciicircum{}
+  + → Use + directly, NEVER \\+ (correct: "200+ clients", wrong: "200\\+ clients")
 
-RULES:
-1. If error mentions "Missing $", find ALL unescaped special characters (_, &, %, $, #) and escape them
-2. Keep all content intact - don't remove information
-3. Return ONLY the corrected LaTeX code
-4. No explanations, no markdown`
+ERROR TYPES AND FIXES:
+1. "Misplaced alignment tab character &" → Find the raw & and change to \\&
+   Example: "marketing & sales" should be "marketing \\& sales"
+
+2. "Missing $ inserted" → Usually means unescaped _ or other special char
+   Example: "john_smith" should be "john\\_smith"
+
+3. "Undefined control sequence" with \\+ → Remove the backslash before +
+   Example: "200\\+ clients" should be "200+ clients"
+
+4. "Something's wrong--perhaps a missing \\item" → Empty itemize/enumerate environment
+   MUST have at least one \\resumeItem{} between \\resumeItemListStart and \\resumeItemListEnd
+   Example fix:
+   \\resumeItemListStart
+     \\resumeItem{Add content here}  ← MUST HAVE THIS
+   \\resumeItemListEnd
+
+5. "\\begin{itemize} on input line X ended by \\end{document}" → Unclosed itemize block
+   Find ALL \\resumeItemListStart and ensure EACH has a matching \\resumeItemListEnd
+   Count opening and closing: must be equal
+   Example: If you see \\resumeItemListStart without \\resumeItemListEnd, add it before \\end{document}
+
+YOUR TASK:
+1. If "ended by \\end{document}" error: Find unclosed \\resumeItemListStart or \\resumeSubHeadingListStart
+   - Add the missing \\resumeItemListEnd or \\resumeSubHeadingListEnd before \\end{document}
+   - Verify ALL opened blocks are properly closed
+2. If "missing \\item" error: Find empty \\resumeItemListStart...\\resumeItemListEnd blocks and either:
+   - Add a \\resumeItem{} with content OR
+   - Remove the entire empty itemize block
+2. If error mentions \\+: Find and remove backslash before + signs (e.g., "\\+" → "+")
+3. Scan the ENTIRE document for unescaped &, %, $, #, _, {, }, ~, ^
+4. Replace EVERY occurrence with the escaped version
+5. Pay special attention to bullet points and descriptions (most common location)
+6. Keep all other content exactly the same
+7. Return ONLY the corrected LaTeX code (no markdown fences, no explanations)`
       },
       {
         role: 'user',
@@ -1752,8 +1801,19 @@ SPECIFIC INSTRUCTIONS:
 Fix the error and return the corrected LaTeX code.`
       }
     ]
-    // Note: gpt-5-mini doesn't support temperature parameter
   });
+
+  // Log cache usage for monitoring
+  if (response.usage) {
+    const { prompt_tokens, completion_tokens, total_tokens } = response.usage;
+    const cached_tokens = response.usage.prompt_tokens_details?.cached_tokens || 0;
+
+    console.log(`🔍 Fix Token Usage:
+    - Prompt tokens: ${prompt_tokens}
+    - Cached tokens: ${cached_tokens} (${cached_tokens > 0 ? `💰 ${((cached_tokens / prompt_tokens) * 100).toFixed(1)}% cached!` : 'no cache hit'})
+    - Completion tokens: ${completion_tokens}
+    - Total tokens: ${total_tokens}`);
+  }
 
   let fixedLatex = response.choices[0].message.content.trim();
   fixedLatex = fixedLatex.replace(/^```latex?\n?/gm, '').replace(/\n?```$/gm, '').replace(/^```.*$/gm, '');
@@ -1907,7 +1967,7 @@ async function processJobAsync(jobId, userId, jobDescription, aiMode, matchMode,
       jobDescription,
       {
         targetJobTitle: role || '',
-        model: aiMode === 'gpt-5-mini' ? 'gpt-4o' : aiMode
+        model: aiMode === 'gpt-4o-mini' ? 'gpt-4o-mini' : aiMode
       }
     );
 
@@ -2096,9 +2156,13 @@ app.use((err, req, res, next) => {
 
 // NEW SIMPLIFIED AI GENERATION ENDPOINT
 import { generateResumeEndpoint, checkCompilersEndpoint } from './lib/simplified-api.js';
+import { extractJobHandler } from './routes/extract-job.js';
 
 app.post('/api/generate-ai', authenticateToken, generateResumeEndpoint);
 app.get('/api/check-compilers', authenticateToken, checkCompilersEndpoint);
+
+// Job extraction endpoint for Chrome extension
+app.post('/api/extract-job', authenticateToken, extractJobHandler);
 
 // Start server
 const PORT = config.server.port;
