@@ -94,7 +94,7 @@ export function DottedSurface({ className, ...props }: DottedSurfaceProps) {
 		scene.add(points);
 
 		let count = 0;
-		let animationId: number;
+		let animationId: number = 0;
 
 		// Animation function
 		const animate = () => {
@@ -162,11 +162,11 @@ export function DottedSurface({ className, ...props }: DottedSurfaceProps) {
 				cancelAnimationFrame(sceneRef.current.animationId);
 
 				// Clean up Three.js objects
-				sceneRef.current.scene.traverse((object) => {
+				sceneRef.current.scene.traverse((object: THREE.Object3D) => {
 					if (object instanceof THREE.Points) {
 						object.geometry.dispose();
 						if (Array.isArray(object.material)) {
-							object.material.forEach((material) => material.dispose());
+							object.material.forEach((material: THREE.Material) => material.dispose());
 						} else {
 							object.material.dispose();
 						}
