@@ -199,23 +199,8 @@ export default function DashboardModern() {
   return (
     <div className="modern-dashboard">
       <div className="modern-dashboard-container">
-        {/* Hero Section with Glass Effect */}
-        <div className="modern-hero-section">
-          <div className="modern-hero-background"></div>
-          <div className="modern-hero-content">
-            <h1 className="modern-hero-title">
-              AI Resume Generator
-              <span className="modern-hero-badge">Pro</span>
-            </h1>
-            <p className="modern-hero-subtitle">
-              Transform job descriptions into tailored resumes instantly
-            </p>
-          </div>
-
-        </div>
-
         {/* Main Generator Card */}
-        <div className="modern-generator-card">
+        <div className="modern-generator-card" style={{ marginTop: '2rem' }}>
           <div className="modern-generator-inner">
             {error && (
               <div className="modern-alert modern-alert-error">
@@ -290,13 +275,12 @@ export default function DashboardModern() {
             {/* Success Result */}
             {lastGenerated && !isGenerating && (
               <div className="modern-success-card">
-                <div className="modern-success-glow"></div>
                 <div className="modern-success-header">
                   <div className="modern-success-icon">
-                    <Icons.checkCircle size={24} />
+                    <Icons.checkCircle size={20} />
                   </div>
                   <div className="modern-success-text">
-                    <h3>Resume Generated Successfully!</h3>
+                    <h3>Resume ready</h3>
                     <p>{lastGenerated.company} • {lastGenerated.role}</p>
                   </div>
                 </div>

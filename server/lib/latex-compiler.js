@@ -131,7 +131,13 @@ async function compileLatex(latexCode) {
       }
 
       if (errorLines.length > 0) {
-        const detailedError = errorLines.join('\n');
+        // Sanitize error messages to remove system paths
+        const detailedError = errorLines.join('\n')
+          .replace(/\/tmp\/latex-[a-f0-9]+/g, '[temp]')
+          .replace(/\/Users\/[^/]+/g, '[user]')
+          .replace(/\/home\/[^/]+/g, '[user]')
+          .replace(/\/opt\/[^/\s]+/g, '[system]')
+          .replace(/\/usr\/[^/\s]+/g, '[system]');
         throw new Error(`LaTeX compilation error with context:\n${detailedError.substring(0, 1000)}`);
       }
 
@@ -147,7 +153,14 @@ async function compileLatex(latexCode) {
       }
     }
 
-    throw new Error(`LaTeX compilation failed: ${error.message}`);
+    // Sanitize the original error message as well
+    const sanitizedMessage = error.message
+      .replace(/\/tmp\/latex-[a-f0-9]+/g, '[temp]')
+      .replace(/\/Users\/[^/]+/g, '[user]')
+      .replace(/\/home\/[^/]+/g, '[user]')
+      .replace(/\/opt\/[^/\s]+/g, '[system]')
+      .replace(/\/usr\/[^/\s]+/g, '[system]');
+    throw new Error(`LaTeX compilation failed: ${sanitizedMessage}`);
   } finally {
     // Clean up temp directory
     try {

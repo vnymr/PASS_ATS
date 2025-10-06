@@ -3,6 +3,11 @@
  *
  * Handles the core logic of processing resume generation jobs.
  * Extracted from server.js processJobAsyncSimplified() for use in worker process.
+ *
+ * CONCURRENCY SAFETY:
+ * BullMQ provides built-in distributed locking via Redis to prevent duplicate processing.
+ * Each job is locked when picked up by a worker, ensuring only one worker processes it.
+ * Lock is automatically released on completion, failure, or worker crash.
  */
 
 import OpenAI from 'openai';

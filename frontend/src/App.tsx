@@ -14,7 +14,6 @@ import MemoryProfile from './pages/MemoryProfile';
 import GenerateResume from './pages/GenerateResume';
 import History from './pages/History';
 import Extension from './pages/Extension';
-import SettingsPage from './pages/Settings';
 
 // Layout components
 import ProtectedRoute from './layouts/ProtectedRoute';
@@ -78,13 +77,6 @@ export default function App() {
         <ProtectedRoute>
           <ModernLayout>
             <MemoryProfile />
-          </ModernLayout>
-        </ProtectedRoute>
-      } />
-      <Route path="/settings" element={
-        <ProtectedRoute>
-          <ModernLayout>
-            <SettingsPage />
           </ModernLayout>
         </ProtectedRoute>
       } />

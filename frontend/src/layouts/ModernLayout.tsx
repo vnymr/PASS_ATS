@@ -58,15 +58,6 @@ export default function ModernLayout({ children }: ModernLayoutProps) {
             </button>
 
             <button
-              className={`modern-nav-item ${location.pathname === '/settings' ? 'active' : ''}`}
-              onClick={() => navigate('/settings')}
-              aria-label="Settings"
-            >
-              <Icons.settings size={16} />
-              <span>Settings</span>
-            </button>
-
-            <button
               className={`modern-nav-item ${location.pathname === '/profile' ? 'active' : ''}`}
               onClick={() => navigate('/profile')}
               aria-label="Profile"

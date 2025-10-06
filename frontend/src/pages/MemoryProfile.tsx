@@ -325,67 +325,6 @@ export default function MemoryProfile() {
   return (
     <div className="modern-profile-page">
       <div className="modern-profile-container">
-        {/* Premium Header */}
-        <div className="modern-profile-header">
-          <div className="modern-profile-header-bg"></div>
-          <div className="modern-profile-header-content">
-            <div className="modern-profile-avatar">
-              <Icons.user size={40} />
-            </div>
-            <div className="modern-profile-info">
-              <h1 className="modern-profile-title">
-                {formData.name || 'Your Profile'}
-                <span className="modern-profile-badge">Pro</span>
-              </h1>
-              <p className="modern-profile-subtitle">
-                Enhance your professional presence with detailed information
-              </p>
-            </div>
-            <div className="modern-profile-header-actions">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".pdf,.docx,.txt"
-                onChange={handleResumeUpload}
-                style={{ display: 'none' }}
-              />
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploadingResume}
-                className="modern-profile-upload-btn"
-              >
-                {uploadingResume ? (
-                  <>
-                    <div className="modern-profile-btn-spinner"></div>
-                    <span>Parsing...</span>
-                  </>
-                ) : (
-                  <>
-                    <Icons.upload size={18} />
-                    <span>Upload Resume</span>
-                  </>
-                )}
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="modern-profile-save-btn"
-              >
-                {saving ? (
-                  <>
-                    <div className="modern-profile-btn-spinner"></div>
-                    <span>Saving...</span>
-                  </>
-                ) : (
-                  <>
-                    <Icons.check size={18} />
-                    <span>Save Profile</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
 
         {/* Modern Status Messages */}
         {error && (
@@ -555,16 +494,22 @@ export default function MemoryProfile() {
             <div className="modern-profile-section">
               <div className="modern-profile-section-header">
                 <h2 className="modern-profile-section-title">Professional Summary</h2>
-                <p className="modern-profile-section-desc">Brief overview of your professional background</p>
+                <p className="modern-profile-section-desc">Brief overview of your professional background and career objectives</p>
               </div>
               <div className="modern-profile-field-full">
                 <textarea
-                  className="modern-profile-textarea"
+                  className="modern-profile-textarea modern-profile-textarea-summary"
                   value={formData.summary}
                   onChange={(e) => setFormData({...formData, summary: e.target.value})}
-                  placeholder="Write a compelling summary of your professional experience, skills, and career objectives..."
-                  rows={8}
+                  placeholder="Write a compelling summary of your professional experience, key achievements, technical skills, and career objectives. This summary will be tailored for each job application.
+
+Example: Experienced Software Engineer with 5+ years of expertise in full-stack development, specializing in React, Node.js, and cloud technologies. Proven track record of delivering scalable solutions..."
+                  rows={12}
                 />
+                <div className="modern-profile-textarea-hint" style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Icons.info size={14} />
+                  <span>Tip: Write 3-5 sentences highlighting your experience, skills, and what makes you unique.</span>
+                </div>
               </div>
             </div>
           ) : activeTab === 'skills' ? (
@@ -675,6 +620,53 @@ export default function MemoryProfile() {
               </div>
             </div>
           )}
+        </div>
+
+        {/* Sticky Bottom Actions Bar */}
+        <div className="modern-profile-sticky-actions">
+          <div className="modern-profile-actions-container">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.docx,.txt"
+              onChange={handleResumeUpload}
+              style={{ display: 'none' }}
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploadingResume}
+              className="modern-profile-action-btn modern-profile-action-upload"
+            >
+              {uploadingResume ? (
+                <>
+                  <div className="modern-profile-btn-spinner"></div>
+                  <span>Parsing Resume...</span>
+                </>
+              ) : (
+                <>
+                  <Icons.upload size={18} />
+                  <span>Upload Resume</span>
+                </>
+              )}
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="modern-profile-action-btn modern-profile-action-save"
+            >
+              {saving ? (
+                <>
+                  <div className="modern-profile-btn-spinner"></div>
+                  <span>Saving...</span>
+                </>
+              ) : (
+                <>
+                  <Icons.check size={18} />
+                  <span>Save Profile</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>

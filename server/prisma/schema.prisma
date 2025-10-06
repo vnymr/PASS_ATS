@@ -8,13 +8,16 @@ datasource db {
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  password  String
-  clerkId   String?  @unique
-  createdAt DateTime @default(now())
-  jobs      Job[]
-  profile   Profile?
+  id            Int              @id @default(autoincrement())
+  email         String           @unique
+  password      String
+  clerkId       String?          @unique
+  createdAt     DateTime         @default(now())
+  jobs          Job[]
+  profile       Profile?
+  subscription  Subscription?
+  usageTracking UsageTracking[]
+  payments      Payment[]
 }
 
 model Profile {
@@ -104,4 +107,72 @@ enum EmbeddingType {
   EXPERIENCE
   REQUIREMENT
   KEYWORD
+}
+
+model Subscription {
+  id                   String             @id @default(cuid())
+  userId               Int                @unique
+  stripeCustomerId     String?            @unique
+  stripeSubscriptionId String?            @unique
+  tier                 SubscriptionTier   @default(FREE)
+  status               SubscriptionStatus @default(ACTIVE)
+  currentPeriodStart   DateTime?
+  currentPeriodEnd     DateTime?
+  cancelAtPeriodEnd    Boolean            @default(false)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  user                 User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([stripeCustomerId])
+  @@index([stripeSubscriptionId])
+}
+
+model UsageTracking {
+  id               String           @id @default(cuid())
+  userId           Int
+  date             DateTime         @default(now())
+  resumesGenerated Int              @default(0)
+  dailyLimit       Int
+  tier             SubscriptionTier
+  resetAt          DateTime
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId, date])
+}
+
+model Payment {
+  id              String        @id @default(cuid())
+  userId          Int
+  stripePaymentId String        @unique
+  amount          Int
+  currency        String        @default("usd")
+  status          PaymentStatus
+  description     String?
+  createdAt       DateTime      @default(now())
+  user            User          @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([stripePaymentId])
+}
+
+enum SubscriptionTier {
+  FREE
+  PRO
+  UNLIMITED
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELED
+  PAST_DUE
+  PAUSED
+  INCOMPLETE
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
 }

@@ -9,6 +9,9 @@ import { fileURLToPath } from 'url';
 import path from 'path';
 import multer from 'multer';
 import OpenAI from 'openai';
+import rateLimit from 'express-rate-limit';
+import Stripe from 'stripe';
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 // Import parse libraries
 import mammoth from 'mammoth';
 import pdfParse from 'pdf-parse/lib/pdf-parse.js';
@@ -22,6 +25,10 @@ import ResumeParser from './lib/resume-parser.js';
 import { compileLatex } from './lib/latex-compiler.js';
 // Import production logger
 import logger, { authLogger, jobLogger, requestLogger, compileLogger, aiLogger } from './lib/logger.js';
+// Import input validator
+import { validateJobDescription, validateEmail, validatePassword, sanitizeProfileData } from './lib/input-validator.js';
+// Import file validator
+import { validateUploadedFile } from './lib/file-validator.js';
 
 // Load environment variables - .env first, then .env.local to override
 dotenv.config();
@@ -34,18 +41,15 @@ if (process.env.NODE_ENV === 'production' && !process.env.DATABASE_URL) {
 
 // Initialize Clerk if keys are available
 let clerkClient = null;
-console.log('Clerk secret key check:', {
-  exists: !!process.env.CLERK_SECRET_KEY,
-  length: process.env.CLERK_SECRET_KEY ? process.env.CLERK_SECRET_KEY.length : 0,
-  startsWithSk: process.env.CLERK_SECRET_KEY ? process.env.CLERK_SECRET_KEY.startsWith('sk_') : false,
-  value: process.env.CLERK_SECRET_KEY ? process.env.CLERK_SECRET_KEY.substring(0, 10) + '...' : 'not set'
-});
+logger.info({
+  clerkConfigured: !!(process.env.CLERK_SECRET_KEY && process.env.CLERK_SECRET_KEY !== 'YOUR_CLERK_SECRET_KEY')
+}, 'Checking Clerk configuration');
 
 if (process.env.CLERK_SECRET_KEY && process.env.CLERK_SECRET_KEY !== 'YOUR_CLERK_SECRET_KEY') {
   clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
-  console.log('🔐 Clerk authentication enabled');
+  logger.info('Clerk authentication enabled');
 } else {
-  console.log('⚠️  Clerk authentication not configured, using legacy JWT auth');
+  logger.warn('Clerk authentication not configured, using legacy JWT auth');
 }
 
 const __filename = fileURLToPath(import.meta.url);
@@ -54,6 +58,37 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const upload = multer({ storage: multer.memoryStorage() });
 
+// Rate limiting configuration
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
+  message: 'Too many requests from this IP, please try again later',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // Limit each IP to 10 auth requests per windowMs
+  message: 'Too many authentication attempts, please try again later',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const jobProcessingLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 20, // Limit each IP to 20 job submissions per hour
+  message: 'Too many resume generation requests, please try again later',
+  standardHeaders: true,
+  legacyHeaders: false,
+  // Use user ID if authenticated for more accurate limiting
+  skip: (req) => false,
+  handler: (req, res) => {
+    res.status(429).json({
+      error: 'Too many resume generation requests, please try again later'
+    });
+  }
+});
 
 // Environment validation
 function validateEnvironment() {
@@ -97,6 +132,48 @@ app.use(cors(corsOptions));
 
 // Enable pre-flight for all routes
 app.options('*', cors(corsOptions));
+
+// Apply general rate limiting to all routes
+app.use(generalLimiter);
+
+// Stripe webhook - MUST come before express.json() middleware
+app.post('/api/webhooks/stripe',
+  express.raw({ type: 'application/json' }),
+  async (req, res) => {
+    const sig = req.headers['stripe-signature'];
+    let event;
+
+    try {
+      event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+    } catch (err) {
+      logger.error({ error: err.message }, 'Stripe webhook signature verification failed');
+      return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data.object;
+      const userId = parseInt(session.client_reference_id);
+      const tier = session.metadata.tier;
+
+      try {
+        await prisma.subscription.create({
+          data: {
+            userId,
+            stripeCustomerId: session.customer,
+            stripeSubscriptionId: session.subscription,
+            tier,
+            status: 'ACTIVE'
+          }
+        });
+        logger.info({ userId, tier }, 'Subscription created from webhook');
+      } catch (error) {
+        logger.error({ error: error.message }, 'Failed to create subscription from webhook');
+      }
+    }
+
+    res.json({ received: true });
+  }
+);
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -226,28 +303,37 @@ const authenticateToken = async (req, res, next) => {
 
 
 // Auth endpoints
-app.post('/api/register', async (req, res) => {
-  console.log('📝 Registration request received:', req.body.email);
+app.post('/api/register', authLimiter, async (req, res) => {
+  logger.info({ email: req.body.email?.substring(0, 3) + '***' }, 'Registration request received');
   try {
     const { email, password } = req.body;
 
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password required' });
+    // Validate email
+    const emailValidation = validateEmail(email);
+    if (!emailValidation.valid) {
+      return res.status(400).json({ error: emailValidation.errors[0] });
+    }
+
+    // Validate password
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.valid) {
+      return res.status(400).json({ error: passwordValidation.errors.join(', ') });
     }
 
     const existingUser = await prisma.user.findUnique({
-      where: { email }
+      where: { email: emailValidation.sanitized }
     });
 
     if (existingUser) {
       return res.status(409).json({ error: 'User already exists' });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    // Use 12 rounds for better security (up from 10)
+    const hashedPassword = await bcrypt.hash(password, 12);
 
     const user = await prisma.user.create({
       data: {
-        email,
+        email: emailValidation.sanitized,
         password: hashedPassword
       }
     });
@@ -258,7 +344,7 @@ app.post('/api/register', async (req, res) => {
       { expiresIn: '24h' }
     );
 
-    console.log('✅ User registered successfully:', user.email);
+    logger.info({ userId: user.id }, 'User registered successfully');
     res.status(201).json({
       token,
       user: {
@@ -267,8 +353,7 @@ app.post('/api/register', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('❌ Registration error:', error);
-    console.error('Registration error:', error);
+    logger.error({ error: error.message }, 'Registration error');
     res.status(500).json({ error: 'Registration failed' });
   }
 });
@@ -369,16 +454,22 @@ function mergeIntoTopLevel(profileData) {
   return profileData;
 }
 
-app.post('/api/login', async (req, res) => {
+app.post('/api/login', authLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password required' });
+    // Validate email
+    const emailValidation = validateEmail(email);
+    if (!emailValidation.valid) {
+      return res.status(400).json({ error: 'Invalid credentials' });
+    }
+
+    if (!password) {
+      return res.status(400).json({ error: 'Invalid credentials' });
     }
 
     const user = await prisma.user.findUnique({
-      where: { email }
+      where: { email: emailValidation.sanitized }
     });
 
     if (!user) {
@@ -396,6 +487,7 @@ app.post('/api/login', async (req, res) => {
       { expiresIn: '24h' }
     );
 
+    logger.info({ userId: user.id }, 'User logged in');
     res.json({
       token,
       user: {
@@ -404,7 +496,7 @@ app.post('/api/login', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Login error:', error);
+    logger.error({ error: error.message }, 'Login error');
     res.status(500).json({ error: 'Login failed' });
   }
 });
@@ -428,7 +520,7 @@ app.get('/api/profile', authenticateToken, async (req, res) => {
     }
 
     // Return the profile data directly, not wrapped in a profile object
-    console.log('📤 Returning profile data:', JSON.stringify(profileData, null, 2));
+    logger.debug({ userId, profileSize: JSON.stringify(profileData).length }, 'Returning profile data');
     res.json(profileData);
   } catch (error) {
     console.error('Profile fetch error:', error);
@@ -462,7 +554,7 @@ app.put('/api/profile', authenticateToken, async (req, res) => {
     };
 
     const cleanedBody = cleanData(req.body);
-    console.log('✨ Cleaned profile data:', JSON.stringify(cleanedBody, null, 2));
+    logger.debug({ userId, dataSize: JSON.stringify(cleanedBody).length }, 'Cleaned profile data');
 
     // Process additional information if present
     let processedData = cleanedBody;
@@ -635,7 +727,25 @@ app.post('/api/upload/resume', authenticateToken, resumeUpload.single('resume'),
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    console.log('📄 Processing uploaded file:', req.file.originalname);
+    // Validate file with magic number checking
+    const fileValidation = validateUploadedFile(req.file);
+    if (!fileValidation.valid) {
+      logger.warn({
+        userId: req.userId,
+        filename: req.file.originalname,
+        errors: fileValidation.errors
+      }, 'File upload validation failed');
+      return res.status(400).json({
+        error: 'File validation failed',
+        details: fileValidation.errors
+      });
+    }
+
+    logger.info({
+      userId: req.userId,
+      filename: fileValidation.sanitizedFilename,
+      detectedType: fileValidation.detectedType
+    }, 'Processing uploaded file');
     let extractedText = '';
 
     // Extract text based on file type
@@ -1225,6 +1335,61 @@ app.post('/api/generate-html', authenticateToken, async (req, res) => {
 });
 
 // ============================================
+// PAYMENT ENDPOINTS (Stripe Integration)
+// ============================================
+
+app.post('/api/create-checkout-session', authenticateToken, async (req, res) => {
+  try {
+    const { tier } = req.body;
+
+    if (!['PRO', 'UNLIMITED'].includes(tier)) {
+      return res.status(400).json({ error: 'Invalid tier' });
+    }
+
+    const priceId = tier === 'PRO'
+      ? process.env.STRIPE_PRICE_ID_PRO
+      : process.env.STRIPE_PRICE_ID_UNLIMITED;
+
+    const session = await stripe.checkout.sessions.create({
+      customer_email: req.user.email,
+      client_reference_id: req.userId.toString(),
+      mode: 'subscription',
+      line_items: [{ price: priceId, quantity: 1 }],
+      success_url: `${process.env.PUBLIC_BASE_URL}/dashboard?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.PUBLIC_BASE_URL}/pricing`,
+      metadata: { userId: req.userId, tier }
+    });
+
+    res.json({ url: session.url });
+  } catch (error) {
+    logger.error({ error: error.message }, 'Checkout creation failed');
+    res.status(500).json({ error: 'Failed to create checkout session' });
+  }
+});
+
+app.get('/api/subscription', authenticateToken, async (req, res) => {
+  try {
+    const subscription = await prisma.subscription.findUnique({
+      where: { userId: req.userId }
+    });
+
+    if (!subscription) {
+      return res.json({ tier: 'FREE', status: 'ACTIVE', dailyLimit: 5 });
+    }
+
+    const dailyLimits = { FREE: 5, PRO: 30, UNLIMITED: 999999 };
+    res.json({
+      tier: subscription.tier,
+      status: subscription.status,
+      dailyLimit: dailyLimits[subscription.tier]
+    });
+  } catch (error) {
+    logger.error({ error: error.message }, 'Failed to fetch subscription');
+    res.status(500).json({ error: 'Failed to fetch subscription' });
+  }
+});
+
+// ============================================
 // NEW CLERK FRONTEND REQUIRED ENDPOINTS
 // ============================================
 
@@ -1316,22 +1481,22 @@ app.get('/api/quota', authenticateToken, async (req, res) => {
  * POST /api/process-job - Start a new resume generation job (PRODUCTION-READY)
  * Required by: Dashboard.tsx, DashboardModern.tsx, DashboardUnified.tsx
  */
-app.post('/api/process-job', authenticateToken, async (req, res) => {
+app.post('/api/process-job', authenticateToken, jobProcessingLimiter, async (req, res) => {
   try {
     const { jobDescription, aiMode, matchMode } = req.body;
 
-    // Validation
-    if (!jobDescription || jobDescription.trim().length === 0) {
-      return res.status(400).json({ error: 'Job description is required' });
+    // Comprehensive validation
+    const validation = validateJobDescription(jobDescription);
+    if (!validation.valid) {
+      return res.status(400).json({ error: validation.errors[0] });
     }
 
-    if (jobDescription.trim().length < 50) {
-      return res.status(400).json({ error: 'Job description too short. Please provide more details.' });
-    }
+    // Use sanitized job description from validation
+    const sanitizedJobDescription = validation.sanitized;
 
     logger.info({
       userId: req.userId,
-      jobDescriptionLength: jobDescription.length,
+      jobDescriptionLength: sanitizedJobDescription.length,
       aiMode: aiMode || 'gpt-5-mini',
       matchMode: matchMode || 'standard'
     }, 'New job request');
@@ -1405,7 +1570,7 @@ app.post('/api/process-job', authenticateToken, async (req, res) => {
       data: {
         userId: req.userId,
         status: 'PENDING',
-        jobDescription,
+        jobDescription: sanitizedJobDescription, // Use sanitized version
         resumeText: normalizedProfile.resumeText || '', // Include resumeText to satisfy NOT NULL constraint
         aiMode: 'gpt-5-mini', // Always use gpt-5-mini
         diagnostics: {
@@ -1427,7 +1592,7 @@ app.post('/api/process-job', authenticateToken, async (req, res) => {
       jobId: job.id,
       userId: req.userId,
       profileData: normalizedProfile,
-      jobDescription
+      jobDescription: sanitizedJobDescription // Use sanitized version
     });
 
     // Return immediately with job ID
