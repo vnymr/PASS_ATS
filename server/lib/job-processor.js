@@ -203,28 +203,36 @@ function analyzeKeywordCoverage(latexContent, keywords) {
 }
 
 /**
- * Generate clean filename for resume PDF
+ * Generate clean, short resume filename
+ * Format: FirstName_Company_Role.pdf
+ * Max length: 50 characters total
+ * @param {string} userName - User's full name
  * @param {string} company - Company name
  * @param {string} role - Job role/title
- * @param {string} jobId - Job ID
- * @returns {string} Clean filename like "Google_Software_Engineer_abc123.pdf"
+ * @returns {string} Clean filename like "Vinay_Microsoft_CloudArchitect.pdf"
  */
-function generateResumeFilename(company, role, jobId) {
-  // Clean company name: remove special chars, spaces to underscores
-  const cleanCompany = company
+function generateResumeFilename(userName, company, role) {
+  // Extract first name only (if userName is "Vinay Muthareddy" → "Vinay")
+  const firstName = (userName || 'Resume')
+    .split(' ')[0]
+    .replace(/[^a-zA-Z0-9]/g, '')
+    .substring(0, 15);
+
+  // Clean company name - keep it SHORT
+  const cleanCompany = (company || 'Company')
     .replace(/[^a-zA-Z0-9\s]/g, '')
     .replace(/\s+/g, '_')
-    .substring(0, 30);
+    .substring(0, 20);
 
-  // Clean role name
-  const cleanRole = role
+  // Clean role - keep it SHORT
+  const cleanRole = (role || 'Role')
     .replace(/[^a-zA-Z0-9\s]/g, '')
     .replace(/\s+/g, '_')
-    .substring(0, 30);
+    .substring(0, 20);
 
-  // Format: Google_Software_Engineer_ABC123.pdf
-  const shortId = jobId.substring(0, 6);
-  return `${cleanCompany}_${cleanRole}_${shortId}.pdf`;
+  // Format: FirstName_Company_Role.pdf
+  // Example: Vinay_Microsoft_CloudArchitect.pdf
+  return `${firstName}_${cleanCompany}_${cleanRole}.pdf`;
 }
 
 /**
@@ -446,10 +454,16 @@ export async function processResumeJob(jobData, onProgress = null) {
       select: { company: true, role: true }
     });
 
+    // Extract user name from profile data
+    const userName = profileData?.name ||
+                     profileData?.personalInfo?.name ||
+                     profileData?.personalInfo?.fullName ||
+                     'Resume';
+
     const filename = generateResumeFilename(
-      job?.company || 'Unknown_Company',
-      job?.role || 'Position',
-      jobId
+      userName,
+      job?.company || 'Company',
+      job?.role || 'Role'
     );
 
     await prisma.artifact.create({
