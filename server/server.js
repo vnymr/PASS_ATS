@@ -115,6 +115,12 @@ const corsOptions = {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
 
+    // Allow all chrome-extension:// origins
+    if (origin && origin.startsWith('chrome-extension://')) {
+      requestLogger.cors(origin, true);
+      return callback(null, true);
+    }
+
     const allowed = config.server.allowedOrigins.indexOf(origin) !== -1;
     requestLogger.cors(origin, allowed);
 
@@ -1138,7 +1144,7 @@ app.get('/api/job/:jobId/download/:type', authenticateToken, async (req, res) =>
     // Verify job belongs to user
     const job = await prisma.job.findUnique({
       where: { id: jobId },
-      select: { userId: true }
+      select: { userId: true, company: true, role: true }
     });
 
     if (!job) {
@@ -1165,14 +1171,29 @@ app.get('/api/job/:jobId/download/:type', authenticateToken, async (req, res) =>
     }
 
     const contentType =
-      artifactType === 'PDF_OUTPUT' ? 'application/pdf' :
-      artifactType === 'LATEX_SOURCE' ? 'text/x-latex' :
+      artifact.type === 'PDF_OUTPUT' ? 'application/pdf' :
+      artifact.type === 'LATEX_SOURCE' ? 'text/x-latex' :
       'application/json';
 
-    const filename =
-      artifactType === 'PDF_OUTPUT' ? 'resume.pdf' :
-      artifactType === 'LATEX_SOURCE' ? 'resume.tex' :
-      'resume.json';
+    // Use stored filename from metadata, or generate clean filename
+    let filename;
+    if (artifact.type === 'PDF_OUTPUT' && artifact.metadata?.filename) {
+      filename = artifact.metadata.filename;
+    } else if (artifact.type === 'PDF_OUTPUT') {
+      // Generate clean filename if not in metadata
+      const cleanCompany = (job.company || 'Unknown_Company')
+        .replace(/[^a-zA-Z0-9\s]/g, '')
+        .replace(/\s+/g, '_')
+        .substring(0, 30);
+      const cleanRole = (job.role || 'Position')
+        .replace(/[^a-zA-Z0-9\s]/g, '')
+        .replace(/\s+/g, '_')
+        .substring(0, 30);
+      const shortId = jobId.substring(0, 6);
+      filename = `${cleanCompany}_${cleanRole}_${shortId}.pdf`;
+    } else {
+      filename = artifactType === 'LATEX_SOURCE' ? 'resume.tex' : 'resume.json';
+    }
 
     res.setHeader('Content-Type', contentType);
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
@@ -1192,12 +1213,23 @@ app.get('/api/job/:jobId/status', authenticateToken, async (req, res) => {
         id: true,
         status: true,
         userId: true,
+        company: true,
+        role: true,
         createdAt: true,
         updatedAt: true,
         startedAt: true,
         completedAt: true,
         error: true,
-        diagnostics: true
+        diagnostics: true,
+        artifacts: {
+          select: {
+            id: true,
+            type: true,
+            version: true,
+            metadata: true,
+            createdAt: true
+          }
+        }
       }
     });
 
@@ -1213,10 +1245,13 @@ app.get('/api/job/:jobId/status', authenticateToken, async (req, res) => {
     const { getJobStatus } = await import('./lib/queue.js');
     const queueStatus = await getJobStatus(req.params.jobId);
 
-    res.json({
+    const response = {
       id: job.id,
       status: job.status,
       progress: queueStatus.found ? queueStatus.progress : 0,
+      company: job.company || null,
+      role: job.role || null,
+      artifacts: job.artifacts || [],
       createdAt: job.createdAt,
       updatedAt: job.updatedAt,
       startedAt: job.startedAt,
@@ -1225,7 +1260,9 @@ app.get('/api/job/:jobId/status', authenticateToken, async (req, res) => {
       diagnostics: job.diagnostics,
       queueState: queueStatus.found ? queueStatus.state : null,
       attemptsMade: queueStatus.attemptsMade || 0
-    });
+    };
+
+    res.json(response);
   } catch (error) {
     console.error('Status error:', error);
     res.status(500).json({ error: 'Failed to fetch status' });
@@ -2329,10 +2366,10 @@ app.get('/api/resumes/:fileName', authenticateToken, async (req, res) => {
 
     const jobId = jobIdMatch[1];
 
-    // Verify job belongs to user
+    // Verify job belongs to user and get company/role info
     const job = await prisma.job.findUnique({
       where: { id: jobId },
-      select: { userId: true }
+      select: { userId: true, company: true, role: true }
     });
 
     if (!job) {
@@ -2356,12 +2393,30 @@ app.get('/api/resumes/:fileName', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'PDF file not found' });
     }
 
+    // Use stored filename from metadata, or generate clean filename
+    let downloadFilename;
+    if (artifact.metadata?.filename) {
+      downloadFilename = artifact.metadata.filename;
+    } else {
+      // Generate clean filename
+      const cleanCompany = (job.company || 'Unknown_Company')
+        .replace(/[^a-zA-Z0-9\s]/g, '')
+        .replace(/\s+/g, '_')
+        .substring(0, 30);
+      const cleanRole = (job.role || 'Position')
+        .replace(/[^a-zA-Z0-9\s]/g, '')
+        .replace(/\s+/g, '_')
+        .substring(0, 30);
+      const shortId = jobId.substring(0, 6);
+      downloadFilename = `${cleanCompany}_${cleanRole}_${shortId}.pdf`;
+    }
+
     // Set appropriate headers and send the PDF
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${downloadFilename}"`);
     res.send(artifact.content);
 
-    console.log(`📥 Served PDF ${fileName} for user ${req.userId}`);
+    console.log(`📥 Served PDF ${downloadFilename} for user ${req.userId}`);
   } catch (error) {
     console.error('❌ Error downloading resume:', error);
     res.status(500).json({ error: 'Failed to download resume' });

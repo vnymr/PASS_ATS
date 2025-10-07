@@ -15,15 +15,100 @@ import logger, { jobLogger, compileLogger, aiLogger } from './logger.js';
 import { prisma } from './prisma-client.js';
 
 /**
+ * Extract job information from description using LLM
+ * @param {string} jobDescription - Job description text
+ * @returns {Promise<{company: string, role: string, location: string|null}>}
+ */
+async function extractJobInfo(jobDescription) {
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+  const prompt = `Extract the following information from this job posting. Return ONLY valid JSON with no markdown formatting:
+
+{
+  "company": "company name",
+  "role": "job title/position",
+  "location": "location if mentioned"
+}
+
+Job posting:
+${jobDescription.substring(0, 3000)}`;
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: 'gpt-5-mini',
+      messages: [{ role: 'user', content: prompt }],
+      response_format: { type: "json_object" },
+      max_tokens: 200
+    });
+
+    const content = response.choices[0].message.content.trim();
+    const parsed = JSON.parse(content);
+
+    return {
+      company: parsed.company || 'Unknown Company',
+      role: parsed.role || 'Position',
+      location: parsed.location || null
+    };
+  } catch (error) {
+    logger.warn({ error: error.message }, 'Failed to extract job info with LLM, using fallback');
+
+    // Fallback: basic extraction
+    const lines = jobDescription.split('\n').slice(0, 10);
+    let company = 'Unknown Company';
+    let role = 'Position';
+
+    for (const line of lines) {
+      const cleanLine = line.trim();
+      if (!role || role === 'Position') {
+        const roleMatch = cleanLine.match(/^(.+?)\s*(?:Developer|Engineer|Manager|Designer|Analyst|Architect|Lead|Senior|Junior)/i);
+        if (roleMatch) role = roleMatch[0].trim();
+      }
+      if (company === 'Unknown Company') {
+        const companyMatch = cleanLine.match(/^(?:Company|At)\s+(.+?)(?:\s|,|\.)/i);
+        if (companyMatch) company = companyMatch[1].trim();
+      }
+    }
+
+    return { company, role, location: null };
+  }
+}
+
+/**
+ * Generate clean filename for resume PDF
+ * @param {string} company - Company name
+ * @param {string} role - Job role/title
+ * @param {string} jobId - Job ID
+ * @returns {string} Clean filename like "Google_Software_Engineer_abc123.pdf"
+ */
+function generateResumeFilename(company, role, jobId) {
+  // Clean company name: remove special chars, spaces to underscores
+  const cleanCompany = company
+    .replace(/[^a-zA-Z0-9\s]/g, '')
+    .replace(/\s+/g, '_')
+    .substring(0, 30);
+
+  // Clean role name
+  const cleanRole = role
+    .replace(/[^a-zA-Z0-9\s]/g, '')
+    .replace(/\s+/g, '_')
+    .substring(0, 30);
+
+  // Format: Google_Software_Engineer_ABC123.pdf
+  const shortId = jobId.substring(0, 6);
+  return `${cleanCompany}_${cleanRole}_${shortId}.pdf`;
+}
+
+/**
  * Process a single resume generation job
  *
  * This function contains the entire resume generation pipeline:
  * 1. Update job status to PROCESSING
- * 2. Check LaTeX cache
- * 3. Generate LaTeX with AI (Gemini or OpenAI)
- * 4. Compile LaTeX to PDF with error recovery
- * 5. Save artifacts (PDF + LaTeX)
- * 6. Update job status to COMPLETED or FAILED
+ * 2. Extract job info (company, role) from description
+ * 3. Check LaTeX cache
+ * 4. Generate LaTeX with AI (Gemini or OpenAI)
+ * 5. Compile LaTeX to PDF with error recovery
+ * 6. Save artifacts (PDF + LaTeX) with clean filenames
+ * 7. Update job status to COMPLETED or FAILED
  *
  * @param {Object} jobData - Job data from queue
  * @param {string} jobData.jobId - Database job ID
@@ -60,7 +145,24 @@ export async function processResumeJob(jobData, onProgress = null) {
     });
     timings.statusUpdate = Date.now() - t1;
 
-    if (onProgress) onProgress(10); // 10% - Job started
+    if (onProgress) onProgress(5); // 5% - Job started
+
+    // Extract job info (company, role) from description
+    logger.info({ jobId }, 'Extracting job information from description');
+    const jobInfo = await extractJobInfo(jobDescription);
+    logger.info({ jobId, company: jobInfo.company, role: jobInfo.role }, 'Job info extracted');
+
+    // Update the job record with extracted info
+    await prisma.job.update({
+      where: { id: jobId },
+      data: {
+        company: jobInfo.company,
+        role: jobInfo.role
+        // Note: location not stored in Job table, only extracted for potential future use
+      }
+    });
+
+    if (onProgress) onProgress(10); // 10% - Job info extracted
 
     // Prepare data for LLM - pass everything as structured JSON
     const t2 = Date.now();
@@ -183,9 +285,22 @@ export async function processResumeJob(jobData, onProgress = null) {
 
     if (onProgress) onProgress(85); // 85% - Saving artifacts
 
-    // Save artifacts
+    // Save artifacts with clean filename
     const t4 = Date.now();
     logger.debug({ jobId }, 'Saving artifacts to database');
+
+    // Get the job to retrieve company and role for filename
+    const job = await prisma.job.findUnique({
+      where: { id: jobId },
+      select: { company: true, role: true }
+    });
+
+    const filename = generateResumeFilename(
+      job?.company || 'Unknown_Company',
+      job?.role || 'Position',
+      jobId
+    );
+
     await prisma.artifact.create({
       data: {
         jobId,
@@ -194,7 +309,8 @@ export async function processResumeJob(jobData, onProgress = null) {
         metadata: {
           attempts: attempt,
           model: 'gpt-4o-mini',
-          pdfSizeKB: (pdfBuffer.length / 1024).toFixed(2)
+          pdfSizeKB: (pdfBuffer.length / 1024).toFixed(2),
+          filename: filename
         }
       }
     });
@@ -452,6 +568,6 @@ ${brokenLatex}`
  * Compile LaTeX to PDF using Tectonic
  */
 async function compileLatex(latexCode) {
-  const { compileToBuffer } = await import('./latex-compiler.js');
-  return await compileToBuffer(latexCode);
+  const { compileLatex: compileLatexFn } = await import('./latex-compiler.js');
+  return await compileLatexFn(latexCode);
 }
