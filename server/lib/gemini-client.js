@@ -63,8 +63,10 @@ export async function generateLatexWithGemini(systemPrompt, userPrompt, onProgre
     }
 
     // Get the Gemini 2.5 Flash model - optimized for speed
+    // Using systemInstruction for the large LaTeX template (automatically cached by Gemini)
     const model = genAI.getGenerativeModel({
       model: 'gemini-2.5-flash',
+      systemInstruction: systemPrompt, // Gemini automatically caches system instructions
       generationConfig: {
         temperature: 0.3, // Lower temperature for more consistent LaTeX generation
         maxOutputTokens: 8192, // Increased to ensure complete generation
@@ -74,8 +76,8 @@ export async function generateLatexWithGemini(systemPrompt, userPrompt, onProgre
       }
     });
 
-    // Combine system and user prompts
-    const fullPrompt = `${systemPrompt}\n\n${userPrompt}`;
+    // Use only user prompt since system instruction is separate
+    const fullPrompt = userPrompt;
 
     logger.debug({
       promptLength: fullPrompt.length,
@@ -259,6 +261,30 @@ Fixed LaTeX code:`;
 }
 
 /**
+ * Generate simple JSON response using Gemini (for keyword extraction, job info, etc.)
+ * @param {string} prompt - The prompt requesting JSON output
+ * @returns {Promise<string>} JSON string response
+ */
+export async function generateSimpleJsonWithGemini(prompt) {
+  if (!genAI) {
+    throw new Error('Gemini client not initialized');
+  }
+
+  const model = genAI.getGenerativeModel({
+    model: 'gemini-2.0-flash-exp',
+    generationConfig: {
+      temperature: 0,
+      maxOutputTokens: 1024,
+      responseMimeType: 'application/json'
+    }
+  });
+
+  const result = await model.generateContent(prompt);
+  const response = result.response;
+  return response.text();
+}
+
+/**
  * Calculate cost for Gemini 2.5 Flash
  * Pricing: $0.30 per 1M input tokens, $2.50 per 1M output tokens
  */
@@ -282,6 +308,7 @@ export function isGeminiAvailable() {
 export default {
   generateLatexWithGemini,
   fixLatexWithGemini,
+  generateSimpleJsonWithGemini,
   calculateGeminiCost,
   isGeminiAvailable
 };

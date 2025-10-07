@@ -73,6 +73,136 @@ ${jobDescription.substring(0, 3000)}`;
 }
 
 /**
+ * Extract ATS keywords from job description using LLM
+ * @param {string} jobDescription - Job description text
+ * @returns {Promise<{criticalKeywords: string[], importantKeywords: string[], technicalTerms: string[]}>}
+ */
+async function extractKeywordsFromJD(jobDescription) {
+  const prompt = `Extract ATS keywords from this job description. Return ONLY a JSON object with the most important keywords (skills, tools, certifications, frameworks, product names).
+
+EXTRACTION RULES:
+1. Extract exact phrases as they appear (case-sensitive)
+2. Include product names, tools, frameworks, certifications exactly as written
+3. Include multi-word terms (e.g., "Microsoft Purview", "Zero Trust", "Data Loss Prevention")
+4. Separate critical (must-have) vs important (nice-to-have) vs technical terms
+
+Job Description:
+${jobDescription}
+
+Return format (valid JSON):
+{
+  "criticalKeywords": ["keyword1", "keyword2"],
+  "importantKeywords": ["keyword3", "keyword4"],
+  "technicalTerms": ["term1", "term2"]
+}`;
+
+  // Try Gemini first
+  const { generateSimpleJsonWithGemini, isGeminiAvailable } = await import('./gemini-client.js');
+
+  if (isGeminiAvailable()) {
+    try {
+      logger.info('Using Gemini 2.5 Flash for keyword extraction');
+      const result = await generateSimpleJsonWithGemini(prompt);
+      const parsed = JSON.parse(result);
+
+      return {
+        criticalKeywords: parsed.criticalKeywords || [],
+        importantKeywords: parsed.importantKeywords || [],
+        technicalTerms: parsed.technicalTerms || []
+      };
+    } catch (error) {
+      logger.warn({ error: error.message }, 'Gemini keyword extraction failed, falling back to OpenAI');
+    }
+  }
+
+  // Fallback to OpenAI
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+  try {
+    logger.info('Using OpenAI gpt-4o-mini for keyword extraction');
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: prompt }],
+      response_format: { type: "json_object" },
+      temperature: 0,
+      max_completion_tokens: 500
+    });
+
+    const content = response.choices[0].message.content.trim();
+    const parsed = JSON.parse(content);
+
+    return {
+      criticalKeywords: parsed.criticalKeywords || [],
+      importantKeywords: parsed.importantKeywords || [],
+      technicalTerms: parsed.technicalTerms || []
+    };
+  } catch (error) {
+    logger.warn({ error: error.message }, 'Failed to extract keywords, using empty arrays');
+    return {
+      criticalKeywords: [],
+      importantKeywords: [],
+      technicalTerms: []
+    };
+  }
+}
+
+/**
+ * Analyze keyword coverage in generated LaTeX
+ * @param {string} latexContent - Generated LaTeX content
+ * @param {Object} keywords - Extracted keywords object
+ * @returns {Object} Coverage statistics
+ */
+function analyzeKeywordCoverage(latexContent, keywords) {
+  const stats = {
+    criticalMatched: 0,
+    criticalTotal: keywords.criticalKeywords.length,
+    importantMatched: 0,
+    importantTotal: keywords.importantKeywords.length,
+    technicalMatched: 0,
+    technicalTotal: keywords.technicalTerms.length,
+    missedCritical: [],
+    missedImportant: []
+  };
+
+  // Check critical keywords
+  keywords.criticalKeywords.forEach(kw => {
+    if (latexContent.includes(kw)) {
+      stats.criticalMatched++;
+    } else {
+      stats.missedCritical.push(kw);
+    }
+  });
+
+  // Check important keywords
+  keywords.importantKeywords.forEach(kw => {
+    if (latexContent.includes(kw)) {
+      stats.importantMatched++;
+    } else {
+      stats.missedImportant.push(kw);
+    }
+  });
+
+  // Check technical terms
+  keywords.technicalTerms.forEach(kw => {
+    if (latexContent.includes(kw)) {
+      stats.technicalMatched++;
+    }
+  });
+
+  // Calculate overall coverage percentage
+  const totalMatched = stats.criticalMatched + stats.importantMatched + stats.technicalMatched;
+  const totalKeywords = stats.criticalTotal + stats.importantTotal + stats.technicalTotal;
+  stats.coveragePercent = totalKeywords > 0 ? Math.round((totalMatched / totalKeywords) * 100) : 0;
+
+  // Calculate critical coverage (most important metric)
+  stats.criticalCoveragePercent = stats.criticalTotal > 0
+    ? Math.round((stats.criticalMatched / stats.criticalTotal) * 100)
+    : 100;
+
+  return stats;
+}
+
+/**
  * Generate clean filename for resume PDF
  * @param {string} company - Company name
  * @param {string} role - Job role/title
@@ -151,6 +281,17 @@ export async function processResumeJob(jobData, onProgress = null) {
     const jobInfo = await extractJobInfo(jobDescription);
     logger.info({ jobId, company: jobInfo.company, role: jobInfo.role }, 'Job info extracted');
 
+    // Extract ATS keywords from job description
+    logger.info({ jobId }, 'Extracting ATS keywords from job description');
+    const keywords = await extractKeywordsFromJD(jobDescription);
+    logger.info({
+      jobId,
+      criticalCount: keywords.criticalKeywords.length,
+      importantCount: keywords.importantKeywords.length,
+      technicalCount: keywords.technicalTerms.length,
+      criticalKeywords: keywords.criticalKeywords.slice(0, 5) // Log first 5 for debugging
+    }, 'ATS keywords extracted');
+
     // Update the job record with extracted info
     await prisma.job.update({
       where: { id: jobId },
@@ -210,6 +351,17 @@ export async function processResumeJob(jobData, onProgress = null) {
         logger.warn({ jobId, expectedName: profileData.name }, 'User name not found in generated LaTeX');
       }
     }
+
+    // Analyze ATS keyword coverage in generated LaTeX
+    const keywordStats = analyzeKeywordCoverage(latexCode, keywords);
+    logger.info({
+      jobId,
+      coveragePercent: keywordStats.coveragePercent,
+      criticalCoveragePercent: keywordStats.criticalCoveragePercent,
+      criticalMatched: `${keywordStats.criticalMatched}/${keywordStats.criticalTotal}`,
+      importantMatched: `${keywordStats.importantMatched}/${keywordStats.importantTotal}`,
+      missedCritical: keywordStats.missedCritical
+    }, 'ATS keyword coverage analysis');
 
     // Try to compile with error feedback loop
     let pdfBuffer = null;
@@ -345,7 +497,21 @@ export async function processResumeJob(jobData, onProgress = null) {
           totalTimeMs: totalTime,
           pdfSizeKB: (pdfBuffer.length / 1024).toFixed(2),
           success: true,
-          timings: timings
+          timings: timings,
+          atsOptimization: {
+            keywordCoverage: keywordStats.coveragePercent,
+            criticalCoverage: keywordStats.criticalCoveragePercent,
+            criticalMatched: keywordStats.criticalMatched,
+            criticalTotal: keywordStats.criticalTotal,
+            importantMatched: keywordStats.importantMatched,
+            importantTotal: keywordStats.importantTotal,
+            missedCritical: keywordStats.missedCritical,
+            extractedKeywords: {
+              critical: keywords.criticalKeywords,
+              important: keywords.importantKeywords,
+              technical: keywords.technicalTerms
+            }
+          }
         }
       }
     });
