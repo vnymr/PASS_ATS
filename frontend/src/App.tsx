@@ -1,5 +1,6 @@
 import { Routes, Route } from 'react-router-dom';
-import { SignedIn, SignedOut, SignInButton, SignUpButton, UserButton } from '@clerk/clerk-react';
+import { SignedIn, SignedOut, SignInButton, SignUpButton, UserButton, useAuth, useUser } from '@clerk/clerk-react';
+import { useEffect } from 'react';
 import './styles.css';
 import './styles-modern.css';
 
@@ -52,20 +53,49 @@ function AuthPage() {
 }
 
 export default function App() {
+  const { isSignedIn, getToken } = useAuth();
+  const { user } = useUser();
+
+  // Sync Clerk token to extension when user signs in
+  useEffect(() => {
+    async function syncTokenToExtension() {
+      if (isSignedIn && user) {
+        try {
+          const token = await getToken();
+          const extensionId = import.meta.env.VITE_EXTENSION_ID;
+
+          if (typeof chrome !== 'undefined' && chrome.runtime && extensionId) {
+            console.log('🔄 Syncing token to extension:', extensionId);
+            chrome.runtime.sendMessage(
+              extensionId,
+              {
+                type: 'CLERK_TOKEN_UPDATE',
+                token: token,
+                email: user.primaryEmailAddress?.emailAddress
+              },
+              (response) => {
+                if (chrome.runtime.lastError) {
+                  console.log('⚠️ Extension not available:', chrome.runtime.lastError.message);
+                } else {
+                  console.log('✅ Token synced to extension', response);
+                }
+              }
+            );
+          } else {
+            console.log('ℹ️ Extension ID not configured or chrome runtime unavailable');
+          }
+        } catch (error) {
+          console.error('❌ Failed to sync token:', error);
+        }
+      }
+    }
+    syncTokenToExtension();
+  }, [isSignedIn, user, getToken]);
+
   return (
     <Routes>
       <Route path="/" element={<Landing />} />
       <Route path="/auth" element={<AuthPage />} />
-      {/* ONBOARDING DISABLED: Route temporarily commented out
-          To re-enable: Uncomment this route and set ONBOARDING_ENABLED=true in ProtectedRoute.tsx
-      <Route path="/onboarding" element={
-        <ProtectedRoute>
-          <OnboardingProvider>
-            <OnboardingNew />
-          </OnboardingProvider>
-        </ProtectedRoute>
-      } />
-      */}
       <Route path="/dashboard" element={
         <ProtectedRoute>
           <ModernLayout>

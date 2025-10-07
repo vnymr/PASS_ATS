@@ -147,17 +147,25 @@ export default function DashboardUnified() {
     return (bytes / 1024).toFixed(0) + ' KB';
   };
 
-  const formatDate = (dateStr?: string) => {
+  const formatJobTime = (dateStr?: string) => {
     if (!dateStr) return 'Just now';
     const date = new Date(dateStr);
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
 
-    if (diffHours < 1) return 'Just now';
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
     if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffHours < 48) return 'Yesterday';
-    return date.toLocaleDateString();
+    if (diffDays < 7) return `${diffDays}d ago`;
+
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
+    });
   };
 
   if (loading) {
@@ -255,7 +263,7 @@ export default function DashboardUnified() {
                   <div className="ai-result-info">
                     <span className="ai-result-filename">{lastGenerated.fileName}</span>
                     <span className="ai-result-meta">
-                      {formatDate(lastGenerated.createdAt)} • {formatFileSize()}
+                      {formatJobTime(lastGenerated.createdAt)} • {formatFileSize()}
                     </span>
                   </div>
                   <div className="ai-result-actions">
@@ -340,7 +348,7 @@ export default function DashboardUnified() {
                       )}
                     </div>
                     <span className="ai-history-date">
-                      {formatDate(resume.createdAt)}
+                      {formatJobTime(resume.createdAt)}
                     </span>
                   </div>
                   <div className="ai-history-card-footer">
