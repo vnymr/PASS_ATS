@@ -1,0 +1,260 @@
+const API_BASE = 'https://passats-production.up.railway.app';
+let currentJobs = new Map(); // jobId -> job data
+
+document.addEventListener('DOMContentLoaded', async () => {
+  // Check auth
+  const { clerk_session_token } = await chrome.storage.local.get('clerk_session_token');
+
+  if (!clerk_session_token) {
+    document.getElementById('auth-view').style.display = 'block';
+    document.getElementById('signin-btn').onclick = () => {
+      chrome.tabs.create({ url: 'https://getunlimitedresume.com/dashboard' });
+    };
+    return;
+  }
+
+  document.getElementById('main-view').style.display = 'block';
+
+  // Load usage and tier
+  await loadUsageStats(clerk_session_token);
+
+  // Check current page for job
+  await checkCurrentPage(clerk_session_token);
+
+  // Load recent jobs
+  await loadRecentJobs(clerk_session_token);
+
+  // Setup jobs list toggle
+  document.getElementById('jobs-toggle').onclick = () => {
+    const list = document.getElementById('jobs-list');
+    list.classList.toggle('collapsed');
+    document.querySelector('.toggle-icon').textContent =
+      list.classList.contains('collapsed') ? '▼' : '▲';
+  };
+
+  // Check for active background jobs
+  chrome.runtime.sendMessage({ action: 'GET_ACTIVE_JOBS' }, (response) => {
+    if (response && response.jobs && response.jobs.length > 0) {
+      // Expand jobs list if there are active jobs
+      document.getElementById('jobs-list').classList.remove('collapsed');
+      document.querySelector('.toggle-icon').textContent = '▲';
+    }
+  });
+});
+
+async function loadUsageStats(token) {
+  try {
+    const response = await fetch(`${API_BASE}/api/subscription`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const data = await response.json();
+
+    document.getElementById('tier-badge').textContent = data.tier || 'FREE';
+
+    const usageResponse = await fetch(`${API_BASE}/api/usage`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const usage = await usageResponse.json();
+
+    document.getElementById('usage-text').textContent =
+      `${usage.resumesGenerated || 0}/${usage.dailyLimit}`;
+  } catch (error) {
+    console.error('Failed to load usage:', error);
+  }
+}
+
+async function checkCurrentPage(token) {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+
+  const supportedSites = ['linkedin.com', 'indeed.com', 'glassdoor.com'];
+  const isJobSite = supportedSites.some(site => tab.url.includes(site));
+
+  if (isJobSite) {
+    // Try to scrape job info
+    try {
+      const results = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: () => {
+          if (window.jobScraper) {
+            const jobData = window.jobScraper.extractJobContent();
+            return {
+              success: true,
+              title: jobData.metadata?.title || 'Job Title',
+              company: jobData.metadata?.company || 'Company',
+              description: jobData.fullDescription
+            };
+          }
+          return { success: false };
+        }
+      });
+
+      const result = results[0]?.result;
+
+      if (result && result.success && result.description) {
+        document.getElementById('job-detected').style.display = 'block';
+        document.getElementById('job-title').textContent = result.title;
+        document.getElementById('job-company').textContent = result.company;
+
+        document.getElementById('generate-btn').onclick = () => {
+          generateResume(result, token);
+        };
+      } else {
+        showNoJob();
+      }
+    } catch (error) {
+      console.error('Failed to check page:', error);
+      showNoJob();
+    }
+  } else {
+    showNoJob();
+  }
+}
+
+function showNoJob() {
+  document.getElementById('no-job').style.display = 'block';
+  document.getElementById('job-detected').style.display = 'none';
+}
+
+async function generateResume(jobData, token) {
+  const btn = document.getElementById('generate-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Starting...';
+
+  try {
+    const response = await fetch(`${API_BASE}/api/process-job`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        jobDescription: jobData.description,
+        profileId: 1
+      })
+    });
+
+    const result = await response.json();
+
+    if (response.ok) {
+      // Tell background to track this job
+      chrome.runtime.sendMessage({
+        action: 'START_JOB',
+        jobId: result.jobId,
+        token: token,
+        jobInfo: { company: jobData.company, title: jobData.title }
+      });
+
+      // Add to jobs list immediately
+      addJobToList(result.jobId, jobData.company, jobData.title, 'PROCESSING');
+
+      // Expand jobs list
+      document.getElementById('jobs-list').classList.remove('collapsed');
+      document.querySelector('.toggle-icon').textContent = '▲';
+
+      btn.innerHTML = '<span class="icon">✓</span> Processing in background';
+      setTimeout(() => {
+        btn.disabled = false;
+        btn.innerHTML = '<span class="icon">⚡</span> Generate Resume';
+      }, 2000);
+    } else {
+      btn.innerHTML = '<span class="icon">⚡</span> Generate Resume';
+      btn.disabled = false;
+      alert(result.error || 'Failed to start job');
+    }
+  } catch (error) {
+    btn.innerHTML = '<span class="icon">⚡</span> Generate Resume';
+    btn.disabled = false;
+    alert('Error: ' + error.message);
+  }
+}
+
+async function loadRecentJobs(token) {
+  try {
+    // Get active jobs from background
+    chrome.runtime.sendMessage({ action: 'GET_ACTIVE_JOBS' }, async (response) => {
+      const activeJobs = response?.jobs || [];
+
+      // Get completed jobs from API
+      const apiResponse = await fetch(`${API_BASE}/api/resumes?limit=5`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const completedJobs = await apiResponse.json();
+
+      const container = document.getElementById('jobs-container');
+      container.innerHTML = '';
+
+      // Show active jobs first
+      activeJobs.forEach(job => {
+        addJobToList(job.id, job.company, job.title, job.status, job.progress);
+      });
+
+      // Then show completed jobs
+      if (Array.isArray(completedJobs)) {
+        completedJobs.slice(0, 5).forEach(job => {
+          if (!activeJobs.find(aj => aj.id === job.id)) {
+            addJobToList(job.id, job.company || 'Unknown', job.role || 'Position', 'COMPLETED', 100, job.pdfUrl);
+          }
+        });
+      }
+
+      if (activeJobs.length === 0 && (!completedJobs || completedJobs.length === 0)) {
+        document.getElementById('no-jobs').style.display = 'block';
+      }
+    });
+  } catch (error) {
+    console.error('Failed to load jobs:', error);
+  }
+}
+
+function addJobToList(jobId, company, title, status, progress = 0, downloadUrl = null) {
+  const container = document.getElementById('jobs-container');
+  document.getElementById('no-jobs').style.display = 'none';
+
+  // Remove existing if present
+  const existing = document.getElementById(`job-${jobId}`);
+  if (existing) existing.remove();
+
+  const jobEl = document.createElement('div');
+  jobEl.id = `job-${jobId}`;
+  jobEl.className = `job-item ${status.toLowerCase()}`;
+
+  const statusIcon = {
+    'PROCESSING': '⏳',
+    'COMPLETED': '✓',
+    'FAILED': '✗'
+  }[status] || '•';
+
+  jobEl.innerHTML = `
+    <div class="job-info">
+      <span class="status-icon">${statusIcon}</span>
+      <div class="job-details">
+        <div class="job-name">${company} - ${title}</div>
+        <div class="job-status">${status === 'PROCESSING' ? `${progress}%` : status}</div>
+      </div>
+    </div>
+    ${downloadUrl ? `<button class="btn-download" data-url="${downloadUrl}">↓</button>` : ''}
+    ${status === 'PROCESSING' ? `<div class="progress-bar"><div class="progress" style="width: ${progress}%"></div></div>` : ''}
+  `;
+
+  if (downloadUrl) {
+    jobEl.querySelector('.btn-download').onclick = () => {
+      chrome.tabs.create({ url: `${API_BASE}${downloadUrl}` });
+    };
+  }
+
+  container.prepend(jobEl);
+}
+
+// Listen for job updates from background
+chrome.runtime.onMessage.addListener((message) => {
+  if (message.action === 'JOB_UPDATE') {
+    addJobToList(
+      message.jobId,
+      message.company,
+      message.title,
+      message.status,
+      message.progress,
+      message.downloadUrl
+    );
+  }
+});

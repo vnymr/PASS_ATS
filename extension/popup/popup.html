@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <h1>Quick Resume AI</h1>
+      <div class="user-info">
+        <span id="tier-badge" class="badge">FREE</span>
+        <span id="usage-text" class="usage">0/5</span>
+      </div>
+    </div>
+
+    <!-- Auth Required View -->
+    <div id="auth-view" style="display: none;">
+      <div class="message">Sign in to generate resumes</div>
+      <button id="signin-btn" class="btn-primary">Sign In</button>
+    </div>
+
+    <!-- Main View -->
+    <div id="main-view" style="display: none;">
+      <!-- Current Page Status -->
+      <div id="page-status" class="page-status">
+        <div id="job-detected" style="display: none;">
+          <div class="job-preview">
+            <h3 id="job-title">Job Title</h3>
+            <p id="job-company">Company</p>
+          </div>
+          <button id="generate-btn" class="btn-primary">
+            <span class="icon">⚡</span> Generate Resume
+          </button>
+        </div>
+
+        <div id="no-job" style="display: none;">
+          <p class="message">📋 Open a job posting to generate resume</p>
+          <p class="hint">Supports LinkedIn, Indeed, Glassdoor</p>
+        </div>
+      </div>
+
+      <!-- Jobs List Toggle -->
+      <div class="section-header" id="jobs-toggle">
+        <span>Recent Jobs</span>
+        <span class="toggle-icon">▼</span>
+      </div>
+
+      <!-- Jobs List (collapsible) -->
+      <div id="jobs-list" class="jobs-list collapsed">
+        <div id="jobs-container"></div>
+        <div id="no-jobs" style="display: none;">
+          <p class="empty-message">No resumes generated yet</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="../utils/config.js"></script>
+  <script src="../utils/api-client.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

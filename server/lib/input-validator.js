@@ -11,7 +11,7 @@ import validator from 'validator';
 const VALIDATION_RULES = {
   jobDescription: {
     minLength: 50,
-    maxLength: 10000, // 10KB limit
+    maxLength: Infinity, // No limit - accept job descriptions of any length
     allowedChars: /^[\w\s\-.,;:!?()\[\]{}'"\/\n\r@#$%&*+=<>]*$/
   },
   resumeText: {

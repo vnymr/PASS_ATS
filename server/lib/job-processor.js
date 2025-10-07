@@ -35,10 +35,9 @@ ${jobDescription.substring(0, 3000)}`;
 
   try {
     const response = await openai.chat.completions.create({
-      model: 'gpt-5-mini',
+      model: 'gpt-4o-mini',
       messages: [{ role: 'user', content: prompt }],
-      response_format: { type: "json_object" },
-      max_tokens: 200
+      response_format: { type: "json_object" }
     });
 
     const content = response.choices[0].message.content.trim();

@@ -17,12 +17,7 @@ export async function extractJobHandler(req, res) {
       });
     }
 
-    if (textContent.length > 10000) {
-      return res.status(400).json({
-        error: 'Content too long (max 10,000 characters)',
-        fallback: true
-      });
-    }
+    // No length limit - accept job descriptions of any size
 
     console.log('\n📋 Job extraction request:');
     console.log(`   - URL: ${url}`);

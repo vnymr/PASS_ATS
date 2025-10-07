@@ -1,0 +1,97 @@
+{
+  "manifest_version": 3,
+  "name": "Quick Resume AI",
+  "version": "1.2.0",
+  "description": "Generate tailored resumes for any job in seconds with AI",
+  "icons": {
+    "16": "assets/icons/icon-16.png",
+    "48": "assets/icons/icon-48.png",
+    "128": "assets/icons/icon-128.png"
+  },
+  "permissions": [
+    "storage",
+    "downloads",
+    "cookies",
+    "notifications",
+    "alarms",
+    "tabs",
+    "scripting"
+  ],
+  "host_permissions": [
+    "http://localhost:3000/*",
+    "http://localhost:3001/*",
+    "http://localhost:5173/*",
+    "https://*.railway.app/*",
+    "https://getresume.us/*",
+    "https://getunlimitedresume.com/*",
+    "https://*.linkedin.com/*",
+    "https://*.indeed.com/*",
+    "https://*.glassdoor.com/*",
+    "https://*.monster.com/*",
+    "https://*.ziprecruiter.com/*",
+    "https://*/*"
+  ],
+  "externally_connectable": {
+    "matches": [
+      "http://localhost:5173/*",
+      "http://localhost:3000/*",
+      "https://getresume.us/*",
+      "https://getunlimitedresume.com/*"
+    ]
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.linkedin.com/*",
+        "https://www.indeed.com/*",
+        "https://www.glassdoor.com/*",
+        "https://www.monster.com/*",
+        "https://www.ziprecruiter.com/*",
+        "https://*/*"
+      ],
+      "js": [
+        "utils/config.js",
+        "utils/api-client.js",
+        "content/detector.js",
+        "content/scraper.js",
+        "content/ui-injector.js"
+      ],
+      "css": ["assets/styles.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "background": {
+    "service_worker": "background/service-worker.js"
+  },
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "assets/icons/icon-16.png",
+      "48": "assets/icons/icon-48.png",
+      "128": "assets/icons/icon-128.png"
+    },
+    "default_title": "Quick Resume AI"
+  },
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+R",
+        "mac": "Command+Shift+R"
+      },
+      "description": "Open extension and generate resume"
+    },
+    "generate-resume": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+R",
+        "mac": "Command+Shift+R"
+      },
+      "description": "Generate resume from current job page"
+    }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["assets/*", "components/*"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}
