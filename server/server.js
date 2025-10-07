@@ -1455,15 +1455,27 @@ app.get('/api/resumes', authenticateToken, async (req, res) => {
     });
 
     // Transform to ResumeEntry format expected by frontend
-    const resumes = jobs.map(job => ({
-      fileName: `resume-${job.id}.pdf`,
-      pdfUrl: `/api/resumes/resume-${job.id}.pdf`,
-      texUrl: `/api/job/${job.id}/download/latex`,
-      role: job.role || undefined,
-      company: job.company || undefined,
-      jobUrl: job.jobUrl || undefined,
-      createdAt: job.createdAt.toISOString()
-    }));
+    const resumes = jobs.map(job => {
+      // Use stored filename from artifact metadata, or generate clean filename
+      let fileName = job.artifacts[0]?.metadata?.filename;
+
+      if (!fileName) {
+        // Fallback: Generate clean filename (shouldn't happen for new resumes)
+        const cleanCompany = (job.company || 'Company').replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_').substring(0, 20);
+        const cleanRole = (job.role || 'Role').replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_').substring(0, 20);
+        fileName = `Resume_${cleanCompany}_${cleanRole}.pdf`;
+      }
+
+      return {
+        fileName: fileName,
+        pdfUrl: `/api/resumes/${job.id}`, // Use job ID in URL, not filename
+        texUrl: `/api/job/${job.id}/download/latex`,
+        role: job.role || undefined,
+        company: job.company || undefined,
+        jobUrl: job.jobUrl || undefined,
+        createdAt: job.createdAt.toISOString()
+      };
+    });
 
     console.log(`📄 Returning ${resumes.length} resumes for user ${req.userId}`);
     res.json(resumes);
@@ -2354,22 +2366,14 @@ async function processJobAsync(jobId, userId, jobDescription, aiMode, matchMode,
  * GET /api/resumes/:fileName - Download a specific resume file
  * Required by: Dashboard.tsx, DashboardModern.tsx, DashboardUnified.tsx, History.tsx
  */
-app.get('/api/resumes/:fileName', authenticateToken, async (req, res) => {
+app.get('/api/resumes/:jobId', authenticateToken, async (req, res) => {
   try {
-    const { fileName } = req.params;
+    const { jobId } = req.params;
 
-    // Extract job ID from fileName (format: resume-{jobId}.pdf)
-    const jobIdMatch = fileName.match(/resume-(.+)\.pdf$/);
-    if (!jobIdMatch) {
-      return res.status(400).json({ error: 'Invalid file name format' });
-    }
-
-    const jobId = jobIdMatch[1];
-
-    // Verify job belongs to user and get company/role info
+    // Verify job belongs to user
     const job = await prisma.job.findUnique({
       where: { id: jobId },
-      select: { userId: true, company: true, role: true }
+      select: { userId: true }
     });
 
     if (!job) {
@@ -2393,23 +2397,8 @@ app.get('/api/resumes/:fileName', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'PDF file not found' });
     }
 
-    // Use stored filename from metadata, or generate clean filename
-    let downloadFilename;
-    if (artifact.metadata?.filename) {
-      downloadFilename = artifact.metadata.filename;
-    } else {
-      // Generate clean filename
-      const cleanCompany = (job.company || 'Unknown_Company')
-        .replace(/[^a-zA-Z0-9\s]/g, '')
-        .replace(/\s+/g, '_')
-        .substring(0, 30);
-      const cleanRole = (job.role || 'Position')
-        .replace(/[^a-zA-Z0-9\s]/g, '')
-        .replace(/\s+/g, '_')
-        .substring(0, 30);
-      const shortId = jobId.substring(0, 6);
-      downloadFilename = `${cleanCompany}_${cleanRole}_${shortId}.pdf`;
-    }
+    // Use stored filename from metadata (should always exist for new resumes)
+    const downloadFilename = artifact.metadata?.filename || `Resume_${jobId.substring(0, 8)}.pdf`;
 
     // Set appropriate headers and send the PDF
     res.setHeader('Content-Type', 'application/pdf');
