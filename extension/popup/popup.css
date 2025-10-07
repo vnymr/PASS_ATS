@@ -5,15 +5,16 @@
 }
 
 body {
-  width: 380px;
-  min-height: 400px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  width: 360px;
+  min-height: 420px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
   background: #0a0a0a;
   color: #fff;
+  overflow-x: hidden;
 }
 
 .container {
-  padding: 16px;
+  padding: 20px;
 }
 
 /* Header */
@@ -22,13 +23,14 @@ body {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #222;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #333;
 }
 
 .header h1 {
   font-size: 18px;
   font-weight: 600;
+  letter-spacing: -0.3px;
 }
 
 .user-info {
@@ -38,11 +40,11 @@ body {
 }
 
 .badge {
-  padding: 4px 10px;
-  background: #ff6b35;
+  padding: 4px 12px;
+  background: #3b82f6;
   color: #fff;
   border-radius: 12px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -50,7 +52,8 @@ body {
 
 .usage {
   font-size: 13px;
-  color: #888;
+  color: #94a3b8;
+  font-weight: 500;
 }
 
 /* Auth View */
@@ -68,12 +71,12 @@ body {
 /* Buttons */
 .btn-primary {
   width: 100%;
-  padding: 12px 16px;
-  background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%);
+  padding: 14px 16px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   border: none;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   cursor: pointer;
   transition: transform 0.2s, box-shadow 0.2s;
@@ -84,12 +87,12 @@ body {
 }
 
 .btn-primary:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(255, 107, 53, 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
 }
 
 .btn-primary:disabled {
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: not-allowed;
   transform: none;
 }
@@ -126,7 +129,7 @@ body {
 
 #no-job {
   text-align: center;
-  padding: 30px 20px;
+  padding: 40px 20px;
   background: #1a1a1a;
   border-radius: 8px;
   border: 1px dashed #333;
@@ -134,13 +137,13 @@ body {
 
 #no-job .message {
   font-size: 14px;
-  color: #aaa;
-  margin-bottom: 8px;
+  color: #94a3b8;
+  margin-bottom: 5px;
 }
 
 #no-job .hint {
   font-size: 12px;
-  color: #666;
+  color: #64748b;
   margin: 0;
 }
 

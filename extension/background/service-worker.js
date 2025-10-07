@@ -294,7 +294,7 @@ async function startJobProcessing(jobId, token, jobInfo = {}) {
 
   // Get API base URL from config
   const { apiBaseURL } = await chrome.storage.local.get('apiBaseURL');
-  const API_BASE = apiBaseURL || 'https://passats-production.up.railway.app';
+  const API_BASE = apiBaseURL || 'https://happyresumes.com';
 
   // Poll job status in background
   const pollInterval = setInterval(async () => {
@@ -479,7 +479,7 @@ async function downloadResume(jobId, token, apiBase) {
         const { apiBaseURL } = chrome.storage.local.get('apiBaseURL');
         const webUrl = apiBaseURL?.includes('localhost')
           ? 'http://localhost:5173/dashboard'
-          : 'https://getunlimitedresume.com/dashboard';
+          : 'https://happyresumes.com/dashboard';
         chrome.tabs.create({ url: webUrl });
       }
 
@@ -508,7 +508,7 @@ chrome.notifications.onButtonClicked.addListener((notificationId, buttonIndex) =
     const { apiBaseURL } = chrome.storage.local.get('apiBaseURL');
     const webUrl = apiBaseURL?.includes('localhost')
       ? 'http://localhost:5173/dashboard'
-      : 'https://getunlimitedresume.com/dashboard';
+      : 'https://happyresumes.com/dashboard';
     chrome.tabs.create({ url: webUrl });
   }
 });

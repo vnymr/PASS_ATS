@@ -93,7 +93,11 @@ import {
   Wifi,
   WifiOff,
   Battery,
-  BatteryCharging
+  BatteryCharging,
+  ArrowLeft,
+  CreditCard,
+  Infinity,
+  Sparkles
 } from 'lucide-react';
 
 export const Icons = {
@@ -190,7 +194,12 @@ export const Icons = {
   wifi: Wifi,
   wifiOff: WifiOff,
   battery: Battery,
-  batteryCharging: BatteryCharging
+  batteryCharging: BatteryCharging,
+  arrowLeft: ArrowLeft,
+  creditCard: CreditCard,
+  infinity: Infinity,
+  sparkles: Sparkles,
+  refreshCw: RefreshCw
 };
 
 export default Icons;

@@ -1,4 +1,4 @@
-const API_BASE = 'https://passats-production.up.railway.app';
+const API_BASE = 'https://happyresumes.com';
 let currentJobs = new Map(); // jobId -> job data
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -8,7 +8,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (!clerk_session_token) {
     document.getElementById('auth-view').style.display = 'block';
     document.getElementById('signin-btn').onclick = () => {
-      chrome.tabs.create({ url: 'https://getunlimitedresume.com/dashboard' });
+      chrome.tabs.create({ url: 'https://happyresumes.com/dashboard' });
     };
     return;
   }

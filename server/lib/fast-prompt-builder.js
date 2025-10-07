@@ -164,10 +164,34 @@ PAGE FILLING REQUIREMENTS:
    - NO MARKDOWN EVER (no **, *, _, #)
    - All formatting must be valid LaTeX
 
-4. ESCAPE special characters: & → \\&, % → \\%, # → \\#, _ → \\_
-5. Date format: Mon YYYY -- Present (e.g., Sep 2024 -- Present)
-6. ONLY use \\resumeItem{} for bullets (NEVER use • or unicode)
-7. NO empty itemize blocks
+4. CRITICAL LATEX SYNTAX (Follow EXACTLY):
+   a) NO & CHARACTER except in tables
+      WRONG: Python & JavaScript & React
+      RIGHT: Python, JavaScript, React
+
+   b) ALL commands must have closing braces
+      WRONG: \\resumeItem{Text here
+      RIGHT: \\resumeItem{Text here}
+
+   c) Skills section format:
+      \\resumeSubHeadingListStart
+      \\small{\\item{
+        \\textbf{Category}: Skill1, Skill2, Skill3 \\\\
+        \\textbf{Category}: Skill1, Skill2
+      }}
+      \\resumeSubHeadingListEnd
+
+   d) Experience bullets format:
+      \\resumeItem{Complete sentence ending with period.}
+
+   e) ALWAYS end with \\end{document}
+
+   f) Test each section for balanced braces before moving to next section
+
+5. ESCAPE special characters: & → \\&, % → \\%, # → \\#, _ → \\_
+6. Date format: Mon YYYY -- Present (e.g., Sep 2024 -- Present)
+7. ONLY use \\resumeItem{} for bullets (NEVER use • or unicode)
+8. NO empty itemize blocks
 
 ATS KEYWORD PROCESS:
 Step 1: Analyze job description and extract:
@@ -209,7 +233,7 @@ If page overflows, trim:
 OUTPUT: Only LaTeX code`;
 }
 
-export function buildFastUserPrompt(userProfile, jobDescription) {
+export function buildFastUserPrompt(userProfile, jobDescription, keywords = null) {
   // Streamlined prompt focusing on essential data
   let profileText = '';
 
@@ -255,6 +279,40 @@ ${Array.isArray(skills) ? skills.join(', ') : JSON.stringify(skills)}
 `;
   }
 
+  // Build keyword integration section if keywords provided
+  let keywordSection = '';
+  if (keywords && (keywords.criticalKeywords?.length > 0 || keywords.importantKeywords?.length > 0)) {
+    keywordSection = `
+⚠️ MANDATORY KEYWORD INTEGRATION:
+
+You MUST incorporate these keywords from the job description into the resume:
+
+CRITICAL KEYWORDS (use ALL of these, 2-3 times each):
+${keywords.criticalKeywords ? keywords.criticalKeywords.map(k => `"${k}"`).join(', ') : 'None'}
+
+IMPORTANT KEYWORDS (use at least 70% of these):
+${keywords.importantKeywords ? keywords.importantKeywords.map(k => `"${k}"`).join(', ') : 'None'}
+
+TECHNICAL KEYWORDS (use where relevant):
+${keywords.technicalKeywords ? keywords.technicalKeywords.map(k => `"${k}"`).join(', ') : 'None'}
+
+INTEGRATION RULES:
+1. Use keywords in experience bullets, NOT just in skills section
+2. Bold keywords when first introduced: \\textbf{keyword}
+3. Match exact phrases from JD (case-sensitive)
+4. Make it natural - rewrite existing experience using these terms
+
+EXAMPLE:
+If candidate "built data pipeline" and JD requires "venture funding":
+WRONG: Built data pipeline for analytics
+RIGHT: Built data pipeline to support \\textbf{venture funding} decision-making
+
+VERIFICATION STEP:
+After generating resume, mentally count usage of each CRITICAL keyword.
+If any critical keyword is used less than 2 times, find a natural place to add it.
+`;
+  }
+
   return `Generate a tailored LaTeX resume that MUST fill ONE COMPLETE PAGE.
 
 JOB DESCRIPTION:
@@ -262,6 +320,8 @@ ${jobDescription}
 
 CANDIDATE PROFILE:
 ${profileText}
+
+${keywordSection}
 
 CRITICAL REQUIREMENTS:
 1. ⚠️ MUST fill 85-95% of the page - adjust bullet count based on experience count

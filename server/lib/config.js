@@ -73,8 +73,8 @@ export const config = {
           'http://localhost:3000',
           'http://localhost:5173',
           'http://localhost:8080',
-          'https://getresume.us',
-          'https://getunlimitedresume.com',
+          'https://happyresumes.com',
+          'https://www.happyresumes.com',
           // Allow Chrome extension
           'chrome-extension://pkhamkbdejjbjeckjkoofjpcbbghdgoc'
         ],

@@ -2,6 +2,8 @@ import React, { useEffect, useState, useRef, KeyboardEvent } from 'react';
 import { useAuth } from '@clerk/clerk-react';
 import { api, type ResumeEntry } from '../api-clerk';
 import Icons from '../components/ui/icons';
+import UsageCard from '../components/UsageCard';
+import UpgradeLimitModal from '../components/UpgradeLimitModal';
 
 export default function DashboardModern() {
   const { getToken } = useAuth();
@@ -15,6 +17,8 @@ export default function DashboardModern() {
   const [filter, setFilter] = useState<'all' | 'recent' | 'week'>('all');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [hoveredCard, setHoveredCard] = useState<number | null>(null);
+  const [showLimitModal, setShowLimitModal] = useState(false);
+  const [usageLimit, setUsageLimit] = useState({ used: 0, limit: 5 });
 
   useEffect(() => {
     loadDashboardData();
@@ -112,7 +116,16 @@ export default function DashboardModern() {
 
       setJobDescription('');
     } catch (err: any) {
-      setError(err.message || 'Failed to generate resume. Please try again.');
+      // Check if it's a 403 limit error
+      if (err.status === 403 && err.message?.includes('limit')) {
+        const token = await getToken();
+        const usage = await api.get('/api/usage', token || undefined).catch(() => ({ used: 0, limit: 5 }));
+        setUsageLimit(usage);
+        setShowLimitModal(true);
+        setError('');
+      } else {
+        setError(err.message || 'Failed to generate resume. Please try again.');
+      }
     } finally {
       setIsGenerating(false);
     }
@@ -198,9 +211,19 @@ export default function DashboardModern() {
 
   return (
     <div className="modern-dashboard">
+      <UpgradeLimitModal
+        isOpen={showLimitModal}
+        onClose={() => setShowLimitModal(false)}
+        usedCount={usageLimit.used}
+        limit={usageLimit.limit}
+      />
+
       <div className="modern-dashboard-container">
+        {/* Usage Card */}
+        <UsageCard />
+
         {/* Main Generator Card */}
-        <div className="modern-generator-card" style={{ marginTop: '2rem' }}>
+        <div className="modern-generator-card">
           <div className="modern-generator-inner">
             {error && (
               <div className="modern-alert modern-alert-error">

@@ -66,6 +66,15 @@ export default function ModernLayout({ children }: ModernLayoutProps) {
               <span>Profile</span>
             </button>
 
+            <button
+              className={`modern-nav-item ${location.pathname === '/pricing' ? 'active' : ''}`}
+              onClick={() => navigate('/pricing')}
+              aria-label="Pricing"
+            >
+              <Icons.dollarSign size={16} />
+              <span>Pricing</span>
+            </button>
+
             <div className="modern-nav-user">
               <UserButton
                 afterSignOutUrl="/"

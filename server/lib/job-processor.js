@@ -343,7 +343,7 @@ export async function processResumeJob(jobData, onProgress = null) {
 
       aiLogger.request('gpt-5-mini', 'resume_generation');
       const genStart = Date.now();
-      latexCode = await generateLatexWithLLM(openai, userDataForLLM, jobDescription, onProgress);
+      latexCode = await generateLatexWithLLM(openai, userDataForLLM, jobDescription, keywords, onProgress);
       timings.latexGeneration = Date.now() - genStart;
       logger.info({ jobId, genTimeMs: timings.latexGeneration, latexSize: latexCode.length }, 'LaTeX generation completed');
 
@@ -360,6 +360,9 @@ export async function processResumeJob(jobData, onProgress = null) {
       }
     }
 
+    // Validate and auto-fix LaTeX before compilation
+    latexCode = validateAndFixLatex(latexCode, jobId);
+
     // Analyze ATS keyword coverage in generated LaTeX
     const keywordStats = analyzeKeywordCoverage(latexCode, keywords);
     logger.info({
@@ -370,6 +373,16 @@ export async function processResumeJob(jobData, onProgress = null) {
       importantMatched: `${keywordStats.importantMatched}/${keywordStats.importantTotal}`,
       missedCritical: keywordStats.missedCritical
     }, 'ATS keyword coverage analysis');
+
+    // Warn if keyword coverage is low
+    if (keywordStats.coveragePercent < 70) {
+      logger.warn({
+        jobId,
+        coverage: keywordStats.coveragePercent,
+        missedCritical: keywordStats.missedCritical.slice(0, 5),
+        message: 'LOW ATS SCORE - Keywords not integrated properly'
+      }, 'Poor keyword coverage detected');
+    }
 
     // Try to compile with error feedback loop
     let pdfBuffer = null;
@@ -572,17 +585,70 @@ export async function processResumeJob(jobData, onProgress = null) {
 }
 
 /**
+ * Validate and auto-fix common LaTeX errors before compilation
+ * @param {string} latex - Generated LaTeX code
+ * @param {string} jobId - Job ID for logging
+ * @returns {string} Fixed LaTeX code
+ */
+function validateAndFixLatex(latex, jobId) {
+  logger.debug({ jobId }, 'Validating LaTeX before compilation');
+
+  let fixed = latex;
+  let issues = [];
+
+  // Fix 1: Remove stray & characters outside tables
+  const lines = fixed.split('\n');
+  let inTable = false;
+  const fixedLines = lines.map((line, i) => {
+    if (line.includes('\\begin{tabular}')) inTable = true;
+    if (line.includes('\\end{tabular}')) inTable = false;
+
+    if (!inTable && line.includes('&') && !line.includes('\\&')) {
+      issues.push(`Line ${i+1}: Removed stray & character`);
+      return line.replace(/&/g, ',');
+    }
+    return line;
+  });
+  fixed = fixedLines.join('\n');
+
+  // Fix 2: Check balanced braces
+  const openBraces = (fixed.match(/\{/g) || []).length;
+  const closeBraces = (fixed.match(/\}/g) || []).length;
+  if (openBraces !== closeBraces) {
+    issues.push(`Unbalanced braces: ${openBraces} open vs ${closeBraces} close`);
+  }
+
+  // Fix 3: Ensure \end{document}
+  if (!fixed.includes('\\end{document}')) {
+    issues.push('Added missing \\end{document}');
+    fixed += '\n\\end{document}\n';
+  }
+
+  // Fix 4: Remove any ** markdown that snuck in
+  if (fixed.includes('**')) {
+    issues.push('Removed markdown ** syntax');
+    fixed = fixed.replace(/\*\*/g, '');
+  }
+
+  if (issues.length > 0) {
+    logger.info({ jobId, issues }, 'Auto-fixed LaTeX issues');
+  }
+
+  return fixed;
+}
+
+/**
  * Generate LaTeX using gpt-4o-mini (fastest model)
  * Uses prompts from fast-prompt-builder.js
  */
-async function generateLatexWithLLM(openai, userDataJSON, jobDescription, onProgress = null) {
+async function generateLatexWithLLM(openai, userDataJSON, jobDescription, keywords = null, onProgress = null) {
   // Import prompt builders and Gemini client
   const { buildFastSystemPrompt, buildFastUserPrompt } = await import('./fast-prompt-builder.js');
   const { generateLatexWithGemini, isGeminiAvailable } = await import('./gemini-client.js');
 
   // Use fast prompts for speed
   const systemPrompt = buildFastSystemPrompt();
-  const userPrompt = buildFastUserPrompt(userDataJSON, jobDescription);
+  const userPrompt = buildFastUserPrompt(userDataJSON, jobDescription, keywords);
 
   // Try Gemini first if available (33% faster, 37% cheaper)
   if (isGeminiAvailable()) {

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@clerk/clerk-react';
 import Icons from '../components/ui/icons';
+import BillingSection from '../components/BillingSection';
 
 // Define the profile type with all fields
 type Profile = {
@@ -19,7 +20,7 @@ type Profile = {
   additionalInfo?: string;
 };
 
-type TabType = 'personal' | 'summary' | 'skills' | 'experience' | 'additional' | 'resume';
+type TabType = 'personal' | 'summary' | 'skills' | 'experience' | 'additional' | 'resume' | 'billing';
 
 // API base URL
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
@@ -393,6 +394,13 @@ export default function MemoryProfile() {
               <Icons.file size={18} />
               <span>Resume</span>
             </button>
+            <button
+              className={`modern-profile-tab ${activeTab === 'billing' ? 'active' : ''}`}
+              onClick={() => setActiveTab('billing')}
+            >
+              <Icons.creditCard size={18} />
+              <span>Billing</span>
+            </button>
           </div>
         </div>
 
@@ -603,7 +611,7 @@ Example: Experienced Software Engineer with 5+ years of expertise in full-stack 
                 />
               </div>
             </div>
-          ) : (
+          ) : activeTab === 'resume' ? (
             <div className="modern-profile-section">
               <div className="modern-profile-section-header">
                 <h2 className="modern-profile-section-title">Resume Text</h2>
@@ -619,10 +627,13 @@ Example: Experienced Software Engineer with 5+ years of expertise in full-stack 
                 />
               </div>
             </div>
-          )}
+          ) : activeTab === 'billing' ? (
+            <BillingSection />
+          ) : null}
         </div>
 
         {/* Sticky Bottom Actions Bar */}
+        {activeTab !== 'billing' && (
         <div className="modern-profile-sticky-actions">
           <div className="modern-profile-actions-container">
             <input
@@ -668,6 +679,7 @@ Example: Experienced Software Engineer with 5+ years of expertise in full-stack 
             </button>
           </div>
         </div>
+        )}
       </div>
     </div>
   );
