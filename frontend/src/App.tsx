@@ -67,18 +67,18 @@ export default function App() {
           const token = await getToken();
           const extensionId = import.meta.env.VITE_EXTENSION_ID;
 
-          if (typeof chrome !== 'undefined' && chrome.runtime && extensionId) {
+          if (typeof (window as any).chrome !== 'undefined' && (window as any).chrome.runtime && extensionId) {
             console.log('🔄 Syncing token to extension:', extensionId);
-            chrome.runtime.sendMessage(
+            (window as any).chrome.runtime.sendMessage(
               extensionId,
               {
                 type: 'CLERK_TOKEN_UPDATE',
                 token: token,
                 email: user.primaryEmailAddress?.emailAddress
               },
-              (response) => {
-                if (chrome.runtime.lastError) {
-                  console.log('⚠️ Extension not available:', chrome.runtime.lastError.message);
+              (response: any) => {
+                if ((window as any).chrome.runtime.lastError) {
+                  console.log('⚠️ Extension not available:', (window as any).chrome.runtime.lastError.message);
                 } else {
                   console.log('✅ Token synced to extension', response);
                 }
