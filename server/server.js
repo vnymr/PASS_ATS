@@ -2497,6 +2497,51 @@ app.get('/api/job/:jobId/download/pdf', authenticateToken, async (req, res) => {
   }
 });
 
+// PDF download by filename endpoint (used by Clerk-based frontend)
+app.get('/api/resumes/:filename', authenticateToken, async (req, res) => {
+  try {
+    const { filename } = req.params;
+
+    // Find the artifact by filename in metadata
+    const artifact = await prisma.artifact.findFirst({
+      where: {
+        type: 'PDF_OUTPUT',
+        metadata: {
+          path: ['filename'],
+          equals: filename
+        }
+      },
+      include: {
+        job: {
+          select: { userId: true }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    if (!artifact) {
+      logger.warn({ filename, userId: req.userId }, '❌ PDF not found by filename');
+      return res.status(404).json({ error: 'Resume not found' });
+    }
+
+    // Verify the resume belongs to the authenticated user
+    if (artifact.job.userId !== req.userId) {
+      logger.warn({ filename, userId: req.userId }, '❌ Unauthorized access attempt');
+      return res.status(403).json({ error: 'Unauthorized access to this resume' });
+    }
+
+    // Set appropriate headers and send the PDF
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(artifact.content);
+
+    logger.info({ filename, userId: req.userId }, '📥 Served PDF download by filename');
+  } catch (error) {
+    logger.error({ error, filename: req.params.filename }, '❌ Error downloading PDF by filename');
+    res.status(500).json({ error: 'Failed to download resume' });
+  }
+});
+
 // Static file serving in production
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '..', 'frontend', 'dist')));
