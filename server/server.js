@@ -2404,48 +2404,80 @@ async function processJobAsync(jobId, userId, jobDescription, aiMode, matchMode,
  * GET /api/resumes/:fileName - Download a specific resume file
  * Required by: Dashboard.tsx, DashboardModern.tsx, DashboardUnified.tsx, History.tsx
  */
-app.get('/api/resumes/:jobId', authenticateToken, async (req, res) => {
+app.get('/api/resumes/:identifier', authenticateToken, async (req, res) => {
   try {
-    const { jobId } = req.params;
+    const { identifier } = req.params;
+    let artifact = null;
 
-    // Verify job belongs to user
-    const job = await prisma.job.findUnique({
-      where: { id: jobId },
-      select: { userId: true }
-    });
+    // Check if identifier is a filename (ends with .pdf) or a jobId
+    if (identifier.endsWith('.pdf')) {
+      // It's a filename - find by filename in metadata
+      artifact = await prisma.artifact.findFirst({
+        where: {
+          type: 'PDF_OUTPUT',
+          metadata: {
+            path: ['filename'],
+            equals: identifier
+          }
+        },
+        include: {
+          job: {
+            select: { userId: true }
+          }
+        },
+        orderBy: { createdAt: 'desc' }
+      });
 
-    if (!job) {
-      return res.status(404).json({ error: 'Resume not found' });
-    }
+      if (!artifact) {
+        logger.warn({ filename: identifier, userId: req.userId }, '❌ PDF not found by filename');
+        return res.status(404).json({ error: 'Resume not found' });
+      }
 
-    if (job.userId !== req.userId) {
-      return res.status(403).json({ error: 'Unauthorized access to this resume' });
-    }
+      // Verify the resume belongs to the authenticated user
+      if (artifact.job.userId !== req.userId) {
+        logger.warn({ filename: identifier, userId: req.userId }, '❌ Unauthorized access attempt');
+        return res.status(403).json({ error: 'Unauthorized access to this resume' });
+      }
+    } else {
+      // It's a jobId - verify job belongs to user first
+      const job = await prisma.job.findUnique({
+        where: { id: identifier },
+        select: { userId: true }
+      });
 
-    // Fetch the PDF artifact
-    const artifact = await prisma.artifact.findFirst({
-      where: {
-        jobId,
-        type: 'PDF_OUTPUT'
-      },
-      orderBy: { version: 'desc' }
-    });
+      if (!job) {
+        return res.status(404).json({ error: 'Resume not found' });
+      }
 
-    if (!artifact) {
-      return res.status(404).json({ error: 'PDF file not found' });
+      if (job.userId !== req.userId) {
+        return res.status(403).json({ error: 'Unauthorized access to this resume' });
+      }
+
+      // Fetch the PDF artifact
+      artifact = await prisma.artifact.findFirst({
+        where: {
+          jobId: identifier,
+          type: 'PDF_OUTPUT'
+        },
+        orderBy: { version: 'desc' }
+      });
+
+      if (!artifact) {
+        return res.status(404).json({ error: 'PDF file not found' });
+      }
     }
 
     // Use stored filename from metadata (should always exist for new resumes)
-    const downloadFilename = artifact.metadata?.filename || `Resume_${jobId.substring(0, 8)}.pdf`;
+    const downloadFilename = artifact.metadata?.filename || `Resume_${identifier.substring(0, 8)}.pdf`;
 
     // Set appropriate headers and send the PDF
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${downloadFilename}"`);
     res.send(artifact.content);
 
-    console.log(`📥 Served PDF ${downloadFilename} for user ${req.userId}`);
+    logger.info({ identifier, filename: downloadFilename, userId: req.userId }, '📥 Served PDF download');
   } catch (error) {
-    console.error('❌ Error downloading resume:', error);
+    logger.error({ error, identifier: req.params.identifier }, '❌ Error downloading resume');
     res.status(500).json({ error: 'Failed to download resume' });
   }
 });
@@ -2493,51 +2525,6 @@ app.get('/api/job/:jobId/download/pdf', authenticateToken, async (req, res) => {
     logger.info({ jobId, filename: downloadFilename }, '📥 Served PDF download');
   } catch (error) {
     logger.error({ error, jobId: req.params.jobId }, '❌ Error downloading PDF');
-    res.status(500).json({ error: 'Failed to download resume' });
-  }
-});
-
-// PDF download by filename endpoint (used by Clerk-based frontend)
-app.get('/api/resumes/:filename', authenticateToken, async (req, res) => {
-  try {
-    const { filename } = req.params;
-
-    // Find the artifact by filename in metadata
-    const artifact = await prisma.artifact.findFirst({
-      where: {
-        type: 'PDF_OUTPUT',
-        metadata: {
-          path: ['filename'],
-          equals: filename
-        }
-      },
-      include: {
-        job: {
-          select: { userId: true }
-        }
-      },
-      orderBy: { createdAt: 'desc' }
-    });
-
-    if (!artifact) {
-      logger.warn({ filename, userId: req.userId }, '❌ PDF not found by filename');
-      return res.status(404).json({ error: 'Resume not found' });
-    }
-
-    // Verify the resume belongs to the authenticated user
-    if (artifact.job.userId !== req.userId) {
-      logger.warn({ filename, userId: req.userId }, '❌ Unauthorized access attempt');
-      return res.status(403).json({ error: 'Unauthorized access to this resume' });
-    }
-
-    // Set appropriate headers and send the PDF
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.send(artifact.content);
-
-    logger.info({ filename, userId: req.userId }, '📥 Served PDF download by filename');
-  } catch (error) {
-    logger.error({ error, filename: req.params.filename }, '❌ Error downloading PDF by filename');
     res.status(500).json({ error: 'Failed to download resume' });
   }
 });
