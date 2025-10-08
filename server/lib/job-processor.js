@@ -786,9 +786,9 @@ async function fixLatexWithLLM(openai, brokenLatex, errorMessage) {
   }
 
   // Fallback to OpenAI
-  logger.info('Using OpenAI gpt-5-mini for LaTeX error fixing');
+  logger.info('Using OpenAI gpt-4o-mini for LaTeX error fixing');
   const response = await openai.chat.completions.create({
-    model: 'gpt-5-mini',
+    model: 'gpt-4o-mini',
     messages: [
       {
         role: 'system',
