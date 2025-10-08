@@ -1430,6 +1430,40 @@ app.get('/api/subscription', authenticateToken, async (req, res) => {
   }
 });
 
+app.get('/api/usage', authenticateToken, async (req, res) => {
+  try {
+    // Get user's subscription to determine limit
+    const subscription = await prisma.subscription.findUnique({
+      where: { userId: req.userId }
+    });
+
+    const tier = subscription?.tier || 'FREE';
+    const dailyLimits = { FREE: 5, PRO: 30, UNLIMITED: 999999 };
+    const limit = dailyLimits[tier];
+
+    // Count jobs created today
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const usedToday = await prisma.job.count({
+      where: {
+        userId: req.userId,
+        createdAt: { gte: today }
+      }
+    });
+
+    res.json({
+      used: usedToday,
+      limit: limit,
+      remaining: Math.max(0, limit - usedToday),
+      tier: tier
+    });
+  } catch (error) {
+    logger.error({ error: error.message }, 'Failed to fetch usage');
+    res.status(500).json({ error: 'Failed to fetch usage' });
+  }
+});
+
 // ============================================
 // NEW CLERK FRONTEND REQUIRED ENDPOINTS
 // ============================================
@@ -2412,6 +2446,53 @@ app.get('/api/resumes/:jobId', authenticateToken, async (req, res) => {
     console.log(`📥 Served PDF ${downloadFilename} for user ${req.userId}`);
   } catch (error) {
     console.error('❌ Error downloading resume:', error);
+    res.status(500).json({ error: 'Failed to download resume' });
+  }
+});
+
+// PDF download endpoint (alternative path used by frontend)
+app.get('/api/job/:jobId/download/pdf', authenticateToken, async (req, res) => {
+  try {
+    const { jobId } = req.params;
+
+    // Verify job belongs to user
+    const job = await prisma.job.findUnique({
+      where: { id: jobId },
+      select: { userId: true }
+    });
+
+    if (!job) {
+      return res.status(404).json({ error: 'Resume not found' });
+    }
+
+    if (job.userId !== req.userId) {
+      return res.status(403).json({ error: 'Unauthorized access to this resume' });
+    }
+
+    // Fetch the PDF artifact
+    const artifact = await prisma.artifact.findFirst({
+      where: {
+        jobId,
+        type: 'PDF_OUTPUT'
+      },
+      orderBy: { version: 'desc' }
+    });
+
+    if (!artifact) {
+      return res.status(404).json({ error: 'PDF file not found' });
+    }
+
+    // Use stored filename from metadata
+    const downloadFilename = artifact.metadata?.filename || `Resume_${jobId.substring(0, 8)}.pdf`;
+
+    // Set appropriate headers and send the PDF
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${downloadFilename}"`);
+    res.send(artifact.content);
+
+    logger.info({ jobId, filename: downloadFilename }, '📥 Served PDF download');
+  } catch (error) {
+    logger.error({ error, jobId: req.params.jobId }, '❌ Error downloading PDF');
     res.status(500).json({ error: 'Failed to download resume' });
   }
 });
