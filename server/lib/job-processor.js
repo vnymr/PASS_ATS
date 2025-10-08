@@ -15,6 +15,7 @@ import cacheManager from './cache-manager.js';
 import logger, { jobLogger, compileLogger, aiLogger } from './logger.js';
 import { prisma } from './prisma-client.js';
 import crypto from 'crypto';
+import OpenAI from 'openai';
 
 /**
  * Generate hash for job description (for caching)
