@@ -29,6 +29,8 @@ import logger, { authLogger, jobLogger, requestLogger, compileLogger, aiLogger }
 import { validateJobDescription, validateEmail, validatePassword, sanitizeProfileData } from './lib/input-validator.js';
 // Import file validator
 import { validateUploadedFile } from './lib/file-validator.js';
+// Import resume queue for concurrent processing
+import { queueResumeForParsing, getResumeParsingStatus } from './lib/resume-queue.js';
 
 // Load environment variables - .env first, then .env.local to override
 dotenv.config();
@@ -62,10 +64,10 @@ app.set('trust proxy', 1);
 
 const upload = multer({ storage: multer.memoryStorage() });
 
-// Rate limiting configuration
+// Rate limiting configuration - optimized for 1000+ concurrent users
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
+  max: 500, // Increased from 100 to 500 for high traffic
   message: 'Too many requests from this IP, please try again later',
   standardHeaders: true,
   legacyHeaders: false,
@@ -73,7 +75,7 @@ const generalLimiter = rateLimit({
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10, // Limit each IP to 10 auth requests per windowMs
+  max: 20, // Increased from 10 to 20 for legitimate retries
   message: 'Too many authentication attempts, please try again later',
   standardHeaders: true,
   legacyHeaders: false,
@@ -81,11 +83,10 @@ const authLimiter = rateLimit({
 
 const jobProcessingLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: 20, // Limit each IP to 20 job submissions per hour
+  max: 50, // Increased from 20 to 50 for paid users
   message: 'Too many resume generation requests, please try again later',
   standardHeaders: true,
   legacyHeaders: false,
-  // Use user ID if authenticated for more accurate limiting
   skip: (req) => false,
   handler: (req, res) => {
     res.status(429).json({
@@ -187,6 +188,26 @@ app.post('/api/webhooks/stripe',
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Security: Block access to sensitive files and directories
+app.use((req, res, next) => {
+  const blockedPaths = [
+    /^\/\.git/,
+    /^\/\.env/,
+    /^\/\.claude/,
+    /\/\.git\//,
+    /\/\.env/,
+    /\/node_modules\//,
+    /\/\.DS_Store/,
+  ];
+
+  if (blockedPaths.some(pattern => pattern.test(req.path))) {
+    logger.warn({ path: req.path, ip: req.ip }, 'Blocked access to sensitive path');
+    return res.status(404).send('Not Found');
+  }
+
+  next();
+});
 
 // Health check
 app.get('/health', async (req, res) => {
@@ -618,43 +639,101 @@ app.put('/api/profile', authenticateToken, async (req, res) => {
 });
 
 // Parse resume endpoint - extract information from uploaded resume
+// Now supports both sync (immediate) and async (queued) parsing
 app.post('/api/parse-resume', authenticateToken, upload.single('resume'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    console.log('📄 Parsing resume:', req.file.originalname);
+    const useQueue = req.query.async === 'true' || req.body.async === 'true';
 
-    const parser = new ResumeParser();
-    const { text, extractedData } = await parser.parseResume(req.file.buffer, req.file.mimetype);
+    console.log('📄 Parsing resume:', req.file.originalname, useQueue ? '(queued)' : '(immediate)');
 
-    console.log('✅ Resume parsed successfully');
-    res.json({
-      resumeText: text,
-      extractedData
-    });
+    if (useQueue) {
+      // Queue for async processing (recommended for high concurrency)
+      const { jobId, status } = await queueResumeForParsing(
+        req.userId,
+        req.file.buffer,
+        req.file.mimetype,
+        req.file.originalname,
+        false // Don't merge with profile, just parse
+      );
+
+      console.log('✅ Resume queued for parsing:', jobId);
+      res.json({
+        jobId,
+        status,
+        message: 'Resume queued for parsing. Use /api/resume-status/:jobId to check progress.'
+      });
+    } else {
+      // Immediate parsing (legacy, for small files)
+      const parser = new ResumeParser();
+      const { text, extractedData } = await parser.parseResume(req.file.buffer, req.file.mimetype);
+
+      console.log('✅ Resume parsed successfully');
+      res.json({
+        resumeText: text,
+        extractedData
+      });
+    }
   } catch (error) {
     console.error('Resume parse error:', error);
     res.status(500).json({ error: 'Failed to parse resume' });
   }
 });
 
+// Get resume parsing job status
+app.get('/api/resume-status/:jobId', authenticateToken, async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    const status = await getResumeParsingStatus(jobId);
+
+    res.json(status);
+  } catch (error) {
+    console.error('Job status error:', error);
+    res.status(500).json({ error: 'Failed to get job status' });
+  }
+});
+
 // Save profile with resume endpoint
+// Now supports async resume processing for better concurrency
 app.post('/api/profile/with-resume', authenticateToken, upload.single('resume'), async (req, res) => {
   try {
     const profileData = JSON.parse(req.body.profile);
+    const useQueue = req.query.async === 'true' || req.body.async === 'true';
     let resumeBuffer = null;
 
     if (req.file) {
       console.log('📎 Saving resume file:', req.file.originalname);
       resumeBuffer = req.file.buffer;
 
-      // Parse resume if not already parsed
-      if (!profileData.resumeText) {
-        const parser = new ResumeParser();
-        const { text } = await parser.parseResume(resumeBuffer, req.file.mimetype);
-        profileData.resumeText = text;
+      if (useQueue) {
+        // Queue resume for async parsing and merging with profile
+        const { jobId, status } = await queueResumeForParsing(
+          req.userId,
+          req.file.buffer,
+          req.file.mimetype,
+          req.file.originalname,
+          true // Merge with existing profile
+        );
+
+        console.log('✅ Resume queued for parsing and profile merge:', jobId);
+
+        // Return job ID for status tracking
+        return res.json({
+          jobId,
+          status,
+          message: 'Resume queued for processing. Your profile will be updated when parsing completes.',
+          profileData: profileData // Return the non-resume data immediately
+        });
+      } else {
+        // Immediate parsing (legacy/small files)
+        if (!profileData.resumeText) {
+          const parser = new ResumeParser();
+          const { text } = await parser.parseResume(resumeBuffer, req.file.mimetype);
+          profileData.resumeText = text;
+        }
       }
     }
 
@@ -666,7 +745,7 @@ app.post('/api/profile/with-resume', authenticateToken, upload.single('resume'),
       savedResumeFilename: req.file ? req.file.originalname : null
     };
 
-    // Save profile
+    // Save profile (merge with existing data using upsert)
     const profile = await prisma.profile.upsert({
       where: { userId: req.userId },
       update: {

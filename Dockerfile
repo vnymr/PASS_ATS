@@ -7,6 +7,13 @@ RUN apk add --no-cache curl && \
     | tar -xz -C /usr/local/bin/ && \
     apk del curl
 
+# Build frontend
+WORKDIR /app/frontend
+COPY frontend/package*.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
+
 # Production stage
 FROM node:18-alpine
 
@@ -17,6 +24,9 @@ RUN apk add --no-cache ca-certificates openssl curl
 COPY --from=builder /usr/local/bin/tectonic /usr/local/bin/tectonic
 
 WORKDIR /app
+
+# Copy built frontend from builder stage
+COPY --from=builder /app/frontend/dist ./frontend/dist
 
 # Copy only necessary files for server
 COPY server/package*.json ./server/
@@ -32,12 +42,13 @@ RUN npm install --production && \
 COPY server/ ./
 
 # Create required directories
-RUN mkdir -p server/temp server/generated && \
-    chmod 755 server/temp server/generated
+RUN mkdir -p temp generated && \
+    chmod 755 temp generated
 
 # Set environment defaults
 ENV NODE_ENV=production \
-    PORT=8080
+    PORT=8080 \
+    TRUST_PROXY=true
 
 EXPOSE ${PORT}
 
@@ -47,5 +58,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=5 \
 
 WORKDIR /app/server
 
-# Start server
-CMD ["node", "server.js"]
+# Run database migrations and start server
+CMD npx prisma migrate deploy && node server.js

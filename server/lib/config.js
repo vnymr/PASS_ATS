@@ -1,7 +1,29 @@
 // Centralized configuration for the application
 export const config = {
-  // OpenAI Model Configuration
+  // AI Provider Configuration - GEMINI FIRST, OpenAI as fallback
+  ai: {
+    // Primary provider (Gemini is cheaper and faster)
+    primary: process.env.AI_PRIMARY_PROVIDER || 'gemini',
+    fallback: process.env.AI_FALLBACK_PROVIDER || 'openai',
+  },
+
+  // Gemini Model Configuration (PRIMARY)
+  gemini: {
+    apiKey: process.env.GEMINI_API_KEY,
+    // Text generation models
+    textModels: {
+      fast: 'gemini-1.5-flash',      // Fastest, cheapest
+      quality: 'gemini-1.5-pro',     // Highest quality
+      default: 'gemini-1.5-flash',   // Default to fast
+    },
+    // Response settings - HIGH tokens for LaTeX generation
+    maxTokens: parseInt(process.env.GEMINI_MAX_TOKENS || '10000'), // Increased for LaTeX
+    temperature: parseFloat(process.env.GEMINI_TEMPERATURE || '0.7'),
+  },
+
+  // OpenAI Model Configuration (FALLBACK)
   openai: {
+    apiKey: process.env.OPENAI_API_KEY,
     // Text generation models
     textModels: {
       fast: process.env.OPENAI_TEXT_MODEL_FAST || 'gpt-4o-mini',
@@ -13,8 +35,8 @@ export const config = {
     },
     // Embedding model
     embeddingModel: process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-small',
-    // Response settings
-    maxTokens: parseInt(process.env.OPENAI_MAX_TOKENS || '3000'),
+    // Response settings - HIGH tokens for LaTeX generation
+    maxTokens: parseInt(process.env.OPENAI_MAX_TOKENS || '10000'), // Increased for LaTeX
     temperature: parseFloat(process.env.OPENAI_TEMPERATURE || '0.7'),
   },
 
@@ -88,7 +110,44 @@ export const config = {
   },
 };
 
-// Helper function to get the appropriate OpenAI model based on mode
+// Helper function to get AI model - GEMINI FIRST, OpenAI fallback
+export function getAIModel(aiMode = 'default') {
+  const provider = config.ai.primary;
+
+  if (provider === 'gemini') {
+    return {
+      provider: 'gemini',
+      model: getGeminiModel(aiMode),
+      apiKey: config.gemini.apiKey
+    };
+  } else {
+    return {
+      provider: 'openai',
+      model: getOpenAIModel(aiMode),
+      apiKey: config.openai.apiKey
+    };
+  }
+}
+
+// Helper function to get Gemini model
+export function getGeminiModel(aiMode) {
+  // Check if it's a direct model name
+  if (config.gemini.textModels[aiMode]) {
+    return config.gemini.textModels[aiMode];
+  }
+
+  // Map quality levels
+  switch (aiMode) {
+    case 'quality':
+      return config.gemini.textModels.quality;
+    case 'fast':
+      return config.gemini.textModels.fast;
+    default:
+      return config.gemini.textModels.default;
+  }
+}
+
+// Helper function to get the appropriate OpenAI model based on mode (for fallback)
 export function getOpenAIModel(aiMode) {
   // Check if it's a direct model name
   if (config.openai.textModels[aiMode]) {

@@ -1,0 +1,100 @@
+🔍 SYSTEM HEALTH MONITORING
+======================================================================
+Duration: 60 seconds
+Sample Interval: 5000ms
+======================================================================
+
+📋 Checking System Requirements...
+
+System Requirements:
+──────────────────────────────────────────────────
+✅ node: v23.11.0 (requires >= 18.0.0)
+✅ npm: 10.9.2
+❌ memory: 0.2GB free of 8.0GB total (requires >= 2GB free)
+✅ disk: 3.9Gi available
+✅ ports: 3000: in use, 6379: free
+❌ environment: Missing: OPENAI_API_KEY, DATABASE_URL, REDIS_URL, JWT_SECRET
+
+
+================================================================================
+                         📊 SYSTEM HEALTH REPORT
+================================================================================
+
+💻 SYSTEM METRICS
+──────────────────────────────────────────────────────────────────────
+CPU Usage: 38.2%
+Memory Usage: 98.3% (8084MB / 8192MB)
+
+🚀 APPLICATION METRICS
+──────────────────────────────────────────────────────────────────────
+Avg Response Time: 9.33ms
+
+🔗 DEPENDENCIES STATUS
+──────────────────────────────────────────────────────────────────────
+✅ redis: Available (0ms)
+✅ database: Available (0ms)
+✅ openai: Available (371ms)
+✅ latex: Available 
+
+⚠️  ERROR ANALYSIS
+──────────────────────────────────────────────────────────────────────
+Total Errors Detected: 6
+High Severity: 4
+Medium Severity: 2
+Low Severity: 0
+
+Errors by Category:
+  deployment: 1
+  configuration: 1
+  dependencies: 1
+  latex: 1
+  data: 1
+  processing: 1
+
+🛡️  ERROR PREVENTION RECOMMENDATIONS
+──────────────────────────────────────────────────────────────────────
+
+1. FRONTEND BUILD:
+   Solution: Ensure npm run build is executed in frontend directory before deployment
+
+2. TRUST PROXY:
+   Solution: Add app.set('trust proxy', true) in server configuration for Railway/proxy environments
+
+3. LATEX FONTCONFIG:
+   Solution: Install fontconfig package or use Docker image with proper LaTeX dependencies
+
+4. LATEX COMPILATION:
+   Solution: Validate LaTeX templates and escape special characters properly
+
+5. PROFILE MISSING:
+   Solution: Ensure user profile is created during onboarding and handle missing profiles gracefully
+
+6. JOB FAILED:
+   Solution: Implement retry logic, better error handling, and job failure notifications
+
+🏗️  INFRASTRUCTURE RECOMMENDATIONS
+──────────────────────────────────────────────────────────────────────
+• Address high-severity errors immediately before production deployment
+• Consider increasing memory allocation or optimizing memory usage
+• Implement horizontal scaling with 2-5 workers based on load
+• Use Redis Cluster for high availability
+• Set up CDN for frontend static assets
+• Implement caching layer for frequently accessed data
+
+✅ DEPLOYMENT CHECKLIST
+──────────────────────────────────────────────────────────────────────
+☐ Run "npm run build" in frontend directory before deployment
+☐ Set "trust proxy" to true for Railway/proxy environments
+☐ Ensure fontconfig is installed in production Docker image
+☐ Validate all LaTeX templates for undefined control sequences
+☐ Implement user profile creation during onboarding
+☐ Add retry logic for failed jobs (max 3 retries)
+☐ Set up error monitoring (Sentry/DataDog)
+☐ Configure auto-scaling based on queue depth
+☐ Implement health checks for all dependencies
+☐ Set up alerts for high error rates
+
+================================================================================
+
+📁 Detailed report saved to: /Users/vinaymuthareddy/RESUME_GENERATOR/health-report-1759896180924.json
+

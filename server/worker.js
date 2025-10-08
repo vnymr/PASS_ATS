@@ -5,7 +5,7 @@
  * resume generation jobs from the queue.
  *
  * Features:
- * - Processes 5 jobs concurrently
+ * - Processes 50 jobs concurrently (scaled for 1000+ users)
  * - Automatic retries with exponential backoff
  * - Progress reporting (0-100%)
  * - Graceful shutdown
@@ -62,9 +62,9 @@ const worker = new Worker('resume-generation', async (job) => {
   }
 }, {
   connection,
-  concurrency: 5, // Process 5 jobs concurrently
+  concurrency: 50, // Process 50 jobs concurrently (scaled for 1000+ users)
   limiter: {
-    max: 10, // Max 10 jobs
+    max: 100, // Max 100 jobs (up from 10)
     duration: 1000 // per second
   }
 });
@@ -114,12 +114,13 @@ process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 
 logger.info({
-  concurrency: 5,
+  concurrency: 50,
   queue: 'resume-generation'
 }, 'Resume generation worker started');
 
 console.log('🚀 Resume Generation Worker Started');
-console.log('📊 Concurrency: 5 jobs at once');
+console.log('📊 Concurrency: 50 jobs at once (scaled for 1000+ users)');
 console.log('⏱️  Timeout: 2 minutes per job');
 console.log('🔄 Auto-retry: Up to 3 attempts');
+console.log('🚀 Throughput: Up to 100 jobs/second');
 console.log('\n✅ Ready to process jobs...\n');

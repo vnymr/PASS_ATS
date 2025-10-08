@@ -236,7 +236,7 @@ class AIResumeGenerator {
           }
         ],
         temperature: 0.5, // Lower temperature for more consistent factual output
-        max_tokens: 8000  // Increased significantly for complete resume
+        max_tokens: 10000  // Increased for complete LaTeX resume generation
       });
 
       let latexCode = response.choices[0].message.content.trim();
@@ -327,7 +327,7 @@ class AIResumeGenerator {
           }
         ],
         temperature: 0.5,
-        max_tokens: 8000
+        max_tokens: 10000  // Increased for complete LaTeX resume generation
       });
 
       let latexCode = response.choices[0].message.content.trim();

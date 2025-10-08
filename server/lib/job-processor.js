@@ -10,17 +10,35 @@
  * Lock is automatically released on completion, failure, or worker crash.
  */
 
-import OpenAI from 'openai';
+import aiClient from './ai-client.js';
+import cacheManager from './cache-manager.js';
 import logger, { jobLogger, compileLogger, aiLogger } from './logger.js';
 import { prisma } from './prisma-client.js';
+import crypto from 'crypto';
 
 /**
- * Extract job information from description using LLM
+ * Generate hash for job description (for caching)
+ */
+function generateJobHash(jobDescription) {
+  return crypto.createHash('sha256').update(jobDescription).digest('hex').substring(0, 16);
+}
+
+/**
+ * Extract job information from description using LLM (with caching)
  * @param {string} jobDescription - Job description text
  * @returns {Promise<{company: string, role: string, location: string|null}>}
  */
 async function extractJobInfo(jobDescription) {
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const jobHash = generateJobHash(jobDescription);
+
+  // Check cache first
+  const cached = await cacheManager.getJobParsing(jobHash);
+  if (cached) {
+    logger.info('✅ Job info: CACHE HIT - saving $$$ on AI');
+    return cached;
+  }
+
+  logger.info('💰 Job info: CACHE MISS - calling AI (using Gemini to save $$$)');
 
   const prompt = `Extract the following information from this job posting. Return ONLY valid JSON with no markdown formatting:
 
@@ -34,20 +52,25 @@ Job posting:
 ${jobDescription.substring(0, 3000)}`;
 
   try {
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [{ role: 'user', content: prompt }],
-      response_format: { type: "json_object" }
+    // Use AI client (Gemini first, OpenAI fallback)
+    const responseText = await aiClient.generateText({
+      prompt,
+      aiMode: 'fast', // Gemini Flash - super cheap!
+      jsonMode: true
     });
 
-    const content = response.choices[0].message.content.trim();
-    const parsed = JSON.parse(content);
+    const parsed = JSON.parse(responseText);
 
-    return {
+    const result = {
       company: parsed.company || 'Unknown Company',
       role: parsed.role || 'Position',
       location: parsed.location || null
     };
+
+    // Cache for 24 hours (job descriptions don't change)
+    await cacheManager.setJobParsing(jobHash, result);
+
+    return result;
   } catch (error) {
     logger.warn({ error: error.message }, 'Failed to extract job info with LLM, using fallback');
 
@@ -73,11 +96,22 @@ ${jobDescription.substring(0, 3000)}`;
 }
 
 /**
- * Extract ATS keywords from job description using LLM
+ * Extract ATS keywords from job description using LLM (with caching)
  * @param {string} jobDescription - Job description text
  * @returns {Promise<{criticalKeywords: string[], importantKeywords: string[], technicalTerms: string[]}>}
  */
 async function extractKeywordsFromJD(jobDescription) {
+  const jobHash = generateJobHash(jobDescription);
+
+  // Check cache first
+  const cached = await cacheManager.getAtsKeywords(jobHash);
+  if (cached) {
+    logger.info('✅ ATS keywords: CACHE HIT - saving $$$ on AI');
+    return cached;
+  }
+
+  logger.info('💰 ATS keywords: CACHE MISS - calling AI (using Gemini to save $$$)');
+
   const prompt = `Extract ATS keywords from this job description. Return ONLY a JSON object with the most important keywords (skills, tools, certifications, frameworks, product names).
 
 EXTRACTION RULES:
@@ -96,46 +130,28 @@ Return format (valid JSON):
   "technicalTerms": ["term1", "term2"]
 }`;
 
-  // Try Gemini first
-  const { generateSimpleJsonWithGemini, isGeminiAvailable } = await import('./gemini-client.js');
-
-  if (isGeminiAvailable()) {
-    try {
-      logger.info('Using Gemini 2.5 Flash for keyword extraction');
-      const result = await generateSimpleJsonWithGemini(prompt);
-      const parsed = JSON.parse(result);
-
-      return {
-        criticalKeywords: parsed.criticalKeywords || [],
-        importantKeywords: parsed.importantKeywords || [],
-        technicalTerms: parsed.technicalTerms || []
-      };
-    } catch (error) {
-      logger.warn({ error: error.message }, 'Gemini keyword extraction failed, falling back to OpenAI');
-    }
-  }
-
-  // Fallback to OpenAI
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
   try {
-    logger.info('Using OpenAI gpt-4o-mini for keyword extraction');
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [{ role: 'user', content: prompt }],
-      response_format: { type: "json_object" },
+    // Use AI client (Gemini first, OpenAI fallback)
+    const responseText = await aiClient.generateText({
+      prompt,
+      aiMode: 'fast', // Gemini Flash - super cheap!
       temperature: 0,
-      max_completion_tokens: 500
+      jsonMode: true,
+      maxTokens: 500
     });
 
-    const content = response.choices[0].message.content.trim();
-    const parsed = JSON.parse(content);
+    const parsed = JSON.parse(responseText);
 
-    return {
+    const result = {
       criticalKeywords: parsed.criticalKeywords || [],
       importantKeywords: parsed.importantKeywords || [],
       technicalTerms: parsed.technicalTerms || []
     };
+
+    // Cache for 24 hours (job descriptions don't change)
+    await cacheManager.setAtsKeywords(jobHash, result);
+
+    return result;
   } catch (error) {
     logger.warn({ error: error.message }, 'Failed to extract keywords, using empty arrays');
     return {
