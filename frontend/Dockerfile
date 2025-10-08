@@ -13,8 +13,8 @@ COPY . .
 # Set build-time environment variables
 ARG VITE_API_URL
 ARG VITE_CLERK_PUBLISHABLE_KEY
-ENV VITE_API_URL=${VITE_API_URL:-https://pass-ats-production.up.railway.app}
-ENV VITE_CLERK_PUBLISHABLE_KEY=${VITE_CLERK_PUBLISHABLE_KEY:-pk_test_placeholder}
+ENV VITE_API_URL=${VITE_API_URL:-/api}
+ENV VITE_CLERK_PUBLISHABLE_KEY=${VITE_CLERK_PUBLISHABLE_KEY:-pk_live_Y2xlcmsuaGFwcHlyZXN1bWVzLmNvbSQ}
 
 # Build the frontend
 RUN npm run build

@@ -14,8 +14,8 @@ RUN npm ci
 COPY frontend/ ./
 
 # Set build-time environment variables for frontend
-ENV VITE_API_URL=https://pass-ats-production.up.railway.app
-ENV VITE_CLERK_PUBLISHABLE_KEY=pk_test_placeholder
+ENV VITE_API_URL=/api
+ENV VITE_CLERK_PUBLISHABLE_KEY=pk_live_Y2xlcmsuaGFwcHlyZXN1bWVzLmNvbSQ
 
 RUN npm run build
 
