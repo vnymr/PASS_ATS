@@ -12,6 +12,11 @@ WORKDIR /app/frontend
 COPY frontend/package*.json ./
 RUN npm ci
 COPY frontend/ ./
+
+# Set build-time environment variables for frontend
+ENV VITE_API_URL=https://pass-ats-production.up.railway.app
+ENV VITE_CLERK_PUBLISHABLE_KEY=pk_test_placeholder
+
 RUN npm run build
 
 # Production stage
