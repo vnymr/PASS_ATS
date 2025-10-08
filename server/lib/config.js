@@ -4,11 +4,12 @@ export const config = {
   openai: {
     // Text generation models
     textModels: {
-      fast: process.env.OPENAI_TEXT_MODEL_FAST || 'gpt-5-mini',
-      quality: process.env.OPENAI_TEXT_MODEL_QUALITY || 'gpt-5',
-      default: process.env.OPENAI_TEXT_MODEL || 'gpt-5-mini',
-      // Available models (as of August 2025)
-      'gpt-5-mini': 'gpt-5-mini',
+      fast: process.env.OPENAI_TEXT_MODEL_FAST || 'gpt-4o-mini',
+      quality: process.env.OPENAI_TEXT_MODEL_QUALITY || 'gpt-4o',
+      default: process.env.OPENAI_TEXT_MODEL || 'gpt-4o-mini',
+      // Available models
+      'gpt-4o-mini': 'gpt-4o-mini',
+      'gpt-4o': 'gpt-4o',
     },
     // Embedding model
     embeddingModel: process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-small',
