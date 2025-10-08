@@ -1,12 +1,13 @@
 import React, { useEffect, useState, useRef, KeyboardEvent } from 'react';
 import { useAuth } from '@clerk/clerk-react';
+import { useNavigate } from 'react-router-dom';
 import { api, type ResumeEntry } from '../api-clerk';
 import Icons from '../components/ui/icons';
-import UsageCard from '../components/UsageCard';
 import UpgradeLimitModal from '../components/UpgradeLimitModal';
 
 export default function DashboardModern() {
   const { getToken } = useAuth();
+  const navigate = useNavigate();
   const [resumes, setResumes] = useState<ResumeEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [jobDescription, setJobDescription] = useState('');
@@ -219,9 +220,6 @@ export default function DashboardModern() {
       />
 
       <div className="modern-dashboard-container">
-        {/* Usage Card */}
-        <UsageCard />
-
         {/* Main Generator Card */}
         <div className="modern-generator-card">
           <div className="modern-generator-inner">

@@ -1,12 +1,20 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { SignedIn, SignedOut, SignInButton, SignUpButton, UserButton } from '@clerk/clerk-react';
+import { SignedIn, SignedOut, SignInButton, SignUpButton, UserButton, useAuth } from '@clerk/clerk-react';
 // import { api } from '../api-clerk'; // ONBOARDING DISABLED: API not needed without profile check
-import logoImg from '../logo.png';
+import logoImg from '../logo.svg';
 import { DottedSurface } from '@/components/ui/dotted-surface';
 
 export default function Landing() {
   const navigate = useNavigate();
+  const { isSignedIn } = useAuth();
+
+  // Redirect signed-in users directly to dashboard
+  useEffect(() => {
+    if (isSignedIn) {
+      navigate('/dashboard');
+    }
+  }, [isSignedIn, navigate]);
   // ONBOARDING DISABLED: Profile check bypassed - all users go directly to dashboard
   // Original logic checked profile status to show different CTAs
   // To re-enable: Uncomment the profile check code below and update the SignedIn button logic
@@ -46,18 +54,18 @@ export default function Landing() {
   */
 
   return (
-    <div className="landing-hero" style={{ background: '#000000', position: 'relative' }}>
+    <div className="landing-hero" style={{ background: '#0a0a0a', position: 'relative' }}>
       <DottedSurface />
 
       <nav className="landing-nav" style={{ position: 'relative', zIndex: 100 }}>
         <div className="nav-container">
           <div className="logo">
-            <img src={logoImg} alt="" className="logo-img" />
+            <img src={logoImg} alt="HappyResume" className="logo-img" />
           </div>
           <div className="nav-buttons">
             <SignedOut>
               <SignInButton mode="modal">
-                <button className="btn btn-ghost" style={{ color: '#ffffff', borderColor: '#ffffff' }}>
+                <button className="btn btn-ghost">
                   Sign In
                 </button>
               </SignInButton>
@@ -74,13 +82,11 @@ export default function Landing() {
 
       <div className="hero-content" style={{ position: 'relative', zIndex: 100 }}>
         <h1 className="hero-title" style={{
-          background: 'linear-gradient(135deg, #ffffff 0%, #e0e0e0 100%)',
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: 'transparent'
+          color: '#ffffff'
         }}>
           Make Every Application Count
         </h1>
-        <p className="hero-subtitle" style={{ color: '#e0e0e0' }}>
+        <p className="hero-subtitle" style={{ color: '#a0a0a0' }}>
           Turn your profile + any job post into a one-page, ATS-ready resume.
           Every time in under 20 seconds.
         </p>
@@ -98,7 +104,7 @@ export default function Landing() {
               Go to Dashboard
             </button>
           </SignedIn>
-          <button className="btn btn-outline btn-large" style={{ color: '#ff6b35', borderColor: '#ff6b35' }}>
+          <button className="btn btn-outline btn-large">
             Download Extension
           </button>
         </div>

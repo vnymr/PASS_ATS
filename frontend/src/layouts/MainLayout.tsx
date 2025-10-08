@@ -4,6 +4,7 @@ import { UserButton } from '@clerk/clerk-react';
 import Icons from '../components/ui/icons';
 import SettingsModal from '../components/SettingsModal';
 import ProfileModal from '../components/ProfileModal';
+import logoImg from '../logo.svg';
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -31,7 +32,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
       {/* Top Navbar */}
       <nav className="ai-navbar">
         <div className="ai-navbar-left">
-          <span className="ai-navbar-brand">ResumeGen</span>
+          <img src={logoImg} alt="HappyResume" className="ai-navbar-logo" />
         </div>
         <div className="ai-navbar-right">
           <button

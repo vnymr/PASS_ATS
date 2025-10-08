@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '@clerk/clerk-react';
 import { useNavigate } from 'react-router-dom';
 import Icons from '../components/ui/icons';
-import { api } from '../api-clerk';
+import { api, type Quota } from '../api-clerk';
 
 interface PricingTier {
   name: string;
@@ -64,6 +64,95 @@ const pricingTiers: PricingTier[] = [
   }
 ];
 
+function UsageStats() {
+  const { getToken } = useAuth();
+  const [quota, setQuota] = useState<Quota | null>(null);
+  const [subscription, setSubscription] = useState<any>(null);
+
+  useEffect(() => {
+    loadStats();
+  }, []);
+
+  async function loadStats() {
+    try {
+      const token = await getToken();
+
+      const [quotaData, subData] = await Promise.all([
+        api.getQuota(token || undefined),
+        api.get('/api/subscription', token || undefined)
+      ]);
+
+      setQuota(quotaData);
+      setSubscription(subData);
+    } catch (error) {
+      console.error('Failed to load stats:', error);
+    }
+  }
+
+  if (!quota || !subscription) return null;
+
+  const percentage = (quota.used / quota.limit) * 100;
+
+  return (
+    <div
+      style={{
+        background: '#000000',
+        padding: '30px',
+        borderRadius: '12px',
+        marginBottom: '40px',
+        color: '#ffffff',
+        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
+      }}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '20px' }}>
+        <div>
+          <h3 style={{ margin: '0 0 10px 0', fontSize: '20px' }}>
+            Current Plan: {subscription.tier || 'FREE'}
+          </h3>
+          <p style={{ margin: 0, opacity: 0.9 }}>
+            {quota.used} of {quota.limit} resumes used this month
+          </p>
+        </div>
+
+        <div style={{ textAlign: 'right' }}>
+          <div
+            style={{
+              fontSize: '36px',
+              fontWeight: '700',
+              marginBottom: '5px'
+            }}
+          >
+            {quota.remaining}
+          </div>
+          <div style={{ fontSize: '14px', opacity: 0.9 }}>
+            remaining this month
+          </div>
+        </div>
+      </div>
+
+      {/* Progress bar */}
+      <div
+        style={{
+          marginTop: '20px',
+          background: 'rgba(255,255,255,0.2)',
+          borderRadius: '10px',
+          height: '8px',
+          overflow: 'hidden'
+        }}
+      >
+        <div
+          style={{
+            width: `${percentage}%`,
+            height: '100%',
+            background: percentage >= 80 ? '#cd0000' : '#ffffff',
+            transition: 'width 0.3s'
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
 export default function Pricing() {
   const { getToken } = useAuth();
   const navigate = useNavigate();
@@ -120,6 +209,9 @@ export default function Pricing() {
           <h1>Choose Your Plan</h1>
           <p>Select the perfect plan for your job search journey</p>
         </div>
+
+        {/* Usage Stats */}
+        <UsageStats />
 
         {error && (
           <div className="modern-alert modern-alert-error">

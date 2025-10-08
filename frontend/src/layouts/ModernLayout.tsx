@@ -1,10 +1,56 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { UserButton } from '@clerk/clerk-react';
+import { UserButton, useAuth } from '@clerk/clerk-react';
 import Icons from '../components/ui/icons';
+import { api, type Quota } from '../api-clerk';
+import logoImg from '../logo.svg';
 
 interface ModernLayoutProps {
   children: React.ReactNode;
+}
+
+function UsageBadge() {
+  const { getToken } = useAuth();
+  const [quota, setQuota] = useState<Quota | null>(null);
+
+  useEffect(() => {
+    loadQuota();
+    // Refresh quota every 30 seconds
+    const interval = setInterval(loadQuota, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  async function loadQuota() {
+    try {
+      const token = await getToken();
+      const data = await api.getQuota(token || undefined);
+      setQuota(data);
+    } catch (error) {
+      console.error('Failed to load quota:', error);
+    }
+  }
+
+  if (!quota) return null;
+
+  const percentage = (quota.used / quota.limit) * 100;
+  const isNearLimit = percentage >= 80;
+
+  return (
+    <div
+      style={{
+        padding: '4px 10px',
+        background: isNearLimit ? '#cd0000' : '#000000',
+        borderRadius: '6px',
+        fontSize: '12px',
+        fontWeight: '500',
+        color: '#ffffff',
+        marginLeft: '8px',
+        transition: 'all 0.2s'
+      }}
+    >
+      {quota.used}/{quota.limit}
+    </div>
+  );
 }
 
 export default function ModernLayout({ children }: ModernLayoutProps) {
@@ -34,8 +80,7 @@ export default function ModernLayout({ children }: ModernLayoutProps) {
       <nav className="modern-nav">
         <div className="modern-nav-container">
           <div className="modern-nav-brand">
-            <div className="modern-nav-logo">R</div>
-            <div className="modern-nav-title">ResumeGen</div>
+            <img src={logoImg} alt="HappyResume" className="modern-nav-logo-img" />
           </div>
 
           <div className="modern-nav-menu">
@@ -67,12 +112,14 @@ export default function ModernLayout({ children }: ModernLayoutProps) {
             </button>
 
             <button
-              className={`modern-nav-item ${location.pathname === '/pricing' ? 'active' : ''}`}
-              onClick={() => navigate('/pricing')}
-              aria-label="Pricing"
+              className={`modern-nav-item ${location.pathname === '/billing' || location.pathname === '/pricing' ? 'active' : ''}`}
+              onClick={() => navigate('/billing')}
+              aria-label="Billing"
+              style={{ display: 'flex', alignItems: 'center' }}
             >
               <Icons.dollarSign size={16} />
-              <span>Pricing</span>
+              <span>Billing</span>
+              <UsageBadge />
             </button>
 
             <div className="modern-nav-user">

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { UserButton } from '@clerk/clerk-react';
-import logoImg from '../logo.png';
+import logoImg from '../logo.svg';
 import Icons from '../components/ui/icons';
 
 interface DashboardLayoutProps {

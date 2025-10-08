@@ -69,8 +69,8 @@ export function DottedSurface({ className, ...props }: DottedSurfaceProps) {
 				const z = iy * SEPARATION - (AMOUNTY * SEPARATION) / 2;
 
 				positions.push(x, y, z);
-				// Orange color (RGB: 255, 107, 53)
-				colors.push(255, 107, 53);
+				// Subtle gray (RGB: 200, 200, 200)
+				colors.push(200, 200, 200);
 			}
 		}
 
@@ -82,10 +82,10 @@ export function DottedSurface({ className, ...props }: DottedSurfaceProps) {
 
 		// Create material
 		const material = new THREE.PointsMaterial({
-			size: 8,
+			size: 6,
 			vertexColors: true,
 			transparent: true,
-			opacity: 0.6,
+			opacity: 0.3,
 			sizeAttenuation: true,
 		});
 

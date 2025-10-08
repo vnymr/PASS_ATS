@@ -33,7 +33,7 @@ export default function UpgradeLimitModal({ isOpen, onClose, usedCount, limit }:
 
   function handleViewPlans() {
     onClose();
-    navigate('/pricing');
+    window.open('https://happyresumes.com/#pricing', '_blank');
   }
 
   return (

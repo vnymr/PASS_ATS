@@ -15,7 +15,7 @@ import MemoryProfile from './pages/MemoryProfile';
 import GenerateResume from './pages/GenerateResume';
 import History from './pages/History';
 import Extension from './pages/Extension';
-import Pricing from './pages/Pricing';
+import Billing from './pages/Billing';
 import CheckoutSuccess from './pages/CheckoutSuccess';
 import CheckoutCancel from './pages/CheckoutCancel';
 
@@ -134,10 +134,17 @@ export default function App() {
           </ModernLayout>
         </ProtectedRoute>
       } />
+      <Route path="/billing" element={
+        <ProtectedRoute>
+          <ModernLayout>
+            <Billing />
+          </ModernLayout>
+        </ProtectedRoute>
+      } />
       <Route path="/pricing" element={
         <ProtectedRoute>
           <ModernLayout>
-            <Pricing />
+            <Billing />
           </ModernLayout>
         </ProtectedRoute>
       } />

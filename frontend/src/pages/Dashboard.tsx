@@ -111,6 +111,23 @@ export default function Dashboard() {
 
     } catch (err: any) {
       console.error('Failed to generate resume:', err);
+
+      // Check if we hit the daily limit (403 error)
+      if (err?.status === 403 || err?.message?.includes('daily limit') || err?.message?.includes('limit reached')) {
+        const shouldUpgrade = confirm(
+          '⚠️ Daily limit reached\n\n' +
+          'You\'ve used all your free resumes for today.\n\n' +
+          'Upgrade to Pro for 30 resumes/day or Unlimited for no limits.\n\n' +
+          'Click OK to view billing & upgrade options.'
+        );
+
+        if (shouldUpgrade) {
+          navigate('/billing');
+        }
+        setIsGenerating(false);
+        return;
+      }
+
       const errorMsg = err?.message || 'Failed to generate resume. Please try again.';
       showToast(`❌ ${errorMsg}`, 'error');
       setIsGenerating(false);
@@ -184,13 +201,6 @@ export default function Dashboard() {
               Generated: <strong>{resumes.length}</strong>
             </span>
           </div>
-        </div>
-        <div className="ai-header-right">
-          {quota && (
-            <div className="ai-usage-pill">
-              Usage: <strong>{quota.used}/{quota.limit}</strong>
-            </div>
-          )}
         </div>
       </div>
 
