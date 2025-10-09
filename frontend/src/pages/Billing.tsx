@@ -111,43 +111,55 @@ export default function Billing() {
   return (
     <div
       style={{
-        maxWidth: '800px',
-        margin: '0 auto',
-        padding: '40px 20px'
+        background: '#0a0a0a',
+        minHeight: '100vh',
+        padding: '60px 0'
       }}
     >
+      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 24px' }}>
       {/* Back button */}
       <button
         onClick={() => navigate('/dashboard')}
         style={{
-          background: 'none',
-          border: 'none',
-          color: '#94a3b8',
+          background: 'transparent',
+          border: '1px solid rgba(255, 255, 255, 0.2)',
+          color: '#ffffff',
           cursor: 'pointer',
-          marginBottom: '20px',
+          marginBottom: '40px',
           fontSize: '14px',
           display: 'flex',
           alignItems: 'center',
-          gap: '5px'
+          gap: '8px',
+          padding: '8px 16px',
+          borderRadius: '6px',
+          transition: 'all 0.2s'
+        }}
+        onMouseOver={(e) => {
+          e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.4)';
+          e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+        }}
+        onMouseOut={(e) => {
+          e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+          e.currentTarget.style.background = 'transparent';
         }}
       >
         ← Back to Dashboard
       </button>
 
-      <h1 style={{ marginBottom: '10px', fontSize: '32px' }}>Subscription & Usage</h1>
-      <p style={{ color: '#94a3b8', marginBottom: '30px' }}>
+      <h1 style={{ marginBottom: '12px', fontSize: '2.5rem', fontWeight: '700', color: '#ffffff', letterSpacing: '-0.02em' }}>Subscription & Usage</h1>
+      <p style={{ color: '#888', marginBottom: '60px', fontSize: '1.125rem', maxWidth: '600px' }}>
         Manage your subscription and view your usage statistics
       </p>
 
       {/* Current Plan Card */}
       <div
         style={{
-          background: '#000000',
-          borderRadius: '16px',
-          padding: '40px',
+          background: '#0a0a0a',
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+          borderRadius: '0',
+          padding: '48px',
           color: '#ffffff',
-          marginBottom: '30px',
-          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
+          marginBottom: '32px'
         }}
       >
         <div
@@ -163,25 +175,26 @@ export default function Billing() {
           <div>
             <div
               style={{
-                fontSize: '14px',
-                opacity: 0.9,
-                marginBottom: '5px',
+                fontSize: '12px',
+                color: '#666',
+                marginBottom: '8px',
                 textTransform: 'uppercase',
-                letterSpacing: '1px'
+                letterSpacing: '1.5px',
+                fontWeight: '500'
               }}
             >
               Current Plan
             </div>
-            <div style={{ fontSize: '32px', fontWeight: '700' }}>
+            <div style={{ fontSize: '1.75rem', fontWeight: '600', color: '#ffffff' }}>
               {subscription.tier}
             </div>
           </div>
 
           <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: '48px', fontWeight: '700', lineHeight: 1 }}>
+            <div style={{ fontSize: '3rem', fontWeight: '700', lineHeight: 1, color: '#ffffff' }}>
               {usage.remaining}
             </div>
-            <div style={{ fontSize: '14px', opacity: 0.9, marginTop: '5px' }}>
+            <div style={{ fontSize: '14px', color: '#888', marginTop: '8px' }}>
               remaining this month
             </div>
           </div>
@@ -190,9 +203,9 @@ export default function Billing() {
         {/* Usage info */}
         <div
           style={{
-            fontSize: '16px',
-            marginBottom: '15px',
-            opacity: 0.95
+            fontSize: '0.95rem',
+            marginBottom: '12px',
+            color: '#888'
           }}
         >
           {usage.used} of {usage.limit} resumes used this month
@@ -201,9 +214,9 @@ export default function Billing() {
         {/* Progress bar */}
         <div
           style={{
-            background: 'rgba(255,255,255,0.2)',
-            borderRadius: '10px',
-            height: '12px',
+            background: 'rgba(255,255,255,0.1)',
+            borderRadius: '0',
+            height: '4px',
             overflow: 'hidden'
           }}
         >
@@ -211,9 +224,8 @@ export default function Billing() {
             style={{
               width: `${percentage}%`,
               height: '100%',
-              background: isNearLimit ? '#cd0000' : '#ffffff',
-              transition: 'width 0.3s',
-              borderRadius: '10px'
+              background: isNearLimit ? '#ffffff' : '#ffffff',
+              transition: 'width 0.3s'
             }}
           />
         </div>
@@ -221,9 +233,9 @@ export default function Billing() {
         {isNearLimit && (
           <div
             style={{
-              marginTop: '15px',
-              fontSize: '14px',
-              opacity: 0.95,
+              marginTop: '12px',
+              fontSize: '0.875rem',
+              color: '#888',
               display: 'flex',
               alignItems: 'center',
               gap: '8px'
@@ -239,8 +251,8 @@ export default function Billing() {
       <div
         style={{
           display: 'flex',
-          gap: '15px',
-          marginBottom: '30px',
+          gap: '12px',
+          marginBottom: '24px',
           flexWrap: 'wrap'
         }}
       >
@@ -251,12 +263,12 @@ export default function Billing() {
             style={{
               flex: 1,
               minWidth: '250px',
-              padding: '16px 24px',
-              background: '#000000',
-              color: '#ffffff',
+              padding: '14px 28px',
+              background: '#ffffff',
+              color: '#000000',
               border: 'none',
-              borderRadius: '12px',
-              fontSize: '16px',
+              borderRadius: '6px',
+              fontSize: '1rem',
               fontWeight: '500',
               cursor: loading ? 'not-allowed' : 'pointer',
               opacity: loading ? 0.5 : 1,
@@ -268,11 +280,11 @@ export default function Billing() {
             }}
             onMouseOver={(e) => {
               if (!loading) {
-                e.currentTarget.style.background = '#333333';
+                e.currentTarget.style.background = '#f0f0f0';
               }
             }}
             onMouseOut={(e) => {
-              e.currentTarget.style.background = '#000000';
+              e.currentTarget.style.background = '#ffffff';
             }}
           >
             {loading ? (
@@ -281,10 +293,7 @@ export default function Billing() {
                 Loading...
               </>
             ) : (
-              <>
-                <span>⚡</span>
-                Upgrade to Pro or Unlimited
-              </>
+              'Upgrade to Pro or Unlimited'
             )}
           </button>
         ) : (
@@ -294,26 +303,26 @@ export default function Billing() {
             style={{
               flex: 1,
               minWidth: '250px',
-              padding: '16px 24px',
-              background: '#1a1a1a',
-              color: 'white',
-              border: '1px solid #333',
-              borderRadius: '12px',
-              fontSize: '16px',
-              fontWeight: '600',
+              padding: '14px 28px',
+              background: 'transparent',
+              color: '#ffffff',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              borderRadius: '6px',
+              fontSize: '1rem',
+              fontWeight: '500',
               cursor: loading ? 'not-allowed' : 'pointer',
               opacity: loading ? 0.5 : 1,
               transition: 'all 0.2s'
             }}
             onMouseOver={(e) => {
               if (!loading) {
-                e.currentTarget.style.background = '#252525';
-                e.currentTarget.style.borderColor = '#444';
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.4)';
               }
             }}
             onMouseOut={(e) => {
-              e.currentTarget.style.background = '#1a1a1a';
-              e.currentTarget.style.borderColor = '#333';
+              e.currentTarget.style.background = 'transparent';
+              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
             }}
           >
             {loading ? (
@@ -329,15 +338,15 @@ export default function Billing() {
       </div>
 
       {/* Plan comparison link */}
-      <div style={{ textAlign: 'center', marginTop: '30px' }}>
+      <div style={{ textAlign: 'center', marginTop: '24px' }}>
         <a
           href="https://happyresumes.com/#pricing"
           target="_blank"
           rel="noopener noreferrer"
           style={{
-            color: '#000000',
+            color: '#ffffff',
             textDecoration: 'none',
-            fontSize: '14px',
+            fontSize: '0.875rem',
             fontWeight: '500'
           }}
           onMouseOver={(e) => {
@@ -355,13 +364,13 @@ export default function Billing() {
       <div
         style={{
           marginTop: '40px',
-          padding: '30px',
-          background: '#1a1a1a',
-          borderRadius: '12px',
-          border: '1px solid #333'
+          padding: '32px',
+          background: '#0a0a0a',
+          borderRadius: '0',
+          border: '1px solid rgba(255, 255, 255, 0.1)'
         }}
       >
-        <h3 style={{ marginBottom: '20px', fontSize: '18px', fontWeight: '600' }}>
+        <h3 style={{ marginBottom: '20px', fontSize: '1.125rem', fontWeight: '600', color: '#ffffff' }}>
           What's included in {subscription.tier}
         </h3>
 
@@ -374,67 +383,80 @@ export default function Billing() {
         >
           {subscription.tier === 'FREE' && (
             <>
-              <li style={{ padding: '10px 0', display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-                <span style={{ color: '#4CAF50', fontSize: '18px' }}>✓</span>
-                <span>10 AI-generated resumes per month</span>
+              <li style={{ padding: '10px 0', display: 'flex', gap: '12px', alignItems: 'flex-start', color: '#ffffff', fontSize: '1rem' }}>
+                <span style={{ color: '#ffffff', fontSize: '18px' }}>✓</span>
+                <span>50 AI-generated resumes per month</span>
               </li>
-              <li style={{ padding: '10px 0', display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-                <span style={{ color: '#4CAF50', fontSize: '18px' }}>✓</span>
-                <span>ATS optimization</span>
+              <li style={{ padding: '10px 0', display: 'flex', gap: '12px', alignItems: 'flex-start', color: '#ffffff', fontSize: '1rem' }}>
+                <span style={{ color: '#ffffff', fontSize: '18px' }}>✓</span>
+                <span>ATS-optimized formatting</span>
               </li>
-              <li style={{ padding: '10px 0', display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-                <span style={{ color: '#4CAF50', fontSize: '18px' }}>✓</span>
-                <span>PDF download</span>
+              <li style={{ padding: '10px 0', display: 'flex', gap: '12px', alignItems: 'flex-start', color: '#ffffff', fontSize: '1rem' }}>
+                <span style={{ color: '#ffffff', fontSize: '18px' }}>✓</span>
+                <span>Instant PDF downloads</span>
+              </li>
+              <li style={{ padding: '10px 0', display: 'flex', gap: '12px', alignItems: 'flex-start', color: '#ffffff', fontSize: '1rem' }}>
+                <span style={{ color: '#ffffff', fontSize: '18px' }}>✓</span>
+                <span>Job description analysis</span>
               </li>
             </>
           )}
 
           {subscription.tier === 'PRO' && (
             <>
-              <li style={{ padding: '10px 0', display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-                <span style={{ color: '#4CAF50', fontSize: '18px' }}>✓</span>
-                <span>30 AI-generated resumes per month</span>
+              <li style={{ padding: '10px 0', display: 'flex', gap: '12px', alignItems: 'flex-start', color: '#ffffff', fontSize: '1rem' }}>
+                <span style={{ color: '#ffffff', fontSize: '18px' }}>✓</span>
+                <span>100 AI-generated resumes per month</span>
               </li>
-              <li style={{ padding: '10px 0', display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-                <span style={{ color: '#4CAF50', fontSize: '18px' }}>✓</span>
+              <li style={{ padding: '10px 0', display: 'flex', gap: '12px', alignItems: 'flex-start', color: '#ffffff', fontSize: '1rem' }}>
+                <span style={{ color: '#ffffff', fontSize: '18px' }}>✓</span>
                 <span>Advanced ATS optimization</span>
               </li>
-              <li style={{ padding: '10px 0', display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-                <span style={{ color: '#4CAF50', fontSize: '18px' }}>✓</span>
-                <span>LaTeX source code</span>
+              <li style={{ padding: '10px 0', display: 'flex', gap: '12px', alignItems: 'flex-start', color: '#ffffff', fontSize: '1rem' }}>
+                <span style={{ color: '#ffffff', fontSize: '18px' }}>✓</span>
+                <span>LaTeX source code access</span>
               </li>
-              <li style={{ padding: '10px 0', display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-                <span style={{ color: '#4CAF50', fontSize: '18px' }}>✓</span>
+              <li style={{ padding: '10px 0', display: 'flex', gap: '12px', alignItems: 'flex-start', color: '#ffffff', fontSize: '1rem' }}>
+                <span style={{ color: '#ffffff', fontSize: '18px' }}>✓</span>
                 <span>Priority support</span>
+              </li>
+              <li style={{ padding: '10px 0', display: 'flex', gap: '12px', alignItems: 'flex-start', color: '#ffffff', fontSize: '1rem' }}>
+                <span style={{ color: '#ffffff', fontSize: '18px' }}>✓</span>
+                <span>Custom resume templates</span>
               </li>
             </>
           )}
 
           {subscription.tier === 'UNLIMITED' && (
             <>
-              <li style={{ padding: '10px 0', display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-                <span style={{ color: '#4CAF50', fontSize: '18px' }}>✓</span>
+              <li style={{ padding: '10px 0', display: 'flex', gap: '12px', alignItems: 'flex-start', color: '#ffffff', fontSize: '1rem' }}>
+                <span style={{ color: '#ffffff', fontSize: '18px' }}>✓</span>
                 <span>Unlimited AI-generated resumes</span>
               </li>
-              <li style={{ padding: '10px 0', display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-                <span style={{ color: '#4CAF50', fontSize: '18px' }}>✓</span>
+              <li style={{ padding: '10px 0', display: 'flex', gap: '12px', alignItems: 'flex-start', color: '#ffffff', fontSize: '1rem' }}>
+                <span style={{ color: '#ffffff', fontSize: '18px' }}>✓</span>
                 <span>Advanced ATS optimization</span>
               </li>
-              <li style={{ padding: '10px 0', display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-                <span style={{ color: '#4CAF50', fontSize: '18px' }}>✓</span>
-                <span>LaTeX source code</span>
+              <li style={{ padding: '10px 0', display: 'flex', gap: '12px', alignItems: 'flex-start', color: '#ffffff', fontSize: '1rem' }}>
+                <span style={{ color: '#ffffff', fontSize: '18px' }}>✓</span>
+                <span>LaTeX source code access</span>
               </li>
-              <li style={{ padding: '10px 0', display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-                <span style={{ color: '#4CAF50', fontSize: '18px' }}>✓</span>
-                <span>Priority support</span>
+              <li style={{ padding: '10px 0', display: 'flex', gap: '12px', alignItems: 'flex-start', color: '#ffffff', fontSize: '1rem' }}>
+                <span style={{ color: '#ffffff', fontSize: '18px' }}>✓</span>
+                <span>Priority 24/7 support</span>
               </li>
-              <li style={{ padding: '10px 0', display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-                <span style={{ color: '#4CAF50', fontSize: '18px' }}>✓</span>
+              <li style={{ padding: '10px 0', display: 'flex', gap: '12px', alignItems: 'flex-start', color: '#ffffff', fontSize: '1rem' }}>
+                <span style={{ color: '#ffffff', fontSize: '18px' }}>✓</span>
+                <span>Custom resume templates</span>
+              </li>
+              <li style={{ padding: '10px 0', display: 'flex', gap: '12px', alignItems: 'flex-start', color: '#ffffff', fontSize: '1rem' }}>
+                <span style={{ color: '#ffffff', fontSize: '18px' }}>✓</span>
                 <span>Early access to new features</span>
               </li>
             </>
           )}
         </ul>
+      </div>
       </div>
     </div>
   );

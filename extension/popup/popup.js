@@ -1,15 +1,51 @@
-const API_BASE = 'https://happyresumes.com';
+const API_BASE = 'https://passats-production.up.railway.app';
+const WEB_BASE = 'https://happyresumes.com';
 let currentJobs = new Map(); // jobId -> job data
 
 document.addEventListener('DOMContentLoaded', async () => {
+  console.log('🎯 HappyResumes popup loaded');
+
+  // Add customize shortcut handler
+  const customizeLink = document.getElementById('customize-shortcut');
+  if (customizeLink) {
+    customizeLink.onclick = (e) => {
+      e.preventDefault();
+      chrome.tabs.create({ url: 'chrome://extensions/shortcuts' });
+    };
+  }
+
   // Check auth
-  const { clerk_session_token } = await chrome.storage.local.get('clerk_session_token');
+  console.log('🔐 Checking for stored token...');
+  const { clerk_session_token, user_email, clerk_token_updated_at } = await chrome.storage.local.get(['clerk_session_token', 'user_email', 'clerk_token_updated_at']);
 
   if (!clerk_session_token) {
+    console.log('❌ No token found in storage');
     document.getElementById('auth-view').style.display = 'block';
+
+    // Sign in button handler
     document.getElementById('signin-btn').onclick = () => {
-      chrome.tabs.create({ url: 'https://happyresumes.com/dashboard' });
+      chrome.tabs.create({ url: `${WEB_BASE}/dashboard` });
+      // Show instructions after clicking sign in
+      document.getElementById('auth-instructions').style.display = 'block';
     };
+
+    // Refresh button handler
+    const refreshBtn = document.getElementById('refresh-auth');
+    if (refreshBtn) {
+      refreshBtn.onclick = async () => {
+        // Check again for token
+        const { clerk_session_token: newToken } = await chrome.storage.local.get('clerk_session_token');
+        if (newToken) {
+          // Token found! Reload popup
+          location.reload();
+        } else {
+          // Still no token
+          refreshBtn.textContent = 'Still not connected - Try signing in again';
+          refreshBtn.style.background = '#dc3545';
+        }
+      };
+    }
+
     return;
   }
 

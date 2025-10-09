@@ -329,9 +329,15 @@ body {
 }
 
 .logo-img {
-  height: 48px;
+  height: 32px;
   width: auto;
   object-fit: contain;
+}
+
+@media (max-width: 768px) {
+  .logo-img {
+    height: 24px;
+  }
 }
 
 .nav-buttons {

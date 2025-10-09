@@ -8,7 +8,10 @@
   <div class="container">
     <!-- Header -->
     <div class="header">
-      <h1>Quick Resume AI</h1>
+      <div class="logo-section">
+        <h1 class="brand-name">HappyResumes</h1>
+        <span class="brand-tagline">AI Resume Builder</span>
+      </div>
       <div class="user-info">
         <span id="tier-badge" class="badge">FREE</span>
         <span id="usage-text" class="usage">0/5</span>
@@ -17,12 +20,33 @@
 
     <!-- Auth Required View -->
     <div id="auth-view" style="display: none;">
-      <div class="message">Sign in to generate resumes</div>
+      <div class="message" style="margin-bottom: 10px;">Sign in to generate resumes</div>
       <button id="signin-btn" class="btn-primary">Sign In</button>
+      <div id="auth-instructions" style="display: none; margin-top: 15px; padding: 10px; background: #1a1a1a; border-radius: 6px; font-size: 11px; line-height: 1.6;">
+        <strong style="color: #f39c12;">⚠️ After signing in:</strong><br>
+        1. Stay on the Dashboard page<br>
+        2. Wait 3-5 seconds for sync<br>
+        3. Click here to refresh →
+        <button id="refresh-auth" style="margin-top: 8px; width: 100%; padding: 6px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">
+          Check Connection
+        </button>
+      </div>
     </div>
 
     <!-- Main View -->
     <div id="main-view" style="display: none;">
+      <!-- Keyboard Shortcut Hint -->
+      <div class="shortcut-hint">
+        <div class="shortcut-label">Quick Generate</div>
+        <div class="shortcut-keys">
+          <kbd>Alt + Shift + R</kbd>
+          <span class="separator">or</span>
+          <kbd>⌘ + Shift + Y</kbd>
+        </div>
+        <div class="shortcut-desc">Press on any page to generate resume</div>
+        <a href="#" id="customize-shortcut" style="font-size: 10px; color: #007bff; text-decoration: underline; margin-top: 4px; display: inline-block;">Customize shortcut</a>
+      </div>
+
       <!-- Current Page Status -->
       <div id="page-status" class="page-status">
         <div id="job-detected" style="display: none;">
