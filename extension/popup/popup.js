@@ -219,7 +219,7 @@ async function loadRecentJobs(token) {
   try {
     // Get active jobs from background
     chrome.runtime.sendMessage({ action: 'GET_ACTIVE_JOBS' }, async (response) => {
-      const activeJobs = response?.jobs || [];
+      const activeJobs = Array.isArray(response?.jobs) ? response.jobs : [];
 
       // Get completed jobs from API
       const apiResponse = await fetch(`${API_BASE}/api/resumes?limit=5`, {
@@ -239,7 +239,7 @@ async function loadRecentJobs(token) {
       if (Array.isArray(completedJobs)) {
         completedJobs.slice(0, 5).forEach(job => {
           if (!activeJobs.find(aj => aj.id === job.id)) {
-            addJobToList(job.id, job.company || 'Unknown', job.role || 'Position', 'COMPLETED', 100, job.pdfUrl);
+            addJobToList(job.id, job.company || 'Unknown', job.role || 'Position', job.status || 'COMPLETED', job.progress || 100, job.pdfUrl);
           }
         });
       }
@@ -267,6 +267,8 @@ function addJobToList(jobId, company, title, status, progress = 0, downloadUrl =
 
   const statusIcon = {
     'PROCESSING': '⏳',
+    'RUNNING': '⚙️',
+    'QUEUED': '⏳',
     'COMPLETED': '✓',
     'FAILED': '✗'
   }[status] || '•';
@@ -276,11 +278,11 @@ function addJobToList(jobId, company, title, status, progress = 0, downloadUrl =
       <span class="status-icon">${statusIcon}</span>
       <div class="job-details">
         <div class="job-name">${company} - ${title}</div>
-        <div class="job-status">${status === 'PROCESSING' ? `${progress}%` : status}</div>
+        <div class="job-status">${status === 'PROCESSING' || status === 'RUNNING' ? `${progress}%` : status}</div>
       </div>
     </div>
     ${downloadUrl ? `<button class="btn-download" data-url="${downloadUrl}">↓</button>` : ''}
-    ${status === 'PROCESSING' ? `<div class="progress-bar"><div class="progress" style="width: ${progress}%"></div></div>` : ''}
+    ${(status === 'PROCESSING' || status === 'RUNNING') ? `<div class="progress-bar"><div class="progress" style="width: ${progress}%"></div></div>` : ''}
   `;
 
   if (downloadUrl) {
