@@ -219,8 +219,18 @@ class ResumeTextValidator {
   parseSkills(skillsText) {
     if (!skillsText) return [];
 
+    // Handle both string and array inputs
+    let textToProcess;
+    if (Array.isArray(skillsText)) {
+      textToProcess = skillsText.join('\n');
+    } else if (typeof skillsText === 'string') {
+      textToProcess = skillsText;
+    } else {
+      return [];
+    }
+
     // Common skill separators: commas, bullets, newlines
-    const skills = skillsText
+    const skills = textToProcess
       .split(/[,•\n\-]/)
       .map(s => s.trim())
       .filter(s => s.length > 1 && s.length < 50)

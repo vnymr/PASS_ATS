@@ -325,10 +325,35 @@ export default function Landing() {
         </section>
       </main>
 
-      <footer className="footer">
+      <footer className="landing-footer">
         <div className="container">
-          <p className="footer-text">© 2025 HappyResumes. All rights reserved.</p>
-          <p className="footer-subtext">AI-powered ATS resume builder helping job seekers create winning resumes</p>
+          <div className="footer-content">
+            <div className="footer-section">
+              <h4>Product</h4>
+              <ul>
+                <li><a onClick={() => navigate('/dashboard')}>Dashboard</a></li>
+                <li><a onClick={() => navigate('/billing')}>Pricing</a></li>
+                <li><a href="https://chromewebstore.google.com" target="_blank" rel="noopener noreferrer">Chrome Extension</a></li>
+              </ul>
+            </div>
+            <div className="footer-section">
+              <h4>Support</h4>
+              <ul>
+                <li><a onClick={() => navigate('/support')}>Help Center</a></li>
+                <li><a href="mailto:support@happyresumes.com">Contact Us</a></li>
+              </ul>
+            </div>
+            <div className="footer-section">
+              <h4>Legal</h4>
+              <ul>
+                <li><a onClick={() => navigate('/privacy')}>Privacy Policy</a></li>
+                <li><a onClick={() => navigate('/terms')}>Terms of Service</a></li>
+              </ul>
+            </div>
+          </div>
+          <div className="footer-bottom">
+            <p>&copy; 2025 HappyResumes. All rights reserved.</p>
+          </div>
         </div>
       </footer>
 

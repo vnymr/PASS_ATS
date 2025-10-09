@@ -18,6 +18,8 @@ import Extension from './pages/Extension';
 import Billing from './pages/Billing';
 import CheckoutSuccess from './pages/CheckoutSuccess';
 import CheckoutCancel from './pages/CheckoutCancel';
+import Support from './pages/Support';
+import Privacy from './pages/Privacy';
 
 // Layout components
 import ProtectedRoute from './layouts/ProtectedRoute';
@@ -158,6 +160,8 @@ export default function App() {
           <CheckoutCancel />
         </ProtectedRoute>
       } />
+      <Route path="/support" element={<Support />} />
+      <Route path="/privacy" element={<Privacy />} />
     </Routes>
   );
 }
