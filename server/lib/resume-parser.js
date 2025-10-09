@@ -87,8 +87,20 @@ class ResumeParser {
       if (validation.useSimpleParser) {
         // Use fast regex-based parser (no AI, no cost)
         console.log('✨ Using SIMPLE parser (no AI needed - saving $$$)');
-        parsingMethod = 'simple';
-        extractedData = this.simpleParser.parse(text);
+        try {
+          extractedData = this.simpleParser.parse(text);
+          parsingMethod = 'simple';
+
+          if (!extractedData?.email && !extractedData?.name) {
+            console.log('⚠️  Simple parser extracted insufficient info, falling back to AI...');
+            extractedData = await this.extractInformation(text);
+            parsingMethod = 'ai-fallback';
+          }
+        } catch (err) {
+          console.log('⚠️  Simple parser error, using AI:', err.message);
+          extractedData = await this.extractInformation(text);
+          parsingMethod = 'ai-fallback';
+        }
       } else if (validation.isWellStructured) {
         // Try simple parser first, fallback to AI if needed
         console.log('⚡ Trying SIMPLE parser first, will fallback to AI if needed...');

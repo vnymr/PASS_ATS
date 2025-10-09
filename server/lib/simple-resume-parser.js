@@ -77,6 +77,14 @@ class SimpleResumeParser {
   parseEducation(educationText) {
     if (!educationText) return [];
 
+    if (Array.isArray(educationText)) {
+      educationText = educationText.join('\n');
+    }
+
+    if (typeof educationText !== 'string') {
+      return [];
+    }
+
     const education = [];
     const entries = educationText.split(/\n\n+/);
 
@@ -123,6 +131,14 @@ class SimpleResumeParser {
 
   parseExperience(experienceText) {
     if (!experienceText) return [];
+
+    if (Array.isArray(experienceText)) {
+      experienceText = experienceText.join('\n');
+    }
+
+    if (typeof experienceText !== 'string') {
+      return [];
+    }
 
     const experience = [];
     const entries = experienceText.split(/\n\n+/);
@@ -190,6 +206,14 @@ class SimpleResumeParser {
 
   parseProjects(projectsText) {
     if (!projectsText) return [];
+
+    if (Array.isArray(projectsText)) {
+      projectsText = projectsText.join('\n');
+    }
+
+    if (typeof projectsText !== 'string') {
+      return [];
+    }
 
     const projects = [];
     const entries = projectsText.split(/\n\n+/);
