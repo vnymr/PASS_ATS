@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Quick Resume AI",
+  "name": "HappyResumes - AI Resume Builder",
   "version": "1.2.0",
-  "description": "Generate tailored resumes for any job in seconds with AI",
+  "description": "Generate ATS-optimized resumes instantly with AI",
   "icons": {
     "16": "assets/icons/icon-16.png",
     "48": "assets/icons/icon-48.png",
@@ -11,51 +11,31 @@
   "permissions": [
     "storage",
     "downloads",
-    "cookies",
     "notifications",
     "alarms",
-    "tabs",
+    "activeTab",
     "scripting"
   ],
   "host_permissions": [
-    "http://localhost:3000/*",
-    "http://localhost:3001/*",
-    "http://localhost:5173/*",
     "https://happyresumes.com/*",
     "https://www.happyresumes.com/*",
-    "https://*.linkedin.com/*",
-    "https://*.indeed.com/*",
-    "https://*.glassdoor.com/*",
-    "https://*.monster.com/*",
-    "https://*.ziprecruiter.com/*",
-    "https://*/*"
+    "https://passats-production.up.railway.app/*"
   ],
   "externally_connectable": {
     "matches": [
-      "http://localhost:5173/*",
-      "http://localhost:3000/*",
       "https://happyresumes.com/*",
-      "https://www.happyresumes.com/*"
+      "https://www.happyresumes.com/*",
+      "https://passats-production.up.railway.app/*"
     ]
   },
   "content_scripts": [
     {
       "matches": [
-        "https://www.linkedin.com/*",
-        "https://www.indeed.com/*",
-        "https://www.glassdoor.com/*",
-        "https://www.monster.com/*",
-        "https://www.ziprecruiter.com/*",
-        "https://*/*"
+        "https://happyresumes.com/*",
+        "https://www.happyresumes.com/*",
+        "https://passats-production.up.railway.app/*"
       ],
-      "js": [
-        "utils/config.js",
-        "utils/api-client.js",
-        "content/detector.js",
-        "content/scraper.js",
-        "content/ui-injector.js"
-      ],
-      "css": ["assets/styles.css"],
+      "js": ["content/dashboard-sync.js"],
       "run_at": "document_idle"
     }
   ],
@@ -69,20 +49,13 @@
       "48": "assets/icons/icon-48.png",
       "128": "assets/icons/icon-128.png"
     },
-    "default_title": "Quick Resume AI"
+    "default_title": "HappyResumes - AI Resume Builder"
   },
   "commands": {
-    "_execute_action": {
-      "suggested_key": {
-        "default": "Ctrl+Shift+R",
-        "mac": "Command+Shift+R"
-      },
-      "description": "Open extension and generate resume"
-    },
     "generate-resume": {
       "suggested_key": {
-        "default": "Ctrl+Shift+R",
-        "mac": "Command+Shift+R"
+        "default": "Alt+Shift+R",
+        "mac": "Command+Shift+Y"
       },
       "description": "Generate resume from current job page"
     }

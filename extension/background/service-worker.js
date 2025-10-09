@@ -1,9 +1,121 @@
-// Background service worker for Quick Resume AI extension
+// Background service worker for HappyResumes extension
 
-console.log('🚀 Quick Resume AI service worker loaded');
+console.log('🚀 HappyResumes service worker loaded');
 
 // Track active jobs
 let activeJobs = new Map(); // jobId -> { status, progress, startTime }
+
+// ========================================
+// KEYBOARD SHORTCUT HANDLER
+// ========================================
+
+// Listen for keyboard shortcut
+chrome.commands.onCommand.addListener((command) => {
+  if (command === 'generate-resume') {
+    console.log('⌨️ Keyboard shortcut triggered:', command);
+    handleGenerateResumeShortcut();
+  }
+});
+
+async function handleGenerateResumeShortcut() {
+  console.log('🎯 Generate resume shortcut triggered');
+
+  try {
+    // Get current active tab
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+
+    if (!tab || !tab.id) {
+      console.error('No active tab found');
+      showNotification('Error', 'No active tab found');
+      return;
+    }
+
+    // Check if we're on a valid webpage
+    if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
+      showNotification('Not Available', 'Extension cannot run on this page. Please navigate to a job posting.');
+      return;
+    }
+
+    console.log('📄 Current tab:', tab.url);
+
+    // Inject CSS first
+    await chrome.scripting.insertCSS({
+      target: { tabId: tab.id },
+      files: ['assets/styles.css']
+    });
+
+    // Inject scripts dynamically into current tab only
+    await injectScriptsIntoTab(tab.id);
+
+    // Wait a moment for scripts to load
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    // Send message to tab to start job detection
+    chrome.tabs.sendMessage(tab.id, {
+      action: 'SHORTCUT_ACTIVATED',
+      tabUrl: tab.url
+    }, (response) => {
+      if (chrome.runtime.lastError) {
+        console.error('Failed to communicate with content script:', chrome.runtime.lastError);
+        showNotification('Error', 'Failed to activate extension. Please try again.');
+      } else {
+        console.log('✅ Shortcut activation successful:', response);
+      }
+    });
+
+  } catch (error) {
+    console.error('Error handling shortcut:', error);
+    showNotification('Error', error.message || 'Failed to activate extension');
+  }
+}
+
+async function injectScriptsIntoTab(tabId) {
+  console.log('💉 Injecting scripts into tab:', tabId);
+
+  try {
+    // Inject scripts in order
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ['utils/config.js']
+    });
+
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ['utils/api-client.js']
+    });
+
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ['content/detector.js']
+    });
+
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ['content/scraper.js']
+    });
+
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ['content/ui-injector.js']
+    });
+
+    console.log('✅ All scripts injected successfully');
+
+  } catch (error) {
+    console.error('❌ Failed to inject scripts:', error);
+    throw new Error('Failed to load extension components');
+  }
+}
+
+function showNotification(title, message) {
+  chrome.notifications.create({
+    type: 'basic',
+    iconUrl: 'assets/icons/icon-128.png',
+    title: title,
+    message: message,
+    priority: 2
+  });
+}
 
 // Handle service worker errors
 self.addEventListener('error', (event) => {
@@ -43,16 +155,56 @@ chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => 
   }
 });
 
-// Also listen for messages from within the extension
+// Also listen for messages from within the extension (including content scripts)
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('📨 Internal message received:', message);
+
+  // Handle token update from dashboard-sync content script
+  if (message.type === 'CLERK_TOKEN_UPDATE' && message.source === 'dashboard-sync') {
+    console.log('🔐 Token update from dashboard sync script');
+    console.log('Token received:', message.token ? `${message.token.substring(0, 20)}...` : 'No token');
+    console.log('Email:', message.email);
+    console.log('Timestamp:', message.timestamp);
+
+    if (message.token) {
+      // Store token in chrome.storage.local
+      chrome.storage.local.set({
+        clerk_session_token: message.token,
+        clerk_token_updated_at: Date.now(),
+        user_email: message.email || ''
+      }, () => {
+        if (chrome.runtime.lastError) {
+          console.error('❌ Failed to save token:', chrome.runtime.lastError);
+          sendResponse({ success: false, error: chrome.runtime.lastError.message });
+        } else {
+          console.log('✅ Token from dashboard saved to storage');
+          console.log('Storage update complete - token length:', message.token.length);
+
+          // Update badge to show auth status
+          chrome.action.setBadgeText({ text: '✓' });
+          chrome.action.setBadgeBackgroundColor({ color: '#27ae60' });
+
+          // Clear badge after 3 seconds
+          setTimeout(() => {
+            chrome.action.setBadgeText({ text: '' });
+          }, 3000);
+
+          sendResponse({ success: true, message: 'Token synced' });
+        }
+      });
+    } else {
+      console.log('❌ No token in message from dashboard');
+      sendResponse({ success: false, message: 'No token provided' });
+    }
+    return true; // Keep channel open for async response
+  }
 
   // Handle getConfig request from popup
   if (message.action === 'getConfig') {
     // Return CONFIG object
     const CONFIG = {
-      API_BASE_URL: 'http://localhost:3000',
-      WEB_APP_URL: 'http://localhost:5173'
+      API_BASE_URL: 'https://passats-production.up.railway.app',
+      WEB_APP_URL: 'https://happyresumes.com'
     };
     sendResponse(CONFIG);
     return true;
@@ -144,7 +296,7 @@ chrome.runtime.onInstalled.addListener((details) => {
 
   // Set default API base URL for local development
   chrome.storage.local.set({
-    apiBaseURL: 'http://localhost:3000'
+    apiBaseURL: 'https://passats-production.up.railway.app'
   });
 
   if (details.reason === 'install') {
@@ -155,66 +307,7 @@ chrome.runtime.onInstalled.addListener((details) => {
   }
 });
 
-// Handle keyboard shortcut
-chrome.commands.onCommand.addListener(async (command) => {
-  console.log('⌨️ Command received:', command);
-
-  if (command === 'generate-resume') {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-
-    // Check if on job site
-    const supportedSites = ['linkedin.com', 'indeed.com', 'glassdoor.com'];
-    const isJobSite = supportedSites.some(site => tab.url.includes(site));
-
-    if (!isJobSite) {
-      chrome.notifications.create({
-        type: 'basic',
-        iconUrl: chrome.runtime.getURL('assets/icons/icon-48.png'),
-        title: 'Quick Resume AI',
-        message: '⚠️ Please visit a job posting page and try again.\n\nSupported: LinkedIn, Indeed, Glassdoor'
-      });
-      return;
-    }
-
-    // Try to scrape and generate
-    chrome.tabs.sendMessage(tab.id, { action: 'AUTO_GENERATE' });
-  }
-
-  // Legacy command support
-  if (command === 'auto-generate') {
-    // Get current tab
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-
-    // Check if on supported job site
-    const supportedSites = ['linkedin.com', 'indeed.com', 'glassdoor.com', 'monster.com', 'ziprecruiter.com'];
-    const isSupportedSite = supportedSites.some(site => tab.url.includes(site));
-
-    if (!isSupportedSite) {
-      chrome.notifications.create({
-        type: 'basic',
-        iconUrl: chrome.runtime.getURL('assets/icons/icon-48.png'),
-        title: 'Quick Resume AI',
-        message: 'Please navigate to a job posting on LinkedIn, Indeed, Glassdoor, Monster, or ZipRecruiter',
-        priority: 1
-      });
-      return;
-    }
-
-    // Send message to content script to start auto-scraping
-    try {
-      await chrome.tabs.sendMessage(tab.id, { action: 'auto-scrape-and-generate' });
-    } catch (error) {
-      console.error('Failed to send auto-generate message:', error);
-      chrome.notifications.create({
-        type: 'basic',
-        iconUrl: chrome.runtime.getURL('assets/icons/icon-48.png'),
-        title: 'Quick Resume AI',
-        message: 'Please refresh the page and try again',
-        priority: 1
-      });
-    }
-  }
-});
+// (Keyboard shortcut handler moved to the top of the file)
 
 // Listen for generate-resume messages from content script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -477,9 +570,7 @@ async function downloadResume(jobId, token, apiBase) {
 
         // Open dashboard
         const { apiBaseURL } = chrome.storage.local.get('apiBaseURL');
-        const webUrl = apiBaseURL?.includes('localhost')
-          ? 'http://localhost:5173/dashboard'
-          : 'https://happyresumes.com/dashboard';
+        const webUrl = 'https://happyresumes.com/dashboard';
         chrome.tabs.create({ url: webUrl });
       }
 
@@ -506,9 +597,7 @@ chrome.notifications.onButtonClicked.addListener((notificationId, buttonIndex) =
   } else if (buttonIndex === 1) {
     // View Dashboard button clicked
     const { apiBaseURL } = chrome.storage.local.get('apiBaseURL');
-    const webUrl = apiBaseURL?.includes('localhost')
-      ? 'http://localhost:5173/dashboard'
-      : 'https://happyresumes.com/dashboard';
+    const webUrl = 'https://happyresumes.com/dashboard';
     chrome.tabs.create({ url: webUrl });
   }
 });
