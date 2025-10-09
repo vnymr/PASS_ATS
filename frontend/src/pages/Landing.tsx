@@ -1,14 +1,16 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SignedIn, SignedOut, SignInButton, SignUpButton, UserButton, useAuth } from '@clerk/clerk-react';
 // import { api } from '../api-clerk'; // ONBOARDING DISABLED: API not needed without profile check
 import logoImg from '../logo.svg';
 import { DottedSurface } from '@/components/ui/dotted-surface';
+import ExtensionComingSoonModal from '../components/ExtensionComingSoonModal';
 import './Landing.css';
 
 export default function Landing() {
   const navigate = useNavigate();
   const { isSignedIn } = useAuth();
+  const [isExtensionModalOpen, setIsExtensionModalOpen] = useState(false);
 
   // Redirect signed-in users directly to dashboard
   useEffect(() => {
@@ -114,7 +116,11 @@ export default function Landing() {
                 </svg>
               </button>
             </SignedIn>
-            <button className="btn btn-outline btn-large" aria-label="Download Chrome extension">
+            <button 
+              className="btn btn-outline btn-large" 
+              aria-label="Download Chrome extension"
+              onClick={() => setIsExtensionModalOpen(true)}
+            >
               Download Extension
             </button>
           </div>
@@ -325,6 +331,11 @@ export default function Landing() {
           <p className="footer-subtext">AI-powered ATS resume builder helping job seekers create winning resumes</p>
         </div>
       </footer>
+
+      <ExtensionComingSoonModal 
+        isOpen={isExtensionModalOpen}
+        onClose={() => setIsExtensionModalOpen(false)}
+      />
     </>
   );
 }

@@ -19,13 +19,13 @@
   "host_permissions": [
     "https://happyresumes.com/*",
     "https://www.happyresumes.com/*",
-    "https://passats-production.up.railway.app/*"
+    "https://api.happyresumes.com/*"
   ],
   "externally_connectable": {
     "matches": [
       "https://happyresumes.com/*",
       "https://www.happyresumes.com/*",
-      "https://passats-production.up.railway.app/*"
+      "https://api.happyresumes.com/*"
     ]
   },
   "content_scripts": [
@@ -33,7 +33,7 @@
       "matches": [
         "https://happyresumes.com/*",
         "https://www.happyresumes.com/*",
-        "https://passats-production.up.railway.app/*"
+        "https://api.happyresumes.com/*"
       ],
       "js": ["content/dashboard-sync.js"],
       "run_at": "document_idle"

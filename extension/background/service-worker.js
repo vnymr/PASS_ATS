@@ -203,7 +203,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'getConfig') {
     // Return CONFIG object
     const CONFIG = {
-      API_BASE_URL: 'https://passats-production.up.railway.app',
+      API_BASE_URL: 'https://api.happyresumes.com',
       WEB_APP_URL: 'https://happyresumes.com'
     };
     sendResponse(CONFIG);
@@ -283,7 +283,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     (async () => {
       try {
         const stored = await chrome.storage.local.get('apiBaseURL');
-        const apiBase = message.baseURL || stored.apiBaseURL || 'https://passats-production.up.railway.app';
+        const apiBase = message.baseURL || stored.apiBaseURL || 'https://api.happyresumes.com';
         await downloadResume(message.jobId, message.token, apiBase);
         sendResponse({ success: true });
       } catch (error) {
@@ -341,7 +341,7 @@ chrome.runtime.onInstalled.addListener((details) => {
 
   // Set default API base URL for local development
   chrome.storage.local.set({
-    apiBaseURL: 'https://passats-production.up.railway.app'
+    apiBaseURL: 'https://api.happyresumes.com'
   });
 
   if (details.reason === 'install') {
@@ -432,7 +432,7 @@ async function startJobProcessing(jobId, token, jobInfo = {}) {
 
   // Get API base URL from config
   const { apiBaseURL } = await chrome.storage.local.get('apiBaseURL');
-  const API_BASE = apiBaseURL || 'https://happyresumes.com';
+  const API_BASE = apiBaseURL || 'https://api.happyresumes.com';
 
   // Poll job status in background
   const pollInterval = setInterval(async () => {
@@ -595,11 +595,14 @@ async function downloadResume(jobId, token, apiBase) {
 
     const blob = await response.blob();
     const downloadUrl = await createDownloadUrl(blob);
+    const filename = extractFilename(response.headers, jobId);
+
+    console.log('📄 Download filename chosen:', filename);
 
     chrome.downloads.download({
       url: downloadUrl,
-      filename: `resume_${jobId}.pdf`,
-      saveAs: true
+      filename,
+      saveAs: false
     }, (downloadId) => {
       if (downloadId) {
         console.log('✅ Download started:', downloadId);
@@ -662,6 +665,30 @@ async function createDownloadUrl(blob) {
       reject(error);
     }
   });
+}
+
+function extractFilename(headers, jobId) {
+  const disposition = headers.get('content-disposition') || '';
+  let filename = null;
+
+  // RFC 5987 / standard filename parsing
+  const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match && utf8Match[1]) {
+    filename = decodeURIComponent(utf8Match[1]);
+  } else {
+    const quotedMatch = disposition.match(/filename="?([^";]+)"?/i);
+    if (quotedMatch && quotedMatch[1]) {
+      filename = quotedMatch[1];
+    }
+  }
+
+  if (!filename) {
+    filename = `Resume_${jobId.substring(0, 8)}.pdf`;
+  }
+
+  // Sanitize filename to avoid invalid characters / paths
+  filename = filename.replace(/[\\/:*?"<>|]/g, '-');
+  return filename;
 }
 
 // Handle notification button clicks

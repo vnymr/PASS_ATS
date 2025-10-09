@@ -1,4 +1,4 @@
-const API_BASE = 'https://passats-production.up.railway.app';
+const API_BASE = 'https://api.happyresumes.com';
 const WEB_BASE = 'https://happyresumes.com';
 let currentJobs = new Map(); // jobId -> job data
 
