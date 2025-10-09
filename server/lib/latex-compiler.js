@@ -138,7 +138,20 @@ async function compileLatex(latexCode) {
           .replace(/\/home\/[^/]+/g, '[user]')
           .replace(/\/opt\/[^/\s]+/g, '[system]')
           .replace(/\/usr\/[^/\s]+/g, '[system]');
-        throw new Error(`LaTeX compilation error with context:\n${detailedError.substring(0, 1000)}`);
+
+        // Extract actionable error info
+        let actionableError = '';
+        if (detailedError.includes('Undefined control sequence')) {
+          actionableError = '\n💡 Fix: Remove or replace the undefined LaTeX command';
+        } else if (detailedError.includes('Missing \\item')) {
+          actionableError = '\n💡 Fix: Wrap content in \\begin{itemize}...\\end{itemize} or remove \\item';
+        } else if (detailedError.includes('dvipsNames')) {
+          actionableError = '\n💡 Fix: Change dvipsNames to dvipsnames (lowercase "names")';
+        } else if (detailedError.includes('begin{') && detailedError.includes('ended by \\end{')) {
+          actionableError = '\n💡 Fix: Close the environment properly (unmatched begin/end)';
+        }
+
+        throw new Error(`LaTeX compilation error with context:\n${detailedError.substring(0, 1000)}${actionableError}`);
       }
 
       // Fallback to simple error extraction

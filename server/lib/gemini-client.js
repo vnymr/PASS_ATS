@@ -55,6 +55,11 @@ export async function generateLatexWithGemini(systemPrompt, userPrompt, onProgre
   }
 
   const startTime = Date.now();
+  const MAX_RETRIES = 2;
+  let lastError = null;
+
+  // Retry loop for transient failures
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
 
   try {
     // Progress callback for starting
@@ -69,7 +74,7 @@ export async function generateLatexWithGemini(systemPrompt, userPrompt, onProgre
       systemInstruction: systemPrompt, // Gemini automatically caches system instructions
       generationConfig: {
         temperature: 0.3, // Lower temperature for more consistent LaTeX generation
-        maxOutputTokens: 8192, // Increased to ensure complete generation
+        maxOutputTokens: 12000, // CRITICAL: High token limit to prevent incomplete LaTeX (fixes truncation issue)
         topP: 0.9, // More focused generation
         candidateCount: 1,
         stopSequences: [], // Don't stop early
@@ -84,8 +89,14 @@ export async function generateLatexWithGemini(systemPrompt, userPrompt, onProgre
       model: 'gemini-2.5-flash'
     }, 'Starting Gemini generation');
 
-    // Generate content
-    const result = await model.generateContent(fullPrompt);
+    // Generate content with timeout (120 seconds max)
+    const GENERATION_TIMEOUT = 120000;
+    const result = await Promise.race([
+      model.generateContent(fullPrompt),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Gemini generation timeout after 120s')), GENERATION_TIMEOUT)
+      )
+    ]);
     const response = await result.response;
     let latex = response.text();
 
@@ -175,18 +186,42 @@ export async function generateLatexWithGemini(systemPrompt, userPrompt, onProgre
       model: 'gemini-2.5-flash'
     };
   } catch (error) {
+    lastError = error;
+
     const errorDetails = {
       error: error.message,
       code: error.code,
       status: error.status,
+      attempt: attempt,
+      maxRetries: MAX_RETRIES,
       timeElapsed: Date.now() - startTime
     };
 
-    logger.error(errorDetails, 'Gemini generation failed');
+    // Check if it's a retryable error (rate limits, transient issues)
+    const isRetryable = error.code === 429 || // Rate limit
+                        error.code === 503 || // Service unavailable
+                        error.status === 429 ||
+                        error.status === 503 ||
+                        error.message?.includes('quota') ||
+                        error.message?.includes('temporarily unavailable');
 
-    // Re-throw with more context
-    const errorMessage = error.message || 'Unknown Gemini API error';
-    throw new Error(`Gemini API error: ${errorMessage}`);
+    if (isRetryable && attempt < MAX_RETRIES) {
+      const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000); // Exponential backoff, max 5s
+      logger.warn({ ...errorDetails, retryDelay: delay }, `Gemini API error - retrying in ${delay}ms`);
+
+      await new Promise(resolve => setTimeout(resolve, delay));
+      continue; // Retry
+    }
+
+    logger.error(errorDetails, 'Gemini generation failed');
+    break; // Non-retryable error or max retries reached
+  }
+  }
+
+  // If we get here, all retries failed
+  if (lastError) {
+    const errorMessage = lastError.message || 'Unknown Gemini API error';
+    throw new Error(`Gemini API error after ${MAX_RETRIES} attempts: ${errorMessage}`);
   }
 }
 
@@ -211,7 +246,7 @@ export async function fixLatexWithGemini(brokenLatex, errorMessage) {
       model: 'gemini-2.5-flash',
       generationConfig: {
         temperature: 0.3, // Lower temperature for fixing
-        maxOutputTokens: 8192,
+        maxOutputTokens: 12000, // High token limit for complete fixes
       }
     });
 

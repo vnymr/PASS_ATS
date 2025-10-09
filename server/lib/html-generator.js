@@ -89,7 +89,7 @@ export async function generateResumeHTML(profile, jobDescription, aiMode = 'gpt-
 
     // Build request parameters - use same approach as working /generate endpoint
     const modelName = aiMode === 'fast' ? 'gpt-5-mini' :
-                      aiMode === 'quality' ? 'gpt-5' :
+                      aiMode === 'quality' ? 'gpt-5-mini' :
                       aiMode === 'gpt-4' ? 'gpt-4' :
                       aiMode.includes('gpt') ? aiMode :  // Use as-is if it's already a model name
                       'gpt-5-mini';
@@ -118,7 +118,7 @@ IMPORTANT: Return ONLY valid JSON matching the structure provided. No markdown f
     // Temperature handling for different models
     if (!modelName.includes('gpt-5')) {
       requestParams.temperature = 0.3;
-    } else if (modelName === 'gpt-5' || modelName === 'gpt-5-nano') {
+    } else if (modelName === 'gpt-5-mini') {
       requestParams.temperature = 0.2;
     }
     // Skip temperature for GPT-5-mini

@@ -101,29 +101,47 @@ class AIClient {
    * @private
    */
   async _generateWithGemini({ prompt, systemPrompt, model, temperature, maxTokens, jsonMode }) {
-    logger.info({ model, jsonMode }, 'Generating with Gemini');
+    logger.info({ model, jsonMode, maxTokens }, 'Generating with Gemini');
 
-    const geminiModel = this.gemini.getGenerativeModel({
-      model,
-      generationConfig: {
-        temperature,
-        maxOutputTokens: maxTokens,
-        ...(jsonMode && { responseMimeType: 'application/json' })
-      },
-      systemInstruction: systemPrompt || undefined
-    });
+    try {
+      const geminiModel = this.gemini.getGenerativeModel({
+        model,
+        generationConfig: {
+          temperature,
+          maxOutputTokens: maxTokens,
+          ...(jsonMode && { responseMimeType: 'application/json' })
+        },
+        systemInstruction: systemPrompt || undefined
+      });
 
-    const result = await geminiModel.generateContent(prompt);
-    const response = result.response;
-    const text = response.text();
+      const result = await geminiModel.generateContent(prompt);
+      const response = result.response;
+      const text = response.text();
 
-    logger.info({
-      model,
-      inputLength: prompt.length,
-      outputLength: text.length
-    }, 'Gemini generation complete');
+      logger.info({
+        model,
+        inputLength: prompt.length,
+        outputLength: text.length
+      }, 'Gemini generation complete');
 
-    return text;
+      return text;
+    } catch (error) {
+      // Log detailed error information
+      logger.error({
+        error: error.message,
+        errorCode: error.code,
+        errorStatus: error.status,
+        errorDetails: error.details || error.errorDetails,
+        stack: error.stack,
+        model,
+        promptLength: prompt.length
+      }, 'Gemini API error - detailed diagnostics');
+
+      // Re-throw with more context
+      const enhancedError = new Error(`Gemini API failed: ${error.message} (code: ${error.code || 'unknown'})`);
+      enhancedError.originalError = error;
+      throw enhancedError;
+    }
   }
 
   /**

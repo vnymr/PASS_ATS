@@ -17,7 +17,7 @@ export const config = {
       default: 'gemini-1.5-flash',   // Default to fast
     },
     // Response settings - HIGH tokens for LaTeX generation
-    maxTokens: parseInt(process.env.GEMINI_MAX_TOKENS || '10000'), // Increased for LaTeX
+    maxTokens: parseInt(process.env.GEMINI_MAX_TOKENS || '12000'), // CRITICAL: High limit prevents truncated LaTeX
     temperature: parseFloat(process.env.GEMINI_TEMPERATURE || '0.7'),
   },
 
@@ -26,17 +26,18 @@ export const config = {
     apiKey: process.env.OPENAI_API_KEY,
     // Text generation models
     textModels: {
-      fast: process.env.OPENAI_TEXT_MODEL_FAST || 'gpt-4o-mini',
-      quality: process.env.OPENAI_TEXT_MODEL_QUALITY || 'gpt-4o',
-      default: process.env.OPENAI_TEXT_MODEL || 'gpt-4o-mini',
+      fast: process.env.OPENAI_TEXT_MODEL_FAST || 'gpt-5-mini',
+      quality: process.env.OPENAI_TEXT_MODEL_QUALITY || 'gpt-5-mini',
+      default: process.env.OPENAI_TEXT_MODEL || 'gpt-5-mini',
       // Available models
+      'gpt-5-mini': 'gpt-5-mini',
       'gpt-4o-mini': 'gpt-4o-mini',
       'gpt-4o': 'gpt-4o',
     },
     // Embedding model
     embeddingModel: process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-small',
     // Response settings - HIGH tokens for LaTeX generation
-    maxTokens: parseInt(process.env.OPENAI_MAX_TOKENS || '10000'), // Increased for LaTeX
+    maxTokens: parseInt(process.env.OPENAI_MAX_TOKENS || '12000'), // CRITICAL: High limit prevents truncated LaTeX
     temperature: parseFloat(process.env.OPENAI_TEMPERATURE || '0.7'),
   },
 

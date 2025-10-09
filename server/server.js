@@ -1022,7 +1022,7 @@ Return ONLY a valid JSON object, no other text.`
     // Temperature handling for different models
     if (!modelName.includes('gpt-5')) {
       requestParams.temperature = 0.1; // Lower temperature for more precise extraction
-    } else if (modelName === 'gpt-5' || modelName === 'gpt-5-nano') {
+    } else if (modelName === 'gpt-5-mini') {
       requestParams.temperature = 0.1;
     }
     // Skip temperature for GPT-5-mini

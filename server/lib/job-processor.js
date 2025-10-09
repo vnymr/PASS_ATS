@@ -165,6 +165,7 @@ Return format (valid JSON):
 
 /**
  * Analyze keyword coverage in generated LaTeX
+ * Uses case-insensitive matching and handles LaTeX escaping
  * @param {string} latexContent - Generated LaTeX content
  * @param {Object} keywords - Extracted keywords object
  * @returns {Object} Coverage statistics
@@ -181,9 +182,48 @@ function analyzeKeywordCoverage(latexContent, keywords) {
     missedImportant: []
   };
 
-  // Check critical keywords
+  // Helper function for flexible keyword matching
+  function containsKeyword(content, keyword) {
+    // Case-insensitive search
+    const lowerContent = content.toLowerCase();
+    const lowerKeyword = keyword.toLowerCase();
+
+    // Direct match
+    if (lowerContent.includes(lowerKeyword)) {
+      return true;
+    }
+
+    // Check for LaTeX-escaped version (e.g., "C++" might be "C\\+\\+" or "C{+}{+}")
+    const escapedKeyword = keyword
+      .replace(/\+/g, '\\+')
+      .replace(/#/g, '\\#')
+      .replace(/&/g, '\\&')
+      .replace(/%/g, '\\%');
+
+    if (lowerContent.includes(escapedKeyword.toLowerCase())) {
+      return true;
+    }
+
+    // Check for variations (e.g., "JavaScript" vs "Java Script")
+    const noSpaceKeyword = lowerKeyword.replace(/\s+/g, '');
+    const noSpaceContent = lowerContent.replace(/\s+/g, '');
+
+    if (noSpaceContent.includes(noSpaceKeyword)) {
+      return true;
+    }
+
+    // Check for hyphenated versions (e.g., "Machine Learning" vs "Machine-Learning")
+    const hyphenatedKeyword = lowerKeyword.replace(/\s+/g, '-');
+    if (lowerContent.includes(hyphenatedKeyword)) {
+      return true;
+    }
+
+    return false;
+  }
+
+  // Check critical keywords (most important for ATS)
   keywords.criticalKeywords.forEach(kw => {
-    if (latexContent.includes(kw)) {
+    if (containsKeyword(latexContent, kw)) {
       stats.criticalMatched++;
     } else {
       stats.missedCritical.push(kw);
@@ -192,7 +232,7 @@ function analyzeKeywordCoverage(latexContent, keywords) {
 
   // Check important keywords
   keywords.importantKeywords.forEach(kw => {
-    if (latexContent.includes(kw)) {
+    if (containsKeyword(latexContent, kw)) {
       stats.importantMatched++;
     } else {
       stats.missedImportant.push(kw);
@@ -201,7 +241,7 @@ function analyzeKeywordCoverage(latexContent, keywords) {
 
   // Check technical terms
   keywords.technicalTerms.forEach(kw => {
-    if (latexContent.includes(kw)) {
+    if (containsKeyword(latexContent, kw)) {
       stats.technicalMatched++;
     }
   });
@@ -211,10 +251,15 @@ function analyzeKeywordCoverage(latexContent, keywords) {
   const totalKeywords = stats.criticalTotal + stats.importantTotal + stats.technicalTotal;
   stats.coveragePercent = totalKeywords > 0 ? Math.round((totalMatched / totalKeywords) * 100) : 0;
 
-  // Calculate critical coverage (most important metric)
+  // Calculate critical coverage (most important metric for ATS)
   stats.criticalCoveragePercent = stats.criticalTotal > 0
     ? Math.round((stats.criticalMatched / stats.criticalTotal) * 100)
     : 100;
+
+  // Calculate weighted ATS score (critical keywords weighted 2x)
+  const weightedScore = (stats.criticalMatched * 2) + stats.importantMatched + stats.technicalMatched;
+  const maxWeightedScore = (stats.criticalTotal * 2) + stats.importantTotal + stats.technicalTotal;
+  stats.atsScore = maxWeightedScore > 0 ? Math.round((weightedScore / maxWeightedScore) * 100) : 100;
 
   return stats;
 }
@@ -384,20 +429,22 @@ export async function processResumeJob(jobData, onProgress = null) {
     const keywordStats = analyzeKeywordCoverage(latexCode, keywords);
     logger.info({
       jobId,
+      atsScore: keywordStats.atsScore,
       coveragePercent: keywordStats.coveragePercent,
       criticalCoveragePercent: keywordStats.criticalCoveragePercent,
       criticalMatched: `${keywordStats.criticalMatched}/${keywordStats.criticalTotal}`,
       importantMatched: `${keywordStats.importantMatched}/${keywordStats.importantTotal}`,
-      missedCritical: keywordStats.missedCritical
+      missedCritical: keywordStats.missedCritical.slice(0, 10)
     }, 'ATS keyword coverage analysis');
 
-    // Warn if keyword coverage is low
-    if (keywordStats.coveragePercent < 70) {
+    // Warn if ATS score is low (using weighted score)
+    if (keywordStats.atsScore < 75) {
       logger.warn({
         jobId,
-        coverage: keywordStats.coveragePercent,
+        atsScore: keywordStats.atsScore,
+        criticalCoverage: keywordStats.criticalCoveragePercent,
         missedCritical: keywordStats.missedCritical.slice(0, 5),
-        message: 'LOW ATS SCORE - Keywords not integrated properly'
+        message: 'LOW ATS SCORE - Critical keywords not integrated properly'
       }, 'Poor keyword coverage detected');
     }
 
@@ -543,6 +590,7 @@ export async function processResumeJob(jobData, onProgress = null) {
           success: true,
           timings: timings,
           atsOptimization: {
+            atsScore: keywordStats.atsScore,
             keywordCoverage: keywordStats.coveragePercent,
             criticalCoverage: keywordStats.criticalCoveragePercent,
             criticalMatched: keywordStats.criticalMatched,
@@ -613,7 +661,49 @@ function validateAndFixLatex(latex, jobId) {
   let fixed = latex;
   let issues = [];
 
-  // Fix 1: Remove stray & characters outside tables
+  // CRITICAL: Check for document structure FIRST
+  if (!fixed.includes('\\documentclass')) {
+    issues.push('CRITICAL: Missing \\documentclass - LaTeX truncated!');
+    throw new Error('Incomplete LaTeX generation - missing \\documentclass. Increase maxTokens.');
+  }
+
+  if (!fixed.includes('\\begin{document}')) {
+    issues.push('CRITICAL: Missing \\begin{document} - LaTeX truncated!');
+    throw new Error('Incomplete LaTeX generation - missing \\begin{document}. Increase maxTokens.');
+  }
+
+  // Fix 1: Ensure \end{document}
+  if (!fixed.includes('\\end{document}')) {
+    issues.push('Added missing \\end{document}');
+    fixed = fixed.trim() + '\n\\end{document}\n';
+  }
+
+  // Fix 2: Check and fix balanced itemize/enumerate environments
+  const itemizeBegin = (fixed.match(/\\begin\{itemize\}/g) || []).length;
+  const itemizeEnd = (fixed.match(/\\end\{itemize\}/g) || []).length;
+  const enumerateBegin = (fixed.match(/\\begin\{enumerate\}/g) || []).length;
+  const enumerateEnd = (fixed.match(/\\end\{enumerate\}/g) || []).length;
+
+  if (itemizeBegin !== itemizeEnd) {
+    const diff = itemizeBegin - itemizeEnd;
+    if (diff > 0) {
+      // Add missing \end{itemize} before \end{document}
+      issues.push(`Added ${diff} missing \\end{itemize}`);
+      const endInsert = '\\end{itemize}\n'.repeat(diff);
+      fixed = fixed.replace(/\\end\{document\}/, endInsert + '\\end{document}');
+    }
+  }
+
+  if (enumerateBegin !== enumerateEnd) {
+    const diff = enumerateBegin - enumerateEnd;
+    if (diff > 0) {
+      issues.push(`Added ${diff} missing \\end{enumerate}`);
+      const endInsert = '\\end{enumerate}\n'.repeat(diff);
+      fixed = fixed.replace(/\\end\{document\}/, endInsert + '\\end{document}');
+    }
+  }
+
+  // Fix 3: Remove stray & characters outside tables
   const lines = fixed.split('\n');
   let inTable = false;
   const fixedLines = lines.map((line, i) => {
@@ -628,23 +718,48 @@ function validateAndFixLatex(latex, jobId) {
   });
   fixed = fixedLines.join('\n');
 
-  // Fix 2: Check balanced braces
+  // Fix 4: Check balanced braces
   const openBraces = (fixed.match(/\{/g) || []).length;
   const closeBraces = (fixed.match(/\}/g) || []).length;
   if (openBraces !== closeBraces) {
-    issues.push(`Unbalanced braces: ${openBraces} open vs ${closeBraces} close`);
+    issues.push(`WARNING: Unbalanced braces: ${openBraces} open vs ${closeBraces} close`);
+    // Don't fix automatically as this could break commands
   }
 
-  // Fix 3: Ensure \end{document}
-  if (!fixed.includes('\\end{document}')) {
-    issues.push('Added missing \\end{document}');
-    fixed += '\n\\end{document}\n';
-  }
-
-  // Fix 4: Remove any ** markdown that snuck in
+  // Fix 5: Remove any ** markdown that snuck in
   if (fixed.includes('**')) {
     issues.push('Removed markdown ** syntax');
     fixed = fixed.replace(/\*\*/g, '');
+  }
+
+  // Fix 6: Check for dvipsNames option issue
+  if (fixed.includes('\\usepackage[dvipsNames]{color}')) {
+    issues.push('Replaced dvipsNames with dvipsnames (correct capitalization)');
+    fixed = fixed.replace(/\\usepackage\[dvipsNames\]\{color\}/g, '\\usepackage[dvipsnames]{color}');
+  }
+
+  // Fix 7: Validate \item commands are inside lists
+  const itemRegex = /\\item(?![ize])/g;
+  const itemMatches = fixed.match(itemRegex) || [];
+  if (itemMatches.length > 0) {
+    // Check if all items are within itemize/enumerate blocks
+    let inList = false;
+    let orphanItems = 0;
+    fixed.split('\n').forEach(line => {
+      if (line.includes('\\begin{itemize}') || line.includes('\\begin{enumerate}')) {
+        inList = true;
+      }
+      if (line.includes('\\end{itemize}') || line.includes('\\end{enumerate}')) {
+        inList = false;
+      }
+      if (line.match(itemRegex) && !inList) {
+        orphanItems++;
+      }
+    });
+
+    if (orphanItems > 0) {
+      issues.push(`WARNING: ${orphanItems} orphan \\item commands outside lists`);
+    }
   }
 
   if (issues.length > 0) {
