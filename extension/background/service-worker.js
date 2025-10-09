@@ -250,6 +250,51 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  // Proxy API requests to bypass page-origin CORS restrictions
+  if (message.action === 'API_REQUEST') {
+    (async () => {
+      try {
+        const response = await fetch(message.url, message.options || {});
+        const contentType = response.headers.get('content-type') || '';
+        let payload;
+
+        if (contentType.includes('application/json')) {
+          payload = await response.json();
+        } else {
+          payload = await response.text();
+        }
+
+        sendResponse({
+          ok: response.ok,
+          status: response.status,
+          data: payload,
+          headers: Array.from(response.headers.entries())
+        });
+      } catch (error) {
+        console.error('API proxy fetch failed:', error);
+        sendResponse({ ok: false, error: error.message || 'Request failed' });
+      }
+    })();
+
+    return true; // Keep channel open for async response
+  }
+
+  if (message.action === 'DOWNLOAD_RESUME') {
+    (async () => {
+      try {
+        const stored = await chrome.storage.local.get('apiBaseURL');
+        const apiBase = message.baseURL || stored.apiBaseURL || 'https://passats-production.up.railway.app';
+        await downloadResume(message.jobId, message.token, apiBase);
+        sendResponse({ success: true });
+      } catch (error) {
+        console.error('Download proxy error:', error);
+        sendResponse({ success: false, error: error.message || 'Download failed' });
+      }
+    })();
+
+    return true;
+  }
+
   if (message.action === 'jobPageDetected') {
     // Log job page detection
     console.log('🎯 Job page detected:', {
@@ -549,10 +594,10 @@ async function downloadResume(jobId, token, apiBase) {
     }
 
     const blob = await response.blob();
-    const url = URL.createObjectURL(blob);
+    const downloadUrl = await createDownloadUrl(blob);
 
     chrome.downloads.download({
-      url: url,
+      url: downloadUrl,
       filename: `resume_${jobId}.pdf`,
       saveAs: true
     }, (downloadId) => {
@@ -568,14 +613,14 @@ async function downloadResume(jobId, token, apiBase) {
           requireInteraction: false
         });
 
-        // Open dashboard
-        const { apiBaseURL } = chrome.storage.local.get('apiBaseURL');
         const webUrl = 'https://happyresumes.com/dashboard';
         chrome.tabs.create({ url: webUrl });
       }
 
-      // Clean up blob URL
-      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      // Clean up blob URL or revoke data URL memory
+      if (downloadUrl.startsWith('blob:')) {
+        setTimeout(() => URL.revokeObjectURL(downloadUrl), 10000);
+      }
     });
   } catch (error) {
     console.error('Download error:', error);
@@ -587,6 +632,36 @@ async function downloadResume(jobId, token, apiBase) {
       requireInteraction: false
     });
   }
+}
+
+async function createDownloadUrl(blob) {
+  const urlFactory = (globalThis.URL && typeof globalThis.URL.createObjectURL === 'function')
+    ? globalThis.URL
+    : (typeof globalThis.webkitURL !== 'undefined' && typeof globalThis.webkitURL.createObjectURL === 'function')
+      ? globalThis.webkitURL
+      : null;
+
+  if (urlFactory) {
+    return urlFactory.createObjectURL(blob);
+  }
+
+  // Fallback to data URL via FileReader
+  return new Promise((resolve, reject) => {
+    try {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (typeof reader.result === 'string') {
+          resolve(reader.result);
+        } else {
+          reject(new Error('Failed to create download URL'));
+        }
+      };
+      reader.onerror = () => reject(reader.error || new Error('Failed to create download URL'));
+      reader.readAsDataURL(blob);
+    } catch (error) {
+      reject(error);
+    }
+  });
 }
 
 // Handle notification button clicks

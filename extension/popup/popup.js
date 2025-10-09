@@ -102,6 +102,17 @@ async function loadUsageStats(token) {
 async function checkCurrentPage(token) {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
+  if (!tab || !tab.url) {
+    showNoJob();
+    return;
+  }
+
+  // Ignore Chrome internal pages or extension pages where we can't scrape
+  if (tab.url.startsWith('chrome://') || tab.url.startsWith('edge://') || tab.url.startsWith('chrome-extension://')) {
+    showNoJob();
+    return;
+  }
+
   const supportedSites = ['linkedin.com', 'indeed.com', 'glassdoor.com'];
   const isJobSite = supportedSites.some(site => tab.url.includes(site));
 
