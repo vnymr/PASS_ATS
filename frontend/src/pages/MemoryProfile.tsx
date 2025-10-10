@@ -38,6 +38,8 @@ export default function MemoryProfile() {
   const [newSkill, setNewSkill] = useState('');
   const [uploadingResume, setUploadingResume] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [autoSaving, setAutoSaving] = useState(false);
 
   // Form fields for structured profile data
   const [formData, setFormData] = useState({
@@ -81,6 +83,61 @@ export default function MemoryProfile() {
       return () => clearTimeout(timer);
     }
   }, [success]);
+
+  // Auto-save when form data changes (debounced to 2 seconds)
+  useEffect(() => {
+    // Skip auto-save if we're already saving or loading
+    if (saving || loading) return;
+
+    // Clear existing timeout
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current);
+    }
+
+    // Set new timeout for auto-save (2 seconds after user stops typing)
+    autoSaveTimeoutRef.current = setTimeout(() => {
+      autoSave();
+    }, 2000);
+
+    return () => {
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
+      }
+    };
+  }, [formData, additionalInfo, resumeText]);
+
+  async function autoSave() {
+    // Skip if no data to save
+    if (!formData.name && !formData.email && !additionalInfo && !resumeText) {
+      return;
+    }
+
+    setAutoSaving(true);
+
+    try {
+      const token = await getToken();
+      if (!token) return;
+
+      const profileData = {
+        ...formData,
+        additionalInfo,
+        resumeText
+      };
+
+      await fetch(`${API_URL}/api/profile`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(profileData)
+      });
+    } catch (err) {
+      // Silent fail for auto-save
+    } finally {
+      setAutoSaving(false);
+    }
+  }
 
   async function loadProfile() {
     try {
@@ -674,6 +731,12 @@ Example: Experienced Software Engineer with 5+ years of expertise in full-stack 
                   </>
                 )}
               </button>
+              {autoSaving && (
+                <span className="auto-save-indicator">
+                  <Icons.loader className="animate-spin" size={14} />
+                  Auto-saving...
+                </span>
+              )}
             </div>
           )}
         </main>

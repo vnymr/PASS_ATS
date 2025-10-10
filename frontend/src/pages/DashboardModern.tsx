@@ -1,14 +1,16 @@
 import React, { useEffect, useState, useRef, KeyboardEvent } from 'react';
 import { useAuth } from '@clerk/clerk-react';
 import { useNavigate } from 'react-router-dom';
-import { api, type ResumeEntry } from '../api-clerk';
+import { api, type ResumeEntry, type Profile } from '../api-clerk';
 import Icons from '../components/ui/icons';
 import UpgradeLimitModal from '../components/UpgradeLimitModal';
+import ProfileCompletionBanner from '../components/ProfileCompletionBanner';
 
 export default function DashboardModern() {
   const { getToken } = useAuth();
   const navigate = useNavigate();
   const [resumes, setResumes] = useState<ResumeEntry[]>([]);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [jobDescription, setJobDescription] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -32,7 +34,12 @@ export default function DashboardModern() {
   async function loadDashboardData() {
     try {
       const token = await getToken();
-      const resumesData = await api.getResumes(token || undefined);
+      const [resumesData, profileData] = await Promise.all([
+        api.getResumes(token || undefined),
+        api.getProfile(token || undefined)
+      ]);
+
+      setProfile(profileData);
 
       if (Array.isArray(resumesData)) {
         setResumes(resumesData);
@@ -236,6 +243,9 @@ export default function DashboardModern() {
                 </button>
               </div>
             )}
+
+            {/* Profile Completion Banner - shown above job description if profile incomplete or missing */}
+            <ProfileCompletionBanner isComplete={profile?.isComplete ?? false} />
 
             <div className="modern-textarea-container">
               <textarea

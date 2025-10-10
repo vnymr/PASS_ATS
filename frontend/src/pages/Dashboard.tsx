@@ -1,13 +1,15 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@clerk/clerk-react';
-import { api, type Quota, type ResumeEntry } from '../api-clerk';
+import { api, type Quota, type ResumeEntry, type Profile } from '../api-clerk';
 import Icons from '../components/ui/icons';
+import ProfileCompletionBanner from '../components/ProfileCompletionBanner';
 
 export default function Dashboard() {
   const { getToken } = useAuth();
   const [quota, setQuota] = useState<Quota | null>(null);
   const [resumes, setResumes] = useState<ResumeEntry[]>([]);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [jobDescription, setJobDescription] = useState('');
   const [aiMode, setAiMode] = useState('claude');
@@ -23,11 +25,13 @@ export default function Dashboard() {
   async function loadDashboardData() {
     try {
       const token = await getToken();
-      const [quotaData, resumesData] = await Promise.all([
+      const [quotaData, resumesData, profileData] = await Promise.all([
         api.getQuota(token || undefined),
-        api.getResumes(token || undefined)
+        api.getResumes(token || undefined),
+        api.getProfile(token || undefined)
       ]);
       setQuota(quotaData);
+      setProfile(profileData);
 
       if (Array.isArray(resumesData)) {
         setResumes(resumesData);
@@ -206,6 +210,9 @@ export default function Dashboard() {
 
       {/* AI Input Section */}
       <div className="ai-input-section">
+        {/* Profile Completion Banner - shown above job description if profile incomplete or missing */}
+        <ProfileCompletionBanner isComplete={profile?.isComplete ?? false} />
+
         <div className="ai-input-panel">
           <div className="ai-input-header">
             <Icons.zap size={20} />

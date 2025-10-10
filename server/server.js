@@ -550,8 +550,14 @@ app.get('/api/profile', authenticateToken, async (req, res) => {
       profileData.savedResumeUrl = `/api/profile/resume-download`;
     }
 
+    // Check if profile is complete (has minimum required data)
+    const hasExperience = (profileData.experiences || profileData.experience || []).length > 0;
+    const hasEducation = (profileData.education || []).length > 0;
+    const hasResumeText = profileData.resumeText && profileData.resumeText.trim().length > 100;
+    profileData.isComplete = hasExperience || hasEducation || hasResumeText;
+
     // Return the profile data directly, not wrapped in a profile object
-    logger.debug({ userId, profileSize: JSON.stringify(profileData).length }, 'Returning profile data');
+    logger.debug({ userId, profileSize: JSON.stringify(profileData).length, isComplete: profileData.isComplete }, 'Returning profile data');
     res.json(profileData);
   } catch (error) {
     console.error('Profile fetch error:', error);

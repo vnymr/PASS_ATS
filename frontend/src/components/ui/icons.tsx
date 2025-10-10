@@ -95,6 +95,7 @@ import {
   Battery,
   BatteryCharging,
   ArrowLeft,
+  ArrowRight,
   CreditCard,
   Infinity,
   Sparkles
@@ -196,6 +197,7 @@ export const Icons = {
   battery: Battery,
   batteryCharging: BatteryCharging,
   arrowLeft: ArrowLeft,
+  arrowRight: ArrowRight,
   creditCard: CreditCard,
   infinity: Infinity,
   sparkles: Sparkles,

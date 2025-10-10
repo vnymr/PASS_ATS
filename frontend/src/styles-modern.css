@@ -4313,3 +4313,100 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+/* Profile Completion Banner */
+.profile-completion-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-md) var(--space-lg);
+  margin-bottom: var(--space-lg);
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.banner-content {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  color: var(--text-secondary);
+}
+
+.banner-content svg {
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.banner-text {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--text-primary);
+}
+
+.banner-button {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-md);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.banner-button:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent-primary);
+  transform: translateX(2px);
+}
+
+.banner-button svg {
+  transition: transform 0.2s ease;
+}
+
+.banner-button:hover svg {
+  transform: translateX(2px);
+}
+
+/* Auto-save indicator */
+.auto-save-indicator {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  color: var(--text-tertiary);
+  font-size: 13px;
+  font-weight: 400;
+  margin-left: var(--space-md);
+  animation: fadeIn 0.2s ease-out;
+}
+
+.auto-save-indicator svg {
+  color: var(--text-tertiary);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
