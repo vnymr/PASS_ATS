@@ -4,6 +4,12 @@ import { useAuth } from '@clerk/clerk-react';
 import { api, type Quota, type ResumeEntry, type Profile } from '../api-clerk';
 import Icons from '../components/ui/icons';
 import ProfileCompletionBanner from '../components/ProfileCompletionBanner';
+import {
+  trackResumeGenerationStart,
+  trackResumeGenerationComplete,
+  trackResumeDownload,
+  trackJobDescriptionAdd,
+} from '../utils/analytics';
 
 export default function Dashboard() {
   const { getToken } = useAuth();
@@ -54,12 +60,20 @@ export default function Dashboard() {
     if (!trimmedJD || isGenerating) return;
 
     setIsGenerating(true);
+    const startTime = Date.now();
+
     try {
       const token = await getToken();
+
+      // Track job description addition
+      trackJobDescriptionAdd('paste');
 
       // Start job
       const result = await api.processJob(trimmedJD, aiMode, matchMode, token || undefined);
       const jobId = result.jobId;
+
+      // Track resume generation start
+      trackResumeGenerationStart(jobId);
 
       console.log(`📋 Job created: ${jobId}. Starting status polling...`);
 
@@ -79,6 +93,10 @@ export default function Dashboard() {
           console.log(`📊 Job ${jobId} status: ${status.status} (attempt ${attempts})`);
 
           if (status.status === 'COMPLETED') {
+            // Track completion with duration
+            const duration = Math.round((Date.now() - startTime) / 1000);
+            trackResumeGenerationComplete(jobId, duration);
+
             // Success! Reload resumes
             const resumesData = await api.getResumes(token || undefined);
             if (Array.isArray(resumesData)) {
@@ -150,6 +168,10 @@ export default function Dashboard() {
       a.click();
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
+
+      // Track resume download
+      const jobId = fileName.replace('resume-', '').replace('.pdf', '');
+      trackResumeDownload(jobId);
 
       showToast('Resume downloaded successfully!', 'success');
       return true;

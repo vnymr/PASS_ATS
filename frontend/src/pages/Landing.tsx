@@ -5,12 +5,14 @@ import { SignedIn, SignedOut, SignInButton, SignUpButton, UserButton, useAuth } 
 import logoImg from '../logo.svg';
 import { DottedSurface } from '@/components/ui/dotted-surface';
 import ExtensionComingSoonModal from '../components/ExtensionComingSoonModal';
+import { trackCTAClick, trackExtensionClick } from '../utils/analytics';
 import './Landing.css';
 
 export default function Landing() {
   const navigate = useNavigate();
   const { isSignedIn } = useAuth();
   const [isExtensionModalOpen, setIsExtensionModalOpen] = useState(false);
+  const [resumeCount, setResumeCount] = useState<number | null>(null);
 
   // Redirect signed-in users directly to dashboard
   useEffect(() => {
@@ -18,6 +20,20 @@ export default function Landing() {
       navigate('/dashboard');
     }
   }, [isSignedIn, navigate]);
+
+  // Fetch resume count
+  useEffect(() => {
+    async function fetchResumeCount() {
+      try {
+        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/stats/resumes`);
+        const data = await response.json();
+        setResumeCount(data.totalResumes);
+      } catch (error) {
+        console.error('Failed to fetch resume count:', error);
+      }
+    }
+    fetchResumeCount();
+  }, []);
   // ONBOARDING DISABLED: Profile check bypassed - all users go directly to dashboard
   // Original logic checked profile status to show different CTAs
   // To re-enable: Uncomment the profile check code below and update the SignedIn button logic
@@ -100,7 +116,11 @@ export default function Landing() {
           <div className="hero-buttons fade-in-up">
             <SignedOut>
               <SignUpButton mode="modal">
-                <button className="btn btn-primary btn-large btn-glow" aria-label="Start building your resume for free">
+                <button
+                  className="btn btn-primary btn-large btn-glow"
+                  aria-label="Start building your resume for free"
+                  onClick={() => trackCTAClick('hero', 'Start Building Your Resume')}
+                >
                   <span>Start Building Your Resume</span>
                   <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M7.5 15L12.5 10L7.5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -109,17 +129,27 @@ export default function Landing() {
               </SignUpButton>
             </SignedOut>
             <SignedIn>
-              <button onClick={() => navigate('/dashboard')} className="btn btn-primary btn-large btn-glow" aria-label="Navigate to your dashboard">
+              <button
+                onClick={() => {
+                  trackCTAClick('hero', 'Go to Dashboard');
+                  navigate('/dashboard');
+                }}
+                className="btn btn-primary btn-large btn-glow"
+                aria-label="Navigate to your dashboard"
+              >
                 <span>Go to Dashboard</span>
                 <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M7.5 15L12.5 10L7.5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
               </button>
             </SignedIn>
-            <button 
-              className="btn btn-outline btn-large" 
+            <button
+              className="btn btn-outline btn-large"
               aria-label="Download Chrome extension"
-              onClick={() => setIsExtensionModalOpen(true)}
+              onClick={() => {
+                trackExtensionClick();
+                setIsExtensionModalOpen(true);
+              }}
             >
               Download Extension
             </button>
@@ -129,9 +159,9 @@ export default function Landing() {
               <div className="avatar">👤</div>
               <div className="avatar">👤</div>
               <div className="avatar">👤</div>
-              <div className="avatar-count">+2.5k</div>
+              <div className="avatar-count">+{resumeCount ? Math.floor(resumeCount / 100) * 100 : '2.5k'}</div>
             </div>
-            <p>Join thousands landing their dream jobs</p>
+            <p>{resumeCount ? `${resumeCount.toLocaleString()} resumes generated` : 'Join thousands landing their dream jobs'}</p>
           </div>
         </div>
       </header>
@@ -304,7 +334,11 @@ export default function Landing() {
               <p className="cta-subtitle">Join thousands of job seekers who are getting more interviews with ATS-optimized resumes</p>
               <SignedOut>
                 <SignUpButton mode="modal">
-                  <button className="btn btn-primary btn-large btn-glow" aria-label="Create your free account now">
+                  <button
+                    className="btn btn-primary btn-large btn-glow"
+                    aria-label="Create your free account now"
+                    onClick={() => trackCTAClick('cta_section', 'Get Started Free')}
+                  >
                     <span>Get Started Free</span>
                     <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                       <path d="M7.5 15L12.5 10L7.5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -313,7 +347,13 @@ export default function Landing() {
                 </SignUpButton>
               </SignedOut>
               <SignedIn>
-                <button onClick={() => navigate('/dashboard')} className="btn btn-primary btn-large btn-glow">
+                <button
+                  onClick={() => {
+                    trackCTAClick('cta_section', 'Go to Dashboard');
+                    navigate('/dashboard');
+                  }}
+                  className="btn btn-primary btn-large btn-glow"
+                >
                   <span>Go to Dashboard</span>
                   <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M7.5 15L12.5 10L7.5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
