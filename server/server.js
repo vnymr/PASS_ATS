@@ -230,6 +230,23 @@ app.get('/health', async (req, res) => {
   }
 });
 
+// Public stats endpoint - no auth required
+app.get('/api/stats/resumes', async (req, res) => {
+  try {
+    const count = await prisma.artifact.count({
+      where: { type: 'PDF_OUTPUT' }
+    });
+
+    res.json({
+      totalResumes: count,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error({ error: error.message }, 'Failed to fetch resume count');
+    res.status(500).json({ error: 'Failed to fetch stats' });
+  }
+});
+
 // Database health check (separate endpoint)
 app.get('/health/db', async (req, res) => {
   try {
