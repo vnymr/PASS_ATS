@@ -6,13 +6,15 @@ export function buildLatexSystemPrompt() {
 
 YOUR GOAL: Maximize ATS score and recruiter appeal while staying 100% truthful to user's actual work.
 
-⚠️ CRITICAL CONSTRAINTS:
-1. Resume MUST fit on EXACTLY ONE PAGE - this is non-negotiable
-   - MUST FILL THE ENTIRE PAGE from top to bottom with minimal whitespace
-   - If too short: expand bullets with more detail, add more experiences/projects, elaborate on achievements
-   - If too long: remove Projects first, then reduce bullets to 3 per job, then limit to 2 jobs
-   - Be concise and impactful - every word must justify its existence
-   - TARGET: Fill 90-95% of the page vertically
+⚠️ CRITICAL CONSTRAINTS - ONE PAGE ONLY:
+1. Resume MUST fit on EXACTLY ONE PAGE - this is ABSOLUTELY NON-NEGOTIABLE
+   - ⚠️ WARNING: If resume exceeds 1 page, it will be REJECTED by ATS systems
+   - DEFAULT STRATEGY: Aim for 85-90% page fill (safer than overfilling)
+   - Use 3-4 bullets per experience (NOT 5-6 which often causes overflow)
+   - Prioritize quality over quantity - 3 strong bullets >> 5 weak bullets
+   - BE RUTHLESS: Skip Projects section if you have 3+ work experiences
+   - BE RUTHLESS: Skip Summary if content is tight
+   - NEVER let content overflow to page 2 - better to omit than overflow
 
 2. NEVER fabricate contact information
    - ONLY include LinkedIn/GitHub/Website if explicitly provided in user data
@@ -209,12 +211,12 @@ CRITICAL LATEX RULES (FOLLOW EXACTLY):
 - NO unicode symbols (•, →, —, –) - use plain ASCII only
 - Date format: "Mon YYYY -- Mon YYYY" (exactly two hyphens)
 - Skills section: Use plain text with commas, NO bullets or special characters
-- STRICT ONE PAGE LIMIT: Content must fit on a single page BUT MUST FILL 90-95% of the page
-- Use 4-5 detailed bullets per experience to fill the page
-- Include ALL relevant work experiences and projects to maximize page fill
-- If running long: remove Projects section, reduce bullet points, or condense Skills
-- If running short: expand bullets with more detail, add Projects, add relevant coursework
-- Quality AND quantity - fill the page while maintaining quality
+- STRICT ONE PAGE LIMIT: Content must fit on a single page - aim for 85-90% fill
+- Use 3-4 focused bullets per experience (NOT 5+ which often overflows)
+- PRIORITIZE: Most recent 2-3 experiences with strong bullets over many weak ones
+- If running long: IMMEDIATELY remove Projects, reduce to 3 bullets/job, trim Skills
+- If running short: Add 1 more bullet/experience OR add Projects (choose one)
+- SAFETY FIRST: Better slightly short than overflow to page 2 (instant ATS failure)
 - NEVER use & outside of LaTeX commands - always escape as \\&
 - CONTACT INFO: ONLY include fields that exist in user data - DO NOT fabricate LinkedIn, GitHub, or website URLs
 
@@ -292,10 +294,11 @@ LATEX REQUIREMENTS:
 - NO unicode (→, —, etc.)
 - Dates: Mon YYYY -- Mon YYYY (two hyphens)
 - Skills: Plain text, commas (NO ampersands)
-- STRICT ONE PAGE LIMIT: Use 4-5 bullets/experience. Must fit on ONE page only.
-- FILL THE ENTIRE PAGE: Aim for 90-95% vertical page fill. Add more detail, more bullet points, or expand sections if too short.
-- If content is too short: Add Projects section, expand Education with relevant coursework, add more experience bullets
-- If content exceeds one page: Cut Projects section first, then reduce bullets to 3 per job.
+- STRICT ONE PAGE LIMIT: Use 3-4 bullets/experience. Must fit on ONE page only.
+- CONSERVATIVE APPROACH: Aim for 85-90% vertical page fill (safer than 95% which risks overflow)
+- If content seems short: Add 1 more bullet per experience OR add Projects section (not both)
+- If content might be too long: IMMEDIATELY cut Projects, reduce to 3 bullets/job, omit Summary
+- SAFETY RULE: When in doubt, use LESS content - overflow to page 2 = instant ATS rejection
 - CONTACT INFO: Only add LinkedIn/GitHub/website if present in user data. DO NOT fabricate these.
 
 STRUCTURE:

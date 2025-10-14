@@ -1,31 +1,25 @@
+/**
+ * Generate a test JWT token for testing
+ */
+
 import jwt from 'jsonwebtoken';
-import dotenv from 'dotenv';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-here';
 
-dotenv.config({ path: join(__dirname, '../.env') });
+// Create a test user token
+const testUser = {
+  id: 3, // Using existing user ID from previous tests
+  email: 'test-user@example.com'
+};
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this-in-production';
+const token = jwt.sign(testUser, JWT_SECRET, { expiresIn: '24h' });
 
-// Create a test token for user ID 3 (or specify via command line)
-const userId = process.argv[2] ? parseInt(process.argv[2]) : 3;
-const email = process.argv[3] || `user_${userId}@test.com`;
-
-const token = jwt.sign(
-  { id: userId, email },
-  JWT_SECRET,
-  { expiresIn: '24h' }
-);
-
-console.log('Generated test token:');
-console.log(token);
-console.log('\nToken details:');
-console.log(`  User ID: ${userId}`);
-console.log(`  Email: ${email}`);
-console.log(`  Expires: 24 hours`);
-console.log('\nTo use with test script:');
-console.log(`  export TEST_TOKEN="${token}"`);
-console.log(`  node scripts/test-complete-flow.js`);
+console.log('🔑 Test Token Generated');
+console.log('═══════════════════════════════════════════════════════════');
+console.log(`\nToken: ${token}\n`);
+console.log('Usage:');
+console.log(`TEST_TOKEN="${token}" node scripts/test-performance.js`);
+console.log('\nOr export it:');
+console.log(`export TEST_TOKEN="${token}"`);
+console.log('node scripts/test-performance.js');
+console.log('\n═══════════════════════════════════════════════════════════');

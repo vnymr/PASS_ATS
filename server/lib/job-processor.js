@@ -448,10 +448,12 @@ export async function processResumeJob(jobData, onProgress = null) {
       }, 'Poor keyword coverage detected');
     }
 
-    // Try to compile with error feedback loop
+    // Try to compile with error feedback loop + page validation
     let pdfBuffer = null;
     let totalCompileTime = 0;
     let totalFixTime = 0;
+    const MAX_TRIM_ATTEMPTS = 2; // Allow up to 2 trimming attempts if multi-page
+    let trimAttempt = 0;
 
     while (attempt < MAX_RETRIES && !pdfBuffer) {
       attempt++;
@@ -471,6 +473,50 @@ export async function processResumeJob(jobData, onProgress = null) {
           compileTimeMs: compileTime,
           pdfSizeKB: (pdfBuffer.length / 1024).toFixed(2)
         });
+
+        // CRITICAL: Validate page count (must be exactly 1 page)
+        const { validateSinglePage } = await import('./pdf-utils.js');
+        const pageValidation = await validateSinglePage(pdfBuffer);
+
+        logger.info({
+          jobId,
+          pageCount: pageValidation.pageCount,
+          isValid: pageValidation.isValid,
+          message: pageValidation.message
+        }, 'PDF page validation');
+
+        if (!pageValidation.isValid && pageValidation.pageCount > 1 && trimAttempt < MAX_TRIM_ATTEMPTS) {
+          // Resume exceeds 1 page - trim and recompile
+          trimAttempt++;
+          logger.warn({
+            jobId,
+            pageCount: pageValidation.pageCount,
+            trimAttempt
+          }, '⚠️ Resume exceeds 1 page - trimming content');
+
+          const { trimLatexToOnePage, analyzeLatexStructure } = await import('./latex-trimmer.js');
+
+          // Analyze structure before trimming
+          const structure = analyzeLatexStructure(latexCode);
+          logger.info({ jobId, structure }, 'LaTeX structure analysis before trimming');
+
+          // Trim the LaTeX
+          latexCode = trimLatexToOnePage(latexCode, pageValidation.pageCount);
+
+          // Reset for another compilation attempt
+          pdfBuffer = null;
+          attempt--; // Don't count this as a failed attempt
+          logger.info({ jobId, trimAttempt }, 'Recompiling trimmed LaTeX...');
+          continue; // Retry compilation with trimmed content
+        } else if (!pageValidation.isValid && pageValidation.pageCount > 1) {
+          // Exceeded trim attempts - log warning but accept
+          logger.error({
+            jobId,
+            pageCount: pageValidation.pageCount,
+            message: 'Resume still exceeds 1 page after trimming attempts'
+          }, '❌ CRITICAL: Could not trim resume to 1 page');
+          // Continue anyway - better to have 2-page resume than fail
+        }
 
         if (onProgress) onProgress(80); // 80% - Compilation successful
       } catch (compileError) {
@@ -521,6 +567,10 @@ export async function processResumeJob(jobData, onProgress = null) {
 
     if (onProgress) onProgress(85); // 85% - Saving artifacts
 
+    // Get final page count for diagnostics
+    const { countPdfPages } = await import('./pdf-utils.js');
+    const finalPageCount = await countPdfPages(pdfBuffer);
+
     // Save artifacts with clean filename
     const t4 = Date.now();
     logger.debug({ jobId }, 'Saving artifacts to database');
@@ -550,8 +600,10 @@ export async function processResumeJob(jobData, onProgress = null) {
         content: pdfBuffer,
         metadata: {
           attempts: attempt,
-          model: 'gpt-4o-mini',
+          model: 'gpt-5-mini',
           pdfSizeKB: (pdfBuffer.length / 1024).toFixed(2),
+          pageCount: finalPageCount,
+          trimAttempts: trimAttempt,
           filename: filename
         }
       }
@@ -583,10 +635,13 @@ export async function processResumeJob(jobData, onProgress = null) {
         diagnostics: {
           completedAt: new Date().toISOString(),
           attempts: attempt,
-          model: 'gpt-4o-mini',
+          model: 'gpt-5-mini',
           totalTimeSeconds: (totalTime / 1000).toFixed(2),
           totalTimeMs: totalTime,
           pdfSizeKB: (pdfBuffer.length / 1024).toFixed(2),
+          pageCount: finalPageCount,
+          trimAttempts: trimAttempt,
+          isOnePage: finalPageCount === 1,
           success: true,
           timings: timings,
           atsOptimization: {
@@ -823,7 +878,9 @@ async function generateLatexWithLLM(openai, userDataJSON, jobDescription, keywor
           content: userPrompt
         }
       ],
-      stream: true
+      stream: true,
+      // GPT-5 verbosity parameter for more concise output (helps with 1-page constraint)
+      verbosity: 'medium' // low/medium/high - medium balances detail vs brevity
     });
 
     let latex = '';
@@ -859,7 +916,11 @@ async function generateLatexWithLLM(openai, userDataJSON, jobDescription, keywor
         role: 'user',
         content: userPrompt
       }
-    ]
+    ],
+    // GPT-5 verbosity parameter for more concise output (helps with 1-page constraint)
+    verbosity: 'medium', // low/medium/high - medium balances detail vs brevity
+    // Temperature for consistent LaTeX generation
+    temperature: 0.3
   });
 
   // Log cache usage for monitoring
