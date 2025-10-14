@@ -149,7 +149,7 @@ class AIClient {
    * @private
    */
   async _generateWithOpenAI({ prompt, systemPrompt, model, temperature, maxTokens, jsonMode }) {
-    logger.info({ model, jsonMode }, 'Generating with OpenAI');
+    logger.info({ model, jsonMode, temperature }, 'Generating with OpenAI');
 
     const messages = [];
 
@@ -165,12 +165,22 @@ class AIClient {
       content: prompt
     });
 
+    // Build request params - only include temperature if it's the default (1.0)
+    // or if we know the model supports custom temperature
     const requestParams = {
       model,
       messages,
-      temperature,
       max_completion_tokens: maxTokens, // Updated from max_tokens for GPT-4o compatibility
     };
+
+    // Only include temperature for models that support it
+    // GPT-5 models require temperature = 1.0 (default)
+    if (!model.startsWith('gpt-5') || temperature === 1.0) {
+      requestParams.temperature = temperature;
+    } else {
+      // Log if we're skipping temperature for GPT-5
+      logger.info({ model, requestedTemp: temperature }, 'Skipping temperature (GPT-5 only supports default)');
+    }
 
     if (jsonMode) {
       requestParams.response_format = { type: 'json_object' };

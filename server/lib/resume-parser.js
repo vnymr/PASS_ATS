@@ -1,10 +1,18 @@
-import pdfParse from 'pdf-parse/lib/pdf-parse.js';
 import mammoth from 'mammoth';
 import aiClient from './ai-client.js';
 import cacheManager from './cache-manager.js';
 import ResumeTextValidator from './resume-text-validator.js';
 import SimpleResumeParser from './simple-resume-parser.js';
 import crypto from 'crypto';
+
+// Lazy load PDF.js to avoid initialization issues
+let pdfjs = null;
+async function getPdfJs() {
+  if (!pdfjs) {
+    pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  }
+  return pdfjs;
+}
 
 class ResumeParser {
   constructor() {
@@ -22,6 +30,27 @@ class ResumeParser {
     return crypto.createHash('sha256').update(text).digest('hex').substring(0, 16);
   }
 
+  /**
+   * Extract text from PDF buffer using PDF.js
+   */
+  async _extractPdfText(buffer) {
+    const pdfjsLib = await getPdfJs();
+    const data = new Uint8Array(buffer);
+    const loadingTask = pdfjsLib.getDocument({ data });
+    const pdf = await loadingTask.promise;
+
+    let fullText = '';
+
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const textContent = await page.getTextContent();
+      const pageText = textContent.items.map(item => item.str).join(' ');
+      fullText += pageText + '\n';
+    }
+
+    return fullText;
+  }
+
   async parseResume(buffer, mimeType) {
     let text = '';
 
@@ -29,8 +58,7 @@ class ResumeParser {
       // Parse based on file type
       if (mimeType === 'application/pdf') {
         // Parse PDF
-        const pdfData = await pdfParse(buffer);
-        text = pdfData.text;
+        text = await this._extractPdfText(buffer);
         console.log('✅ PDF parsed, extracted', text.length, 'characters');
       }
       else if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {

@@ -1,3 +1,5 @@
+// API endpoints - used for data communication only, NOT for remote code execution
+// All extension functionality is self-contained within this package
 const API_BASE = 'https://api.happyresumes.com';
 const WEB_BASE = 'https://happyresumes.com';
 let currentJobs = new Map(); // jobId -> job data
@@ -10,7 +12,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (customizeLink) {
     customizeLink.onclick = (e) => {
       e.preventDefault();
-      chrome.tabs.create({ url: 'chrome://extensions/shortcuts' });
+      // Show user-friendly message instead of navigating to chrome:// URL
+      alert('To customize keyboard shortcuts:\n\n1. Go to chrome://extensions/shortcuts\n2. Find "HappyResumes - AI Resume Builder"\n3. Set your preferred shortcut');
     };
   }
 
@@ -99,16 +102,57 @@ async function loadUsageStats(token) {
   }
 }
 
+async function ensureScraperReady(tabId) {
+  try {
+    // Inject config first
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ['utils/config.js']
+    });
+
+    // Wait a bit for config to load
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    // Then inject API client
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ['utils/api-client.js']
+    });
+
+    // Wait a bit for API client to load
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    // Finally inject scraper
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ['content/scraper.js']
+    });
+
+    // Wait for scraper to initialize
+    await new Promise(resolve => setTimeout(resolve, 200));
+
+    console.log('✅ All scripts injected and initialized');
+    return true;
+  } catch (error) {
+    console.error('Failed to inject scraper scripts:', error);
+    return false;
+  }
+}
+
 async function checkCurrentPage(token) {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
   if (!tab || !tab.url) {
+    console.log('❌ No active tab found');
     showNoJob();
     return;
   }
 
+  console.log('🔍 Checking page:', tab.url);
+
   // Ignore Chrome internal pages or extension pages where we can't scrape
   if (tab.url.startsWith('chrome://') || tab.url.startsWith('edge://') || tab.url.startsWith('chrome-extension://')) {
+    console.log('❌ Cannot run on Chrome internal pages');
     showNoJob();
     return;
   }
@@ -116,29 +160,58 @@ async function checkCurrentPage(token) {
   const supportedSites = ['linkedin.com', 'indeed.com', 'glassdoor.com'];
   const isJobSite = supportedSites.some(site => tab.url.includes(site));
 
+  console.log('🌐 Is job site?', isJobSite);
+
   if (isJobSite) {
+    console.log('📝 Injecting scraper scripts...');
+    const injected = await ensureScraperReady(tab.id);
+    if (!injected) {
+      console.error('❌ Failed to inject scripts');
+      showNoJob();
+      return;
+    }
+
     // Try to scrape job info
     try {
+      console.log('🔍 Attempting to extract job data...');
       const results = await chrome.scripting.executeScript({
         target: { tabId: tab.id },
         func: () => {
+          console.log('📄 Checking for jobScraper...', typeof window.jobScraper);
           if (window.jobScraper) {
-            const jobData = window.jobScraper.extractJobContent();
-            return {
-              success: true,
-              title: jobData.metadata?.title || 'Job Title',
-              company: jobData.metadata?.company || 'Company',
-              description: jobData.fullDescription
-            };
+            console.log('✅ jobScraper found, extracting...');
+            try {
+              const jobData = window.jobScraper.extractJobContent();
+              console.log('📦 Extracted data:', {
+                hasMetadata: !!jobData.metadata,
+                descriptionLength: jobData.fullDescription?.length,
+                title: jobData.metadata?.title,
+                company: jobData.metadata?.company
+              });
+              return {
+                success: true,
+                title: jobData.metadata?.title || 'Job Title',
+                company: jobData.metadata?.company || 'Company',
+                description: jobData.fullDescription,
+                descriptionLength: jobData.fullDescription?.length || 0
+              };
+            } catch (err) {
+              console.error('❌ Extraction error:', err);
+              return { success: false, error: err.message };
+            }
           }
-          return { success: false };
+          console.error('❌ jobScraper not found on window');
+          return { success: false, error: 'jobScraper not initialized' };
         }
       });
 
       const result = results[0]?.result;
+      console.log('📊 Scraping result:', result);
 
-      if (result && result.success && result.description) {
+      if (result && result.success && result.description && result.descriptionLength > 100) {
+        console.log('✅ Job detected:', result.title, '@', result.company);
         document.getElementById('job-detected').style.display = 'block';
+        document.getElementById('no-job').style.display = 'none';
         document.getElementById('job-title').textContent = result.title;
         document.getElementById('job-company').textContent = result.company;
 
@@ -146,13 +219,15 @@ async function checkCurrentPage(token) {
           generateResume(result, token);
         };
       } else {
+        console.log('❌ No valid job found:', result?.error || 'No description or too short');
         showNoJob();
       }
     } catch (error) {
-      console.error('Failed to check page:', error);
+      console.error('❌ Failed to check page:', error);
       showNoJob();
     }
   } else {
+    console.log('ℹ️ Not on a supported job site');
     showNoJob();
   }
 }

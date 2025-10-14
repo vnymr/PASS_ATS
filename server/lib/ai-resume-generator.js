@@ -224,7 +224,7 @@ class AIResumeGenerator {
 
       // Generate LaTeX with enhanced prompts
       const response = await this.openai.chat.completions.create({
-        model: options.model || 'gpt-4o',
+        model: options.model || 'gpt-5',
         messages: [
           {
             role: 'system',
@@ -278,7 +278,7 @@ class AIResumeGenerator {
         latex: cleanedLatex,
         metadata: {
           generatedAt: new Date().toISOString(),
-          model: options.model || 'gpt-4o',
+          model: options.model || 'gpt-5',
           domain: context.jobAnalysis.domain,
           matchedSkills: context.skillMatch.matched,
           unmatchedKeywords: context.skillMatch.unmatched,
@@ -315,7 +315,7 @@ class AIResumeGenerator {
 
       // Generate LaTeX with simple prompts
       const response = await this.openai.chat.completions.create({
-        model: options.model || 'gpt-4o',
+        model: options.model || 'gpt-5',
         messages: [
           {
             role: 'system',
@@ -353,7 +353,7 @@ class AIResumeGenerator {
         latex: cleanedLatex,
         metadata: {
           generatedAt: new Date().toISOString(),
-          model: options.model || 'gpt-4o',
+          model: options.model || 'gpt-5',
           approach: 'simple-raw-data',
           dataSize: JSON.stringify(rawUserData).length
         }

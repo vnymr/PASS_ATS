@@ -5,6 +5,38 @@ console.log('🚀 HappyResumes service worker loaded');
 // Track active jobs
 let activeJobs = new Map(); // jobId -> { status, progress, startTime }
 
+const CLERK_TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+function storeClerkToken(token, email = '') {
+  const now = Date.now();
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.set({
+      clerk_session_token: token,
+      clerk_token_updated_at: now,
+      clerk_token_expires_at: now + CLERK_TOKEN_TTL_MS,
+      user_email: email
+    }, () => {
+      if (chrome.runtime.lastError) {
+        reject(chrome.runtime.lastError);
+      } else {
+        resolve();
+      }
+    });
+  });
+}
+
+function clearClerkToken() {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.remove(['clerk_session_token', 'clerk_token_updated_at', 'clerk_token_expires_at', 'user_email'], () => {
+      if (chrome.runtime.lastError) {
+        reject(chrome.runtime.lastError);
+      } else {
+        resolve();
+      }
+    });
+  });
+}
+
 // ========================================
 // KEYBOARD SHORTCUT HANDLER
 // ========================================
@@ -136,19 +168,20 @@ chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => 
   
   if (message.type === 'CLERK_TOKEN_UPDATE') {
     if (message.token) {
-      // Store token in chrome.storage.local
-      chrome.storage.local.set({ 
-        clerk_session_token: message.token,
-        clerk_token_updated_at: Date.now()
-      }, () => {
+      storeClerkToken(message.token).then(() => {
         console.log('✅ Clerk token stored in chrome.storage.local');
         sendResponse({ success: true });
+      }).catch((error) => {
+        console.error('❌ Failed to store Clerk token:', error);
+        sendResponse({ success: false, error: error.message });
       });
     } else {
-      // Clear token (user logged out)
-      chrome.storage.local.remove(['clerk_session_token', 'clerk_token_updated_at'], () => {
+      clearClerkToken().then(() => {
         console.log('🗑️ Clerk token cleared from chrome.storage.local');
         sendResponse({ success: true });
+      }).catch((error) => {
+        console.error('❌ Failed to clear Clerk token:', error);
+        sendResponse({ success: false, error: error.message });
       });
     }
     return true; // Keep message channel open for async response
@@ -157,40 +190,118 @@ chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => 
 
 // Also listen for messages from within the extension (including content scripts)
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log('📨 Internal message received:', message);
+  const label = message?.type || message?.action || 'unknown';
+  console.log('📨 Internal message received:', label);
+
+  // Handle token extraction request from dashboard-sync content script
+  if (message.type === 'EXTRACT_CLERK_TOKEN') {
+    console.log('🔍 Token extraction requested from dashboard-sync');
+    (async () => {
+      try {
+        // Get the tab that sent the message
+        const tabId = sender.tab?.id;
+        if (!tabId) {
+          sendResponse({ error: 'No tab ID available' });
+          return;
+        }
+
+        console.log('📍 Extracting token from tab:', tabId);
+
+        // Execute script in MAIN world (page context) - bypasses CSP!
+        const results = await chrome.scripting.executeScript({
+          target: { tabId: tabId },
+          world: 'MAIN', // This is the key - runs in page context, not isolated
+          func: async () => {
+            // This code runs in page context and can access window.Clerk
+            console.log('[PAGE] Extracting Clerk token...');
+
+            // Wait for Clerk to be available
+            let attempts = 0;
+            while (attempts < 60 && typeof window.Clerk === 'undefined') {
+              await new Promise(r => setTimeout(r, 500));
+              attempts++;
+              if (attempts % 5 === 0) {
+                console.log('[PAGE] Waiting for Clerk...', attempts);
+              }
+            }
+
+            if (typeof window.Clerk === 'undefined') {
+              return { error: 'Clerk not found after 30 seconds' };
+            }
+
+            console.log('[PAGE] Clerk found, checking session...');
+
+            // Wait for session
+            attempts = 0;
+            while (attempts < 20 && !window.Clerk.session) {
+              await new Promise(r => setTimeout(r, 500));
+              attempts++;
+            }
+
+            if (!window.Clerk.session) {
+              return { error: 'No active session' };
+            }
+
+            console.log('[PAGE] Getting token...');
+
+            try {
+              const token = await window.Clerk.session.getToken();
+              const email = window.Clerk.user?.primaryEmailAddress?.emailAddress || '';
+
+              console.log('[PAGE] ✅ Token retrieved successfully');
+
+              return {
+                token: token,
+                email: email
+              };
+            } catch (err) {
+              console.error('[PAGE] Error getting token:', err);
+              return { error: err.message };
+            }
+          }
+        });
+
+        if (results && results[0] && results[0].result) {
+          const result = results[0].result;
+
+          if (result.token) {
+            console.log('✅ Token extracted successfully via chrome.scripting');
+            sendResponse({ token: result.token, email: result.email });
+          } else {
+            console.error('❌ Token extraction failed:', result.error);
+            sendResponse({ error: result.error });
+          }
+        } else {
+          sendResponse({ error: 'No result from script execution' });
+        }
+
+      } catch (error) {
+        console.error('❌ chrome.scripting.executeScript failed:', error);
+        sendResponse({ error: error.message || 'Script execution failed' });
+      }
+    })();
+    return true; // Keep channel open for async response
+  }
 
   // Handle token update from dashboard-sync content script
   if (message.type === 'CLERK_TOKEN_UPDATE' && message.source === 'dashboard-sync') {
-    console.log('🔐 Token update from dashboard sync script');
-    console.log('Token received:', message.token ? `${message.token.substring(0, 20)}...` : 'No token');
-    console.log('Email:', message.email);
-    console.log('Timestamp:', message.timestamp);
-
     if (message.token) {
-      // Store token in chrome.storage.local
-      chrome.storage.local.set({
-        clerk_session_token: message.token,
-        clerk_token_updated_at: Date.now(),
-        user_email: message.email || ''
-      }, () => {
-        if (chrome.runtime.lastError) {
-          console.error('❌ Failed to save token:', chrome.runtime.lastError);
-          sendResponse({ success: false, error: chrome.runtime.lastError.message });
-        } else {
-          console.log('✅ Token from dashboard saved to storage');
-          console.log('Storage update complete - token length:', message.token.length);
+      storeClerkToken(message.token, message.email || '').then(() => {
+        console.log('✅ Token from dashboard saved to storage');
 
-          // Update badge to show auth status
-          chrome.action.setBadgeText({ text: '✓' });
-          chrome.action.setBadgeBackgroundColor({ color: '#27ae60' });
+        // Update badge to show auth status
+        chrome.action.setBadgeText({ text: '✓' });
+        chrome.action.setBadgeBackgroundColor({ color: '#27ae60' });
 
-          // Clear badge after 3 seconds
-          setTimeout(() => {
-            chrome.action.setBadgeText({ text: '' });
-          }, 3000);
+        // Clear badge after 3 seconds
+        setTimeout(() => {
+          chrome.action.setBadgeText({ text: '' });
+        }, 3000);
 
-          sendResponse({ success: true, message: 'Token synced' });
-        }
+        sendResponse({ success: true, message: 'Token synced' });
+      }).catch((error) => {
+        console.error('❌ Failed to save token:', error);
+        sendResponse({ success: false, error: error.message });
       });
     } else {
       console.log('❌ No token in message from dashboard');
@@ -233,20 +344,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   // Handle token sync from web app if it comes through internal messaging
   if (message.type === 'CLERK_TOKEN_UPDATE') {
-    if (message.token) {
-      chrome.storage.local.set({ 
-        clerk_session_token: message.token,
-        clerk_token_updated_at: Date.now()
-      }, () => {
-        console.log('✅ Clerk token stored (internal message)');
-        sendResponse({ success: true });
-      });
-    } else {
-      chrome.storage.local.remove(['clerk_session_token', 'clerk_token_updated_at'], () => {
-        console.log('🗑️ Clerk token cleared (internal message)');
-        sendResponse({ success: true });
-      });
-    }
+    const op = message.token ? storeClerkToken(message.token, message.email || '') : clearClerkToken();
+    op.then(() => {
+      console.log(message.token ? '✅ Clerk token stored (internal message)' : '🗑️ Clerk token cleared (internal message)');
+      sendResponse({ success: true });
+    }).catch((error) => {
+      console.error('❌ Clerk token update failed:', error);
+      sendResponse({ success: false, error: error.message });
+    });
     return true;
   }
 

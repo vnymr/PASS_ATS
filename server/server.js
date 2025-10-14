@@ -14,10 +14,39 @@ import Stripe from 'stripe';
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 // Import parse libraries
 import mammoth from 'mammoth';
-import pdfParse from 'pdf-parse/lib/pdf-parse.js';
 import fs from 'fs';
 // Import AI Resume Generator
 import AIResumeGenerator from './lib/ai-resume-generator.js';
+
+// Lazy load PDF.js to avoid initialization issues
+let pdfjs = null;
+async function getPdfJs() {
+  if (!pdfjs) {
+    pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  }
+  return pdfjs;
+}
+
+/**
+ * Extract text from PDF buffer using PDF.js
+ */
+async function extractPdfText(buffer) {
+  const pdfjsLib = await getPdfJs();
+  const data = new Uint8Array(buffer);
+  const loadingTask = pdfjsLib.getDocument({ data });
+  const pdf = await loadingTask.promise;
+
+  let fullText = '';
+
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const textContent = await page.getTextContent();
+    const pageText = textContent.items.map(item => item.str).join(' ');
+    fullText += pageText + '\n';
+  }
+
+  return fullText;
+}
 import { config, getOpenAIModel } from './lib/config.js';
 import dataValidator from './lib/utils/dataValidator.js';
 import ResumeParser from './lib/resume-parser.js';
@@ -864,8 +893,7 @@ app.post('/api/upload/resume', authenticateToken, resumeUpload.single('resume'),
     if (req.file.mimetype === 'application/pdf') {
       // Parse PDF
       try {
-        const pdfData = await pdfParse(req.file.buffer);
-        extractedText = pdfData.text;
+        extractedText = await extractPdfText(req.file.buffer);
         console.log('✅ PDF parsed, extracted', extractedText.length, 'characters');
       } catch (err) {
         console.error('PDF parse error:', err);
@@ -1154,7 +1182,7 @@ Return ONLY a valid JSON object, no other text.`
 // Resume generation endpoint - Simplified version
 app.post('/api/generate', authenticateToken, async (req, res) => {
   try {
-    const { resumeText, jobDescription, aiMode = 'gpt-4o' } = req.body;
+    const { resumeText, jobDescription, aiMode = 'gpt-5' } = req.body;
 
     if (!jobDescription) {
       return res.status(400).json({ error: 'Job description required' });
@@ -1440,7 +1468,7 @@ app.get('/api/metrics/queue', authenticateToken, async (req, res) => {
 // HTML-based resume generation endpoint
 app.post('/api/generate-html', authenticateToken, async (req, res) => {
   try {
-    const { jobDescription, aiMode = 'gpt-4o-mini', outputFormat = 'html' } = req.body;
+    const { jobDescription, aiMode = 'gpt-5-mini', outputFormat = 'html' } = req.body;
 
     if (!jobDescription) {
       return res.status(400).json({ error: 'Job description required' });
@@ -1939,7 +1967,7 @@ async function processJobAsyncSimplified(jobId, profileData, jobDescription) {
         content: pdfBuffer,
         metadata: {
           attempts: attempt,
-          model: 'gpt-4o-mini',
+          model: 'gpt-5-mini',
           pdfSizeKB: (pdfBuffer.length / 1024).toFixed(2)
         }
       }
@@ -1969,7 +1997,7 @@ async function processJobAsyncSimplified(jobId, profileData, jobDescription) {
         diagnostics: {
           completedAt: new Date().toISOString(),
           attempts: attempt,
-          model: 'gpt-4o-mini',
+          model: 'gpt-5-mini',
           totalTimeSeconds: (totalTime / 1000).toFixed(2),
           totalTimeMs: totalTime,
           pdfSizeKB: (pdfBuffer.length / 1024).toFixed(2),
@@ -2017,7 +2045,7 @@ async function processJobAsyncSimplified(jobId, profileData, jobDescription) {
 }
 
 /**
- * Generate LaTeX using gpt-4o-mini (fastest model)
+ * Generate LaTeX using gpt-5-mini (fastest model)
  * Uses prompts from simple-prompt-builder.js (which now delegates to enhanced-prompt-builder.js)
  */
 async function generateLatexWithLLM(openai, userDataJSON, jobDescription, onProgress = null) {
@@ -2388,7 +2416,7 @@ async function processJobAsync(jobId, userId, jobDescription, aiMode, matchMode,
       jobDescription,
       {
         targetJobTitle: role || '',
-        model: aiMode === 'gpt-4o-mini' ? 'gpt-4o-mini' : aiMode
+        model: aiMode === 'gpt-5-mini' ? 'gpt-5-mini' : aiMode
       }
     );
 

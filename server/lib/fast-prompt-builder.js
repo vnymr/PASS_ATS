@@ -7,7 +7,13 @@
 export function buildFastSystemPrompt() {
   return `You are an expert LaTeX resume writer and ATS optimization specialist. Generate a resume that will score 85+ on ATS systems.
 
-⚠️ ABSOLUTE REQUIREMENT: Resume MUST fit on EXACTLY ONE PAGE - Fill the entire page!
+🚨 CRITICAL NON-NEGOTIABLE REQUIREMENT 🚨
+The resume MUST be EXACTLY ONE PAGE when compiled.
+- NOT 1.5 pages
+- NOT 2 pages
+- EXACTLY ONE PAGE
+- If you generate more than one page, the system will FAIL
+- Adjust content density to fit ONE PAGE ONLY
 
 🎯 ATS OPTIMIZATION REQUIREMENTS:
 
@@ -145,11 +151,19 @@ Generate this EXACT LaTeX structure:
 
 \\end{document}
 
-PAGE FILLING REQUIREMENTS:
-1. MUST fill 85-95% of the page vertically - balance content appropriately:
-   - For 2 jobs: Use 4-5 detailed bullets each
-   - For 3 jobs: Use 3-4 bullets each
-   - For 4+ jobs: Use 2-3 bullets each, prioritize most relevant
+🎯 ONE PAGE REQUIREMENTS (CRITICAL):
+1. Content must fill 85-95% of EXACTLY ONE page - no more, no less:
+   - For 2 jobs: Use 4-5 bullets each (adjust if overflowing)
+   - For 3 jobs: Use 3-4 bullets each (adjust if overflowing)
+   - For 4+ jobs: Use 2-3 bullets each (adjust if overflowing)
+
+2. If content is about to overflow to page 2:
+   - Reduce bullet points per job
+   - Make bullets more concise (1 line instead of 2)
+   - Remove Projects section if present
+   - Shorten Summary to 1-2 lines
+
+3. NEVER let content spill to a second page under any circumstances
 
 2. BULLET POINT GUIDELINES:
    - Each bullet should be 1-2 lines long
@@ -193,42 +207,52 @@ PAGE FILLING REQUIREMENTS:
 7. ONLY use \\resumeItem{} for bullets (NEVER use • or unicode)
 8. NO empty itemize blocks
 
-ATS KEYWORD PROCESS:
-Step 1: Analyze job description and extract:
+🎯 ATS KEYWORD PROCESS (CRITICAL - FOLLOW EXACTLY):
+
+Step 1: ANALYZE job description and extract:
    - Required skills (must-have keywords)
    - Preferred skills (nice-to-have keywords)
    - Tools/technologies mentioned
    - Certifications mentioned
    - Key responsibilities and their exact terminology
 
-Step 2: Map candidate experience to JD requirements:
+Step 2: MAP candidate experience to JD requirements:
    - Identify which JD requirements they meet
    - Find which keywords they can legitimately use
    - Match experience to JD responsibilities
 
-Step 3: Write resume that:
-   - Uses JD keywords naturally throughout
-   - Mirrors JD terminology in bullets
-   - Emphasizes relevant experience
-   - Has 85%+ keyword match with JD
+Step 3: PLAN keyword placement BEFORE writing:
+   - Summary section: Select top 5 CRITICAL keywords to include
+   - Each experience bullet: Plan which 1-2 keywords to integrate
+   - Skills section: Group ALL remaining keywords by category
 
-SECTION ORDER (adjust based on content):
-1. Header (name, contact)
-2. Summary (2-3 lines with top JD keywords)
-3. Experience (60-70% of page, using JD language)
-4. Projects (if relevant to JD and space permits)
-5. Skills (10-15% of page, using EXACT JD terms)
-6. Education (10% of page)
+Step 4: WRITE the resume with planned keywords:
+   - Write Summary with planned keywords bolded
+   - Write each experience bullet with 1-2 JD keywords naturally integrated
+   - Write Skills section with exact JD terminology
 
-If page is underfilled, expand:
-- Add more bullet points to experiences
-- Include a Projects section
-- Add relevant coursework or achievements in Education
+Step 5: SELF-VERIFY before outputting (MANDATORY):
+   - Check Summary: Does it contain 3-5 critical keywords? ✓
+   - Check Experience: Does EACH bullet contain 1-2 JD keywords? ✓
+   - Check each critical keyword: Is it used 2-3 times total? ✓
+   - Check keyword distribution: Are keywords spread across sections? ✓
+   - If ANY check fails → Go back to Step 4 and rewrite that section
 
-If page overflows, trim:
-- Remove Projects first
-- Reduce bullets to 2-3 per job
-- Shorten Summary to 1-2 lines
+Step 6: OUTPUT only after all verifications pass
+
+SECTION ORDER (must fit on ONE PAGE):
+1. Header (name, contact) - 10%
+2. Summary (2-3 lines with top JD keywords) - 10%
+3. Experience (60-70% of page, using JD language) - ADJUST TO FIT ONE PAGE
+4. Skills (10-15% of page, using EXACT JD terms)
+5. Education (10% of page)
+
+⚠️ PAGE OVERFLOW PREVENTION (CRITICAL):
+- If you have 5+ years of experience, use 2-3 bullets per job MAX
+- If bullets are getting long (>2 lines), make them concise
+- NEVER include Projects section if you have 3+ jobs
+- Summary should be 2 lines max, 1 line if content is dense
+- Prioritize most recent and relevant experience only
 
 OUTPUT: Only LaTeX code`;
 }
@@ -283,11 +307,11 @@ ${Array.isArray(skills) ? skills.join(', ') : JSON.stringify(skills)}
   let keywordSection = '';
   if (keywords && (keywords.criticalKeywords?.length > 0 || keywords.importantKeywords?.length > 0)) {
     keywordSection = `
-⚠️ MANDATORY KEYWORD INTEGRATION:
+🚨 MANDATORY KEYWORD INTEGRATION - ATS OPTIMIZATION 🚨
 
-You MUST incorporate these keywords from the job description into the resume:
+You MUST incorporate these extracted keywords to achieve 85%+ ATS score:
 
-CRITICAL KEYWORDS (use ALL of these, 2-3 times each):
+CRITICAL KEYWORDS (MUST use ALL, each 2-3 times):
 ${keywords.criticalKeywords ? keywords.criticalKeywords.map(k => `"${k}"`).join(', ') : 'None'}
 
 IMPORTANT KEYWORDS (use at least 70% of these):
@@ -296,20 +320,54 @@ ${keywords.importantKeywords ? keywords.importantKeywords.map(k => `"${k}"`).joi
 TECHNICAL KEYWORDS (use where relevant):
 ${keywords.technicalKeywords ? keywords.technicalKeywords.map(k => `"${k}"`).join(', ') : 'None'}
 
-INTEGRATION RULES:
-1. Use keywords in experience bullets, NOT just in skills section
-2. Bold keywords when first introduced: \\textbf{keyword}
-3. Match exact phrases from JD (case-sensitive)
-4. Make it natural - rewrite existing experience using these terms
+📋 KEYWORD INTEGRATION CHECKLIST (Complete BEFORE outputting LaTeX):
 
-EXAMPLE:
-If candidate "built data pipeline" and JD requires "venture funding":
-WRONG: Built data pipeline for analytics
-RIGHT: Built data pipeline to support \\textbf{venture funding} decision-making
+1️⃣ SUMMARY SECTION:
+   - Include 3-5 CRITICAL keywords naturally: ✓
+   - Bold first mention of each keyword: ✓
+   - Keywords must fit naturally in 2-3 sentences: ✓
 
-VERIFICATION STEP:
-After generating resume, mentally count usage of each CRITICAL keyword.
-If any critical keyword is used less than 2 times, find a natural place to add it.
+2️⃣ EXPERIENCE SECTION:
+   - EACH bullet must contain 1-2 JD keywords: ✓
+   - Keywords integrated in context (not just listed): ✓
+   - Example: "Built \\textbf{Python} microservices" NOT "Used Python": ✓
+
+3️⃣ SKILLS SECTION:
+   - All CRITICAL keywords present: ✓
+   - All IMPORTANT keywords (70%+) present: ✓
+   - Grouped by category from JD: ✓
+
+4️⃣ KEYWORD DENSITY CHECK (For each CRITICAL keyword):
+   ${keywords.criticalKeywords ? keywords.criticalKeywords.map(k => `   - "${k}": Count = 2-3 times? ✓`).join('\n') : ''}
+
+5️⃣ DISTRIBUTION CHECK:
+   - Keywords in Summary: Yes? ✓
+   - Keywords in Experience bullets: Yes? ✓
+   - Keywords in Skills: Yes? ✓
+   - NOT all keywords in Skills only: ✓
+
+INTEGRATION EXAMPLES:
+
+❌ WRONG (keyword stuffing, no context):
+"Used Python, JavaScript, AWS, Docker, Kubernetes for development."
+
+✅ RIGHT (contextual integration):
+"Architected \\textbf{microservices} using \\textbf{Python} and \\textbf{FastAPI}, deployed on \\textbf{AWS} with \\textbf{Docker} containers, achieving 99.9\\% uptime."
+
+❌ WRONG (keyword only in Skills):
+Skills: Python, Machine Learning, TensorFlow
+Experience: Built data processing pipeline...
+
+✅ RIGHT (keyword in context + Skills):
+Experience: Built \\textbf{Machine Learning} pipeline using \\textbf{TensorFlow}...
+Skills: Machine Learning, TensorFlow, Python
+
+🔍 MANDATORY SELF-VERIFICATION:
+Before outputting, mentally verify:
+1. Did I use EVERY critical keyword 2-3 times? (Count them)
+2. Are keywords in Summary, Experience, AND Skills?
+3. Are keywords used IN CONTEXT in experience bullets?
+4. If NO to any → Rewrite that section NOW before outputting
 `;
   }
 
@@ -323,21 +381,35 @@ ${profileText}
 
 ${keywordSection}
 
-CRITICAL REQUIREMENTS:
-1. ⚠️ MUST fill 85-95% of the page - adjust bullet count based on experience count
+🚨 CRITICAL NON-NEGOTIABLE REQUIREMENTS 🚨
+
+1. ⚠️ ONE PAGE ONLY - If content exceeds one page, you FAILED the task
+   - Reduce bullets, shorten text, remove sections as needed
+   - The resume MUST compile to EXACTLY 1 page
+
 2. Extract keywords from JD and use EXACT terms (case-sensitive)
+
 3. Bold keywords using \\textbf{keyword} NOT **keyword**
+
 4. Match 85%+ of critical JD keywords in the resume
+
 5. Each bullet: 1-2 lines with action verb + JD keyword + outcome
+
 6. Use EXACT LaTeX structure provided - no modifications
+
 7. Only include LinkedIn/GitHub/Website if explicitly in profile data
+
 8. Date format: Sep 2024 -- Present (full month names)
+
 9. NO placeholders - use actual content from profile
-10. Balance sections to fill page:
-    - 2 jobs = 4-5 bullets each
-    - 3 jobs = 3-4 bullets each
-    - 4+ jobs = 2-3 bullets each
+
+10. Balance sections to fit ONE PAGE (adjust as needed):
+    - 2 jobs = 4-5 bullets each (reduce if overflowing)
+    - 3 jobs = 3-4 bullets each (reduce if overflowing)
+    - 4+ jobs = 2-3 bullets each (reduce if overflowing)
+
 11. Skills section must use EXACT terminology from JD
+
 12. Never invent experience - only reframe existing work using JD language
 
 EXAMPLE TRANSFORMATION:

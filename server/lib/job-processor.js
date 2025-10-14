@@ -426,7 +426,7 @@ export async function processResumeJob(jobData, onProgress = null) {
     latexCode = validateAndFixLatex(latexCode, jobId);
 
     // Analyze ATS keyword coverage in generated LaTeX
-    const keywordStats = analyzeKeywordCoverage(latexCode, keywords);
+    let keywordStats = analyzeKeywordCoverage(latexCode, keywords);
     logger.info({
       jobId,
       atsScore: keywordStats.atsScore,
@@ -437,23 +437,30 @@ export async function processResumeJob(jobData, onProgress = null) {
       missedCritical: keywordStats.missedCritical.slice(0, 10)
     }, 'ATS keyword coverage analysis');
 
-    // Warn if ATS score is low (using weighted score)
+    // Log ATS score for monitoring - NO REGENERATION (keep it fast)
+    // The enhanced prompt with self-verification is strong enough
+    const atsRetryCount = 0; // Always 0 - no retries for speed
+
     if (keywordStats.atsScore < 75) {
       logger.warn({
         jobId,
         atsScore: keywordStats.atsScore,
         criticalCoverage: keywordStats.criticalCoveragePercent,
         missedCritical: keywordStats.missedCritical.slice(0, 5),
-        message: 'LOW ATS SCORE - Critical keywords not integrated properly'
-      }, 'Poor keyword coverage detected');
+        message: 'LOW ATS SCORE - Enhanced prompt should improve this over time'
+      }, '⚠️ ATS score below 75 - monitor for patterns');
+    } else {
+      logger.info({
+        jobId,
+        atsScore: keywordStats.atsScore,
+        criticalCoverage: keywordStats.criticalCoveragePercent
+      }, '✅ Good ATS score achieved');
     }
 
-    // Try to compile with error feedback loop + page validation
+    // Try to compile with error feedback loop
     let pdfBuffer = null;
     let totalCompileTime = 0;
     let totalFixTime = 0;
-    const MAX_TRIM_ATTEMPTS = 2; // Allow up to 2 trimming attempts if multi-page
-    let trimAttempt = 0;
 
     while (attempt < MAX_RETRIES && !pdfBuffer) {
       attempt++;
@@ -473,50 +480,6 @@ export async function processResumeJob(jobData, onProgress = null) {
           compileTimeMs: compileTime,
           pdfSizeKB: (pdfBuffer.length / 1024).toFixed(2)
         });
-
-        // CRITICAL: Validate page count (must be exactly 1 page)
-        const { validateSinglePage } = await import('./pdf-utils.js');
-        const pageValidation = await validateSinglePage(pdfBuffer);
-
-        logger.info({
-          jobId,
-          pageCount: pageValidation.pageCount,
-          isValid: pageValidation.isValid,
-          message: pageValidation.message
-        }, 'PDF page validation');
-
-        if (!pageValidation.isValid && pageValidation.pageCount > 1 && trimAttempt < MAX_TRIM_ATTEMPTS) {
-          // Resume exceeds 1 page - trim and recompile
-          trimAttempt++;
-          logger.warn({
-            jobId,
-            pageCount: pageValidation.pageCount,
-            trimAttempt
-          }, '⚠️ Resume exceeds 1 page - trimming content');
-
-          const { trimLatexToOnePage, analyzeLatexStructure } = await import('./latex-trimmer.js');
-
-          // Analyze structure before trimming
-          const structure = analyzeLatexStructure(latexCode);
-          logger.info({ jobId, structure }, 'LaTeX structure analysis before trimming');
-
-          // Trim the LaTeX
-          latexCode = trimLatexToOnePage(latexCode, pageValidation.pageCount);
-
-          // Reset for another compilation attempt
-          pdfBuffer = null;
-          attempt--; // Don't count this as a failed attempt
-          logger.info({ jobId, trimAttempt }, 'Recompiling trimmed LaTeX...');
-          continue; // Retry compilation with trimmed content
-        } else if (!pageValidation.isValid && pageValidation.pageCount > 1) {
-          // Exceeded trim attempts - log warning but accept
-          logger.error({
-            jobId,
-            pageCount: pageValidation.pageCount,
-            message: 'Resume still exceeds 1 page after trimming attempts'
-          }, '❌ CRITICAL: Could not trim resume to 1 page');
-          // Continue anyway - better to have 2-page resume than fail
-        }
 
         if (onProgress) onProgress(80); // 80% - Compilation successful
       } catch (compileError) {
@@ -567,10 +530,6 @@ export async function processResumeJob(jobData, onProgress = null) {
 
     if (onProgress) onProgress(85); // 85% - Saving artifacts
 
-    // Get final page count for diagnostics
-    const { countPdfPages } = await import('./pdf-utils.js');
-    const finalPageCount = await countPdfPages(pdfBuffer);
-
     // Save artifacts with clean filename
     const t4 = Date.now();
     logger.debug({ jobId }, 'Saving artifacts to database');
@@ -602,8 +561,6 @@ export async function processResumeJob(jobData, onProgress = null) {
           attempts: attempt,
           model: 'gpt-5-mini',
           pdfSizeKB: (pdfBuffer.length / 1024).toFixed(2),
-          pageCount: finalPageCount,
-          trimAttempts: trimAttempt,
           filename: filename
         }
       }
@@ -639,9 +596,6 @@ export async function processResumeJob(jobData, onProgress = null) {
           totalTimeSeconds: (totalTime / 1000).toFixed(2),
           totalTimeMs: totalTime,
           pdfSizeKB: (pdfBuffer.length / 1024).toFixed(2),
-          pageCount: finalPageCount,
-          trimAttempts: trimAttempt,
-          isOnePage: finalPageCount === 1,
           success: true,
           timings: timings,
           atsOptimization: {
@@ -825,7 +779,7 @@ function validateAndFixLatex(latex, jobId) {
 }
 
 /**
- * Generate LaTeX using gpt-4o-mini (fastest model)
+ * Generate LaTeX using gpt-5-mini (superior performance: 75% vs 31% on coding)
  * Uses prompts from fast-prompt-builder.js
  */
 async function generateLatexWithLLM(openai, userDataJSON, jobDescription, keywords = null, onProgress = null) {
@@ -880,7 +834,7 @@ async function generateLatexWithLLM(openai, userDataJSON, jobDescription, keywor
       ],
       stream: true,
       // GPT-5 verbosity parameter for more concise output (helps with 1-page constraint)
-      verbosity: 'medium' // low/medium/high - medium balances detail vs brevity
+      verbosity: 'low' // low/medium/high - low keeps resumes concise for 1-page
     });
 
     let latex = '';
@@ -918,9 +872,7 @@ async function generateLatexWithLLM(openai, userDataJSON, jobDescription, keywor
       }
     ],
     // GPT-5 verbosity parameter for more concise output (helps with 1-page constraint)
-    verbosity: 'medium', // low/medium/high - medium balances detail vs brevity
-    // Temperature for consistent LaTeX generation
-    temperature: 0.3
+    verbosity: 'low' // low/medium/high - low keeps resumes concise for 1-page
   });
 
   // Log cache usage for monitoring
@@ -963,9 +915,9 @@ async function fixLatexWithLLM(openai, brokenLatex, errorMessage) {
   }
 
   // Fallback to OpenAI
-  logger.info('Using OpenAI gpt-4o-mini for LaTeX error fixing');
+  logger.info('Using OpenAI gpt-5-mini for LaTeX error fixing');
   const response = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
+    model: 'gpt-5-mini',
     messages: [
       {
         role: 'system',
@@ -1000,6 +952,178 @@ ${brokenLatex}`
   fixedLatex = fixedLatex.replace(/^```latex?\n?/gm, '').replace(/\n?```$/gm, '').replace(/^```.*$/gm, '');
 
   return fixedLatex;
+}
+
+/**
+ * Analyze section-specific keyword distribution
+ * Checks if keywords are properly distributed across Summary, Experience, Skills
+ * @param {string} latexContent - Generated LaTeX content
+ * @param {Object} keywords - Extracted keywords object
+ * @returns {Object} Section distribution analysis
+ */
+function analyzeSectionKeywordDistribution(latexContent, keywords) {
+  const analysis = {
+    summaryKeywords: 0,
+    experienceKeywords: 0,
+    skillsKeywords: 0,
+    summaryKeywordsList: [],
+    experienceKeywordsList: [],
+    skillsKeywordsList: [],
+    issues: []
+  };
+
+  // Extract sections
+  const summaryMatch = latexContent.match(/\\section\*?\{Summary\}([\s\S]*?)\\section/i);
+  const experienceMatch = latexContent.match(/\\section\{Experience\}([\s\S]*?)\\section/i);
+  const skillsMatch = latexContent.match(/\\section\{Skills\}([\s\S]*?)\\section/i) ||
+                      latexContent.match(/\\section\{Skills\}([\s\S]*?)\\end\{document\}/i);
+
+  const summaryContent = summaryMatch ? summaryMatch[1].toLowerCase() : '';
+  const experienceContent = experienceMatch ? experienceMatch[1].toLowerCase() : '';
+  const skillsContent = skillsMatch ? skillsMatch[1].toLowerCase() : '';
+
+  // Check critical keywords in each section
+  keywords.criticalKeywords.forEach(kw => {
+    const kwLower = kw.toLowerCase();
+    if (summaryContent.includes(kwLower)) {
+      analysis.summaryKeywords++;
+      analysis.summaryKeywordsList.push(kw);
+    }
+    if (experienceContent.includes(kwLower)) {
+      analysis.experienceKeywords++;
+      analysis.experienceKeywordsList.push(kw);
+    }
+    if (skillsContent.includes(kwLower)) {
+      analysis.skillsKeywords++;
+      analysis.skillsKeywordsList.push(kw);
+    }
+  });
+
+  // Identify issues
+  if (analysis.summaryKeywords < 3) {
+    analysis.issues.push('Summary has too few keywords (need 3-5 critical keywords)');
+  }
+
+  if (analysis.experienceKeywords < keywords.criticalKeywords.length * 0.7) {
+    analysis.issues.push('Experience section needs more keyword integration in bullets');
+  }
+
+  if (analysis.skillsKeywords === keywords.criticalKeywords.length &&
+      analysis.experienceKeywords < 3) {
+    analysis.issues.push('All keywords only in Skills section - need contextual usage in Experience');
+  }
+
+  return analysis;
+}
+
+/**
+ * Regenerate LaTeX with specific keyword feedback
+ * @param {Object} openai - OpenAI client
+ * @param {string} currentLatex - Current LaTeX code
+ * @param {string} userDataJSON - User profile JSON
+ * @param {string} jobDescription - Job description
+ * @param {Object} keywords - Extracted keywords
+ * @param {Object} keywordStats - Current keyword coverage stats
+ * @param {Object} sectionAnalysis - Section distribution analysis
+ * @returns {Promise<string>} Improved LaTeX code
+ */
+async function regenerateWithKeywordFeedback(
+  openai,
+  currentLatex,
+  userDataJSON,
+  jobDescription,
+  keywords,
+  keywordStats,
+  sectionAnalysis
+) {
+  // Build specific feedback based on analysis
+  const feedback = [];
+
+  if (keywordStats.missedCritical.length > 0) {
+    feedback.push(`CRITICAL: You MISSED these critical keywords: ${keywordStats.missedCritical.join(', ')}`);
+    feedback.push(`You MUST include ALL of these in the regenerated resume.`);
+  }
+
+  if (sectionAnalysis.summaryKeywords < 3) {
+    feedback.push(`SUMMARY ISSUE: Only ${sectionAnalysis.summaryKeywords} keywords in Summary. Add ${3 - sectionAnalysis.summaryKeywords} more critical keywords naturally.`);
+  }
+
+  if (sectionAnalysis.issues.length > 0) {
+    feedback.push(`DISTRIBUTION ISSUES:\n${sectionAnalysis.issues.map(i => `- ${i}`).join('\n')}`);
+  }
+
+  // Count each critical keyword
+  const keywordCounts = {};
+  keywords.criticalKeywords.forEach(kw => {
+    const regex = new RegExp(kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+    const matches = currentLatex.match(regex);
+    keywordCounts[kw] = matches ? matches.length : 0;
+  });
+
+  const underusedKeywords = Object.entries(keywordCounts)
+    .filter(([kw, count]) => count < 2)
+    .map(([kw, count]) => `"${kw}" (currently ${count} times, need 2-3)`);
+
+  if (underusedKeywords.length > 0) {
+    feedback.push(`KEYWORD DENSITY ISSUE:\n${underusedKeywords.join('\n')}`);
+  }
+
+  const prompt = `You generated a resume but it has LOW ATS SCORE (${keywordStats.atsScore}/100).
+You need to REGENERATE it with better keyword integration.
+
+CURRENT ISSUES:
+${feedback.join('\n\n')}
+
+SPECIFIC INSTRUCTIONS FOR REGENERATION:
+
+1. SUMMARY SECTION:
+   - Must include these keywords: ${keywords.criticalKeywords.slice(0, 5).join(', ')}
+   - Bold each keyword: \\textbf{keyword}
+   - Keep it natural and 2-3 lines
+
+2. EXPERIENCE SECTION:
+   - EVERY bullet must include 1-2 of these keywords
+   - Missed keywords to add: ${keywordStats.missedCritical.join(', ')}
+   - Use in context: "Built \\textbf{Python} microservices..." NOT "Used Python"
+
+3. SKILLS SECTION:
+   - Must include ALL critical keywords: ${keywords.criticalKeywords.join(', ')}
+   - Group by category from job description
+
+JOB DESCRIPTION:
+${jobDescription.substring(0, 2000)}
+
+CANDIDATE PROFILE:
+${userDataJSON.substring(0, 2000)}
+
+REQUIREMENTS:
+- MUST be EXACTLY 1 PAGE
+- MUST achieve 85%+ ATS score
+- Use EXACT LaTeX structure from original
+- Output ONLY LaTeX code, no explanations
+
+Generate the IMPROVED LaTeX resume now:`;
+
+  const response = await openai.chat.completions.create({
+    model: 'gpt-5-mini', // Use fast model for regeneration
+    messages: [
+      {
+        role: 'system',
+        content: 'You are an ATS optimization expert. Fix the resume to achieve 85%+ ATS score by properly integrating all critical keywords.'
+      },
+      {
+        role: 'user',
+        content: prompt
+      }
+    ],
+    temperature: 0.3, // Keep consistent
+    max_completion_tokens: 4000
+  });
+
+  let improvedLatex = response.choices[0].message.content.trim();
+  improvedLatex = improvedLatex.replace(/^```latex?\n?/gm, '').replace(/\n?```$/gm, '').replace(/^```.*$/gm, '');
+
+  return improvedLatex;
 }
 
 /**

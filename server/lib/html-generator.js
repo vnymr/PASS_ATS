@@ -89,7 +89,7 @@ export async function generateResumeHTML(profile, jobDescription, aiMode = 'gpt-
 
     // Build request parameters - use same approach as working /generate endpoint
     const modelName = aiMode === 'fast' ? 'gpt-5-mini' :
-                      aiMode === 'quality' ? 'gpt-5-mini' :
+                      aiMode === 'quality' ? 'gpt-5' :
                       aiMode === 'gpt-4' ? 'gpt-4' :
                       aiMode.includes('gpt') ? aiMode :  // Use as-is if it's already a model name
                       'gpt-5-mini';
@@ -115,13 +115,13 @@ IMPORTANT: Return ONLY valid JSON matching the structure provided. No markdown f
       requestParams.response_format = { type: 'json_object' };  // Force JSON response
     }
 
-    // Temperature handling for different models
-    if (!modelName.includes('gpt-5')) {
+    // GPT-5 models don't support temperature parameter
+    // Use verbosity instead for GPT-5 models
+    if (modelName.includes('gpt-5')) {
+      requestParams.verbosity = 'low'; // Keep responses concise
+    } else {
       requestParams.temperature = 0.3;
-    } else if (modelName === 'gpt-5-mini') {
-      requestParams.temperature = 0.2;
     }
-    // Skip temperature for GPT-5-mini
 
     const response = await openai.chat.completions.create(requestParams);
 

@@ -37,7 +37,6 @@ async function extractTokenFromCookies() {
 
     // Look for Clerk session cookies
     const cookies = document.cookie.split(';').map(c => c.trim());
-    console.log('Available cookies:', cookies.length);
 
     // Look for __session or __client cookies that Clerk uses
     const sessionCookie = cookies.find(c => c.startsWith('__session='));
@@ -45,7 +44,7 @@ async function extractTokenFromCookies() {
 
     if (sessionCookie || clientCookie) {
       console.log('✅ Found Clerk cookies');
-      return { foundCookies: true, sessionCookie, clientCookie };
+      return { foundCookies: true };
     }
 
     return { foundCookies: false };
@@ -55,185 +54,36 @@ async function extractTokenFromCookies() {
   }
 }
 
-// Function to extract token using multiple methods
+// Request token extraction from background service worker
+// (Service worker has chrome.tabs and chrome.scripting access)
 async function extractTokenFromPage() {
-  console.log('🔍 Starting token extraction...');
+  console.log('🔍 Requesting token extraction from background service worker...');
 
-  return new Promise((resolve) => {
-    // Try Method 1: Direct window.Clerk access (if content script can see it)
-    if (typeof window.Clerk !== 'undefined') {
-      console.log('✅ Found Clerk directly in window');
-      try {
-        if (window.Clerk.session) {
-          window.Clerk.session.getToken().then(token => {
-            console.log('✅ Got token directly from window.Clerk');
-            resolve({
-              token: token,
-              email: window.Clerk.user?.primaryEmailAddress?.emailAddress || '',
-              method: 'direct'
-            });
-          }).catch(err => {
-            console.error('Error getting token:', err);
-            resolve({ error: err.message });
-          });
-          return;
-        }
-      } catch (e) {
-        console.error('Direct Clerk access error:', e);
-      }
+  try {
+    // Ask service worker to extract token using chrome.scripting with world: 'MAIN'
+    const response = await chrome.runtime.sendMessage({
+      type: 'EXTRACT_CLERK_TOKEN',
+      url: window.location.href
+    });
+
+    if (response && response.token) {
+      console.log('✅ Token extracted via service worker');
+      return {
+        token: response.token,
+        email: response.email,
+        method: 'service-worker-scripting'
+      };
+    } else if (response && response.error) {
+      console.error('❌ Token extraction failed:', response.error);
+      return { error: response.error };
+    } else {
+      return { error: 'No response from service worker' };
     }
 
-    // Try Method 2: Inject script into page context
-    console.log('🔧 Injecting script into page context...');
-    const script = document.createElement('script');
-    script.textContent = `
-      (async function() {
-        console.log('[PAGE SCRIPT] Starting token extraction in page context...');
-        console.log('[PAGE SCRIPT] window.Clerk exists?', typeof window.Clerk !== 'undefined');
-
-        try {
-          // Wait for Clerk with more aggressive checking
-          let attempts = 0;
-          let clerkFound = false;
-
-          // Check multiple possible Clerk locations
-          const checkClerk = () => {
-            if (window.Clerk) return window.Clerk;
-            if (window.__clerk) return window.__clerk;
-            if (window.__CLERK__) return window.__CLERK__;
-
-            // Check for Clerk in global scope
-            const globalKeys = Object.keys(window);
-            const clerkKey = globalKeys.find(key => key.toLowerCase().includes('clerk'));
-            if (clerkKey) {
-              console.log('[PAGE SCRIPT] Found Clerk-like key:', clerkKey);
-              return window[clerkKey];
-            }
-
-            return null;
-          };
-
-          while (attempts < 60) { // Wait up to 30 seconds
-            const clerk = checkClerk();
-            if (clerk) {
-              window.Clerk = clerk; // Normalize to window.Clerk
-              clerkFound = true;
-              console.log('[PAGE SCRIPT] ✅ Clerk found after', attempts * 500, 'ms');
-              break;
-            }
-            await new Promise(r => setTimeout(r, 500));
-            attempts++;
-
-            // Log progress every 5 attempts
-            if (attempts % 5 === 0) {
-              console.log('[PAGE SCRIPT] Still waiting for Clerk...', attempts, 'attempts');
-            }
-          }
-
-          if (!clerkFound) {
-            console.log('[PAGE SCRIPT] ❌ Clerk not found after 30 seconds');
-            window.postMessage({
-              type: 'CLERK_TOKEN_RESULT',
-              error: 'Clerk not found after 30 seconds',
-              debug: {
-                hasClerk: false,
-                windowKeys: Object.keys(window).filter(k => k.includes('lerk')).slice(0, 10)
-              }
-            }, '*');
-            return;
-          }
-
-          console.log('[PAGE SCRIPT] Checking Clerk session...');
-
-          // Check if user is signed in
-          if (!window.Clerk.session) {
-            console.log('[PAGE SCRIPT] Waiting for session...');
-
-            // Wait for session to be available
-            let sessionAttempts = 0;
-            while (!window.Clerk.session && sessionAttempts < 20) {
-              await new Promise(r => setTimeout(r, 500));
-              sessionAttempts++;
-            }
-          }
-
-          if (!window.Clerk.session) {
-            console.log('[PAGE SCRIPT] ❌ No active session after waiting');
-            window.postMessage({
-              type: 'CLERK_TOKEN_RESULT',
-              error: 'No active session',
-              debug: {
-                hasClerk: true,
-                hasSession: false,
-                user: window.Clerk.user ? 'User exists' : 'No user'
-              }
-            }, '*');
-            return;
-          }
-
-          console.log('[PAGE SCRIPT] ✅ Session found, getting token...');
-
-          // Get the token
-          const token = await window.Clerk.session.getToken();
-          const user = window.Clerk.user;
-          const email = user?.primaryEmailAddress?.emailAddress || user?.emailAddresses?.[0]?.emailAddress || '';
-
-          console.log('[PAGE SCRIPT] ✅ Token retrieved successfully');
-          console.log('[PAGE SCRIPT] User email:', email);
-
-          // Send the token via postMessage
-          window.postMessage({
-            type: 'CLERK_TOKEN_RESULT',
-            token: token,
-            email: email,
-            method: 'page-script',
-            debug: {
-              hasClerk: true,
-              hasSession: true,
-              hasToken: !!token,
-              tokenLength: token ? token.length : 0
-            }
-          }, '*');
-
-        } catch (error) {
-          console.error('[PAGE SCRIPT] Error:', error);
-          window.postMessage({
-            type: 'CLERK_TOKEN_RESULT',
-            error: error.message,
-            stack: error.stack
-          }, '*');
-        }
-      })();
-    `;
-
-    // Listen for the result
-    let messageHandler;
-    const cleanup = () => {
-      if (messageHandler) {
-        window.removeEventListener('message', messageHandler);
-      }
-      if (script && script.parentNode) {
-        script.remove();
-      }
-    };
-
-    messageHandler = (event) => {
-      if (event.data && event.data.type === 'CLERK_TOKEN_RESULT') {
-        console.log('📨 Received message from page script:', event.data);
-        cleanup();
-        resolve(event.data);
-      }
-    };
-
-    window.addEventListener('message', messageHandler);
-    document.body.appendChild(script);
-
-    // Timeout after 35 seconds (giving page script 30 seconds to find Clerk)
-    setTimeout(() => {
-      cleanup();
-      resolve({ error: 'Timeout waiting for token (35s)' });
-    }, 35000);
-  });
+  } catch (error) {
+    console.error('❌ Failed to communicate with service worker:', error);
+    return { error: error.message || 'Service worker communication failed' };
+  }
 }
 
 // Function to sync token to extension
@@ -241,15 +91,19 @@ async function syncTokenToExtension() {
   try {
     console.log('🔄 Starting token sync process...');
     console.log('Current URL:', window.location.href);
-    console.log('Chrome extension ID:', chrome.runtime.id);
+    console.log('Chrome extension ID detected');
 
     // First check cookies
     const cookieResult = await extractTokenFromCookies();
-    console.log('Cookie check result:', cookieResult);
+    console.log('Cookie check result:', { foundCookies: cookieResult.foundCookies, error: cookieResult.error });
 
     // Extract token from page
     const result = await extractTokenFromPage();
-    console.log('Token extraction result:', result);
+    console.log('Token extraction status:', {
+      hasToken: !!result.token,
+      method: result.method,
+      error: result.error
+    });
 
     if (result.error) {
       console.error('❌ Failed to extract token:', result.error);
@@ -271,10 +125,7 @@ async function syncTokenToExtension() {
       return;
     }
 
-    console.log('✅ Token extracted successfully');
-    console.log('Token length:', result.token.length);
-    console.log('Email:', result.email);
-    console.log('Method:', result.method);
+    console.log('✅ Token extracted successfully via', result.method || 'unknown method');
 
     // Send to extension background script
     console.log('📤 Sending token to extension background...');
@@ -290,7 +141,7 @@ async function syncTokenToExtension() {
         console.error('❌ Failed to send to background:', chrome.runtime.lastError);
         showNotification('❌ Failed to sync to extension', 'error');
       } else {
-        console.log('✅ Token synced successfully!', response);
+        console.log('✅ Token synced successfully!');
         showNotification('✅ Authentication synced to extension!', 'success');
       }
     });
@@ -366,7 +217,7 @@ function showNotification(message, type = 'success') {
 
 // Listen for token refresh requests from extension
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log('📨 Received message:', message);
+  console.log('📨 Received message:', message?.type || message?.action || 'unknown');
 
   if (message.type === 'REQUEST_TOKEN_REFRESH') {
     console.log('📨 Extension requested token refresh');

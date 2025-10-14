@@ -10,11 +10,11 @@ export const config = {
   // Gemini Model Configuration (PRIMARY)
   gemini: {
     apiKey: process.env.GEMINI_API_KEY,
-    // Text generation models
+    // Text generation models - Updated to valid 2025 models
     textModels: {
-      fast: 'gemini-1.5-flash',      // Fastest, cheapest
-      quality: 'gemini-1.5-pro',     // Highest quality
-      default: 'gemini-1.5-flash',   // Default to fast
+      fast: 'gemini-2.0-flash-exp',      // Latest fast model (2025)
+      quality: 'gemini-1.5-pro',         // Highest quality
+      default: 'gemini-2.0-flash-exp',   // Default to fast
     },
     // Response settings - HIGH tokens for LaTeX generation
     maxTokens: parseInt(process.env.GEMINI_MAX_TOKENS || '12000'), // CRITICAL: High limit prevents truncated LaTeX
@@ -25,11 +25,12 @@ export const config = {
   openai: {
     apiKey: process.env.OPENAI_API_KEY,
     // Text generation models
+    // NOTE: Using GPT-4o-mini as fallback (proven reliable model)
     textModels: {
-      fast: process.env.OPENAI_TEXT_MODEL_FAST || 'gpt-5-mini',
-      quality: process.env.OPENAI_TEXT_MODEL_QUALITY || 'gpt-5',
-      default: process.env.OPENAI_TEXT_MODEL || 'gpt-5-mini',
-      // Available models (2025) - GPT-5 series is newest
+      fast: process.env.OPENAI_TEXT_MODEL_FAST || 'gpt-4o-mini',
+      quality: process.env.OPENAI_TEXT_MODEL_QUALITY || 'gpt-4o',
+      default: process.env.OPENAI_TEXT_MODEL || 'gpt-4o-mini',
+      // Available models (2025)
       'gpt-5': 'gpt-5',
       'gpt-5-mini': 'gpt-5-mini',
       'gpt-5-nano': 'gpt-5-nano',
@@ -43,7 +44,7 @@ export const config = {
     embeddingModel: process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-small',
     // Response settings - HIGH tokens for LaTeX generation
     maxTokens: parseInt(process.env.OPENAI_MAX_TOKENS || '12000'), // CRITICAL: High limit prevents truncated LaTeX
-    temperature: parseFloat(process.env.OPENAI_TEMPERATURE || '0.7'),
+    temperature: parseFloat(process.env.OPENAI_TEMPERATURE || '1.0'), // Default temperature 1.0 (compatible with all models)
   },
 
   // Queue Configuration
