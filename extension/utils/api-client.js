@@ -85,7 +85,7 @@ class APIClient {
     }
   }
 
-  async request(endpoint, options = {}) {
+  async request(endpoint, options = {}, retryCount = 0) {
     await this.init(); // Ensure we have latest config and token
 
     const url = `${this.baseURL}${endpoint}`;
@@ -108,6 +108,27 @@ class APIClient {
 
       // Handle authentication errors
       if (result.status === 401 || result.status === 403) {
+        console.warn('⚠️ Authentication failed (401/403)');
+
+        // Only retry once to get a fresh token
+        if (retryCount === 0) {
+          console.log('🔄 Attempting to refresh token and retry...');
+
+          // Try to refresh token from dashboard
+          const refreshed = await this.requestTokenRefresh();
+
+          if (refreshed) {
+            console.log('✅ Token refreshed, retrying request...');
+            // Wait a moment for token to be stored
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            // Retry the request with fresh token
+            return this.request(endpoint, options, retryCount + 1);
+          }
+        }
+
+        // If retry failed or this was already a retry, throw error
+        console.error('❌ Authentication failed - token invalid or expired');
+        console.error('Please visit https://happyresumes.com/dashboard to re-authenticate');
         throw new Error('UNAUTHORIZED');
       }
 
@@ -127,6 +148,29 @@ class APIClient {
     } catch (error) {
       console.error('API request failed:', error);
       throw error;
+    }
+  }
+
+  async requestTokenRefresh() {
+    try {
+      // Check if we can message the service worker
+      if (typeof chrome === 'undefined' || !chrome.runtime) {
+        console.warn('⚠️ Chrome runtime not available');
+        return false;
+      }
+
+      // Send message to service worker to request token refresh
+      // The service worker will handle opening the dashboard if needed
+      console.log('📨 Requesting token refresh from service worker...');
+
+      // For now, just reload the token from storage
+      // In a future update, we could add automatic dashboard tab opening
+      await this.getClerkToken();
+
+      return !!this.token;
+    } catch (error) {
+      console.error('Token refresh failed:', error);
+      return false;
     }
   }
 

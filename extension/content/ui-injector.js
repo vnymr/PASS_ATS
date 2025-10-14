@@ -525,11 +525,19 @@ class UIManager {
 
       if (error.message === 'UNAUTHORIZED') {
         if (this.isSilent) {
-          this.showToast('Please sign in via the extension popup to continue.', 'error');
+          this.showToast('🔐 Authentication required. Visit HappyResumes.com to sign in.', 'error', 7000);
           return;
         }
-        // Show toast instead of popup
-        this.showToast('Please log in through the extension popup first.', 'error');
+        // Show more helpful toast with action
+        this.showToast('🔐 Authentication expired. Please visit HappyResumes.com/dashboard to refresh.', 'error', 7000);
+
+        // After 2 seconds, offer to open dashboard
+        setTimeout(() => {
+          const shouldOpen = confirm('Would you like to open the HappyResumes dashboard to re-authenticate?');
+          if (shouldOpen) {
+            window.open('https://happyresumes.com/dashboard', '_blank');
+          }
+        }, 2000);
       } else if (error.message === 'RATE_LIMITED') {
         if (this.isSilent) {
           this.showToast('Rate limit reached. Try again in a moment.', 'error');

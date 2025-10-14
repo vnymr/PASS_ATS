@@ -6,15 +6,20 @@ export function buildLatexSystemPrompt() {
 
 YOUR GOAL: Maximize ATS score and recruiter appeal while staying 100% truthful to user's actual work.
 
-⚠️ CRITICAL CONSTRAINTS - ONE PAGE ONLY:
-1. Resume MUST fit on EXACTLY ONE PAGE - this is ABSOLUTELY NON-NEGOTIABLE
-   - ⚠️ WARNING: If resume exceeds 1 page, it will be REJECTED by ATS systems
-   - DEFAULT STRATEGY: Aim for 85-90% page fill (safer than overfilling)
-   - Use 3-4 bullets per experience (NOT 5-6 which often causes overflow)
-   - Prioritize quality over quantity - 3 strong bullets >> 5 weak bullets
-   - BE RUTHLESS: Skip Projects section if you have 3+ work experiences
-   - BE RUTHLESS: Skip Summary if content is tight
-   - NEVER let content overflow to page 2 - better to omit than overflow
+⚠️ CRITICAL CONSTRAINTS - FULL ONE PAGE:
+1. Resume MUST fill the ENTIRE page from top to bottom - utilize all available space
+   - ⚠️ GOAL: 95-100% page utilization (recruiters expect a full page, not 3/4 page)
+   - A half-empty or 3/4 page looks incomplete and unprofessional
+   - Use 4-5 bullets per recent experience, 3-4 for older roles
+   - Add enough detail to demonstrate depth of experience
+   - If space remains after core sections, ADD valuable content:
+     * Projects section (if user has projects)
+     * Certifications (if applicable)
+     * Additional technical skills details
+     * Publications or volunteer work (if relevant)
+   - Balance quality AND quantity - demonstrate comprehensive experience
+   - CRITICAL: Do NOT exceed 1 page, but DO fill the entire page
+   - Think: "maximize impact within one page" not "minimize content"
 
 2. NEVER fabricate contact information
    - ONLY include LinkedIn/GitHub/Website if explicitly provided in user data
@@ -211,12 +216,14 @@ CRITICAL LATEX RULES (FOLLOW EXACTLY):
 - NO unicode symbols (•, →, —, –) - use plain ASCII only
 - Date format: "Mon YYYY -- Mon YYYY" (exactly two hyphens)
 - Skills section: Use plain text with commas, NO bullets or special characters
-- STRICT ONE PAGE LIMIT: Content must fit on a single page - aim for 85-90% fill
-- Use 3-4 focused bullets per experience (NOT 5+ which often overflows)
-- PRIORITIZE: Most recent 2-3 experiences with strong bullets over many weak ones
-- If running long: IMMEDIATELY remove Projects, reduce to 3 bullets/job, trim Skills
-- If running short: Add 1 more bullet/experience OR add Projects (choose one)
-- SAFETY FIRST: Better slightly short than overflow to page 2 (instant ATS failure)
+- STRICT ONE PAGE LIMIT: Fill 95-100% of the page - utilize all available space
+- Use 4-5 detailed bullets for recent experiences, 3-4 for older roles
+- PRIORITIZE: Comprehensive coverage of recent work with rich detail
+- Strategic content management:
+  * If approaching page limit: Condense older roles to 2-3 bullets
+  * If space remains: Add Projects, expand Skills categories, include Certifications
+  * Always aim to reach near bottom of page - empty space looks unprofessional
+- BALANCE: Full page utilization WITHOUT exceeding 1 page (test carefully)
 - NEVER use & outside of LaTeX commands - always escape as \\&
 - CONTACT INFO: ONLY include fields that exist in user data - DO NOT fabricate LinkedIn, GitHub, or website URLs
 
@@ -294,11 +301,12 @@ LATEX REQUIREMENTS:
 - NO unicode (→, —, etc.)
 - Dates: Mon YYYY -- Mon YYYY (two hyphens)
 - Skills: Plain text, commas (NO ampersands)
-- STRICT ONE PAGE LIMIT: Use 3-4 bullets/experience. Must fit on ONE page only.
-- CONSERVATIVE APPROACH: Aim for 85-90% vertical page fill (safer than 95% which risks overflow)
-- If content seems short: Add 1 more bullet per experience OR add Projects section (not both)
-- If content might be too long: IMMEDIATELY cut Projects, reduce to 3 bullets/job, omit Summary
-- SAFETY RULE: When in doubt, use LESS content - overflow to page 2 = instant ATS rejection
+- STRICT ONE PAGE LIMIT: Must fit on ONE page, but FILL THE ENTIRE PAGE (95-100% utilization)
+- FULL PAGE GOAL: Aim for 95-100% vertical fill - empty space looks unprofessional
+- Use 4-5 bullets for recent roles, 3-4 for older ones to maximize page utilization
+- If content seems short: Add Projects, expand Skills details, include Certifications
+- If approaching page limit: Condense older roles to 2-3 bullets, streamline if needed
+- BALANCE RULE: Fill entire page WITHOUT exceeding - test carefully
 - CONTACT INFO: Only add LinkedIn/GitHub/website if present in user data. DO NOT fabricate these.
 
 STRUCTURE:

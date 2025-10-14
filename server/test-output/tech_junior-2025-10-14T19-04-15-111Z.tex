@@ -1,0 +1,102 @@
+\documentclass[a4paper,11pt]{article}
+
+\usepackage{latexsym}
+\usepackage[empty]{fullpage}
+\usepackage{titlesec}
+\usepackage[usenames,dvipsnames]{color}
+\usepackage{verbatim}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+\usepackage{fancyhdr}
+\usepackage[english]{babel}
+\usepackage{tabularx}
+\usepackage{fontawesome5}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyfoot{}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0pt}
+
+% Optimal margins for full page utilization
+\addtolength{\oddsidemargin}{-0.8in}
+\addtolength{\evensidemargin}{-0.8in}
+\addtolength{\textwidth}{1.6in}
+\addtolength{\topmargin}{-0.9in}
+\addtolength{\textheight}{1.8in}
+
+\urlstyle{same}
+\raggedbottom
+\raggedright
+\setlength{\tabcolsep}{0in}
+
+\titleformat{\section}{
+  \vspace{-3pt}\scshape\raggedright\large\bfseries
+}{}{0em}{}[\color{black}\titlerule \vspace{-3pt}]
+
+% Custom Commands - Optimized spacing
+\newcommand{\resumeItem}[1]{
+  \item\small{#1 \vspace{-0.5pt}}
+}
+
+\newcommand{\resumeSubheading}[4]{
+  \vspace{-1pt}\item
+  \textbf{#1} \hfill \textbf{\small #2} \\
+  \textit{\small#3} \hfill \textit{\small #4} \\
+  \vspace{-3pt}
+}
+
+\newcommand{\resumeSubItem}[1]{\resumeItem{#1}\vspace{-1pt}}
+\newcommand{\resumeSubHeadingListStart}{\begin{itemize}[leftmargin=0.0in, label={}]}
+\newcommand{\resumeSubHeadingListEnd}{\end{itemize}}
+\newcommand{\resumeItemListStart}{\begin{itemize}[itemsep=0pt]}
+\newcommand{\resumeItemListEnd}{\end{itemize}\vspace{-2pt}}
+
+\begin{document}
+
+% HEADER
+\begin{center}
+    {\Huge \scshape Alice Johnson} \\ \vspace{1pt}
+    \small San Francisco, CA ~ \raisebox{-0.1\height}\faPhone\ 555-0101 ~
+    \href{mailto:alice@email.com}{\raisebox{-0.2\height}\faEnvelope\ \underline{alice@email.com}}
+    \vspace{-5pt}
+\end{center}
+
+% EXPERIENCE
+\section{Experience}
+\resumeSubHeadingListStart
+  \resumeSubheading{Software Engineer}{Jan 2023 -- Present}{StartupCo}{San Francisco, CA}
+    \resumeItemListStart
+      \resumeItem{Built \textbf{REST APIs} using \textbf{Node.js} and Express, enhancing system integration.}
+      \resumeItem{Implemented authentication with \textbf{JWT}, improving security for user sessions.}
+      \resumeItem{Wrote unit tests with Jest, ensuring code quality and reliability.}
+      \resumeItem{Collaborated in an Agile team environment, utilizing \textbf{Git} for version control.}
+    \resumeItemListEnd
+\resumeSubHeadingListEnd
+
+% EDUCATION
+\section{Education}
+\resumeSubHeadingListStart
+  \resumeSubheading{UC Berkeley}{May 2022}{B.S. Computer Science}{Berkeley, CA}
+\resumeSubHeadingListEnd
+
+% SKILLS
+\section{Skills}
+\resumeSubHeadingListStart
+\small{\item{
+  \textbf{Programming Languages}: JavaScript, TypeScript, \textbf{React}, \textbf{Node.js} \\
+  \textbf{Databases}: \textbf{SQL}, PostgreSQL \\
+  \textbf{Tools}: \textbf{Git}, Docker, AWS
+}}
+\resumeSubHeadingListEnd
+
+% PROJECTS
+\section{Projects}
+\resumeSubHeadingListStart
+  \resumeSubheading{Todo App}{}{Personal Project}{} 
+    \resumeItemListStart
+      \resumeItem{Built a full-stack \textbf{todo app} using \textbf{React} and \textbf{Node.js}, showcasing CRUD functionality.}
+    \resumeItemListEnd
+\resumeSubHeadingListEnd
+
+\end{document}
