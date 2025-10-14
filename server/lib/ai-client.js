@@ -169,7 +169,7 @@ class AIClient {
       model,
       messages,
       temperature,
-      max_tokens: maxTokens,
+      max_completion_tokens: maxTokens, // Updated from max_tokens for GPT-4o compatibility
     };
 
     if (jsonMode) {

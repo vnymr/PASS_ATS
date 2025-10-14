@@ -27,10 +27,15 @@ export const config = {
     // Text generation models
     textModels: {
       fast: process.env.OPENAI_TEXT_MODEL_FAST || 'gpt-5-mini',
-      quality: process.env.OPENAI_TEXT_MODEL_QUALITY || 'gpt-5-mini',
+      quality: process.env.OPENAI_TEXT_MODEL_QUALITY || 'gpt-5',
       default: process.env.OPENAI_TEXT_MODEL || 'gpt-5-mini',
-      // Available models
+      // Available models (2025) - GPT-5 series is newest
+      'gpt-5': 'gpt-5',
       'gpt-5-mini': 'gpt-5-mini',
+      'gpt-5-nano': 'gpt-5-nano',
+      'gpt-4.1': 'gpt-4.1',
+      'gpt-4.1-mini': 'gpt-4.1-mini',
+      'gpt-4.1-nano': 'gpt-4.1-nano',
       'gpt-4o-mini': 'gpt-4o-mini',
       'gpt-4o': 'gpt-4o',
     },

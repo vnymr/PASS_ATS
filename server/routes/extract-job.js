@@ -102,7 +102,7 @@ Return JSON with exact structure:
 }`
       }],
       response_format: { type: "json_object" },
-      max_tokens: 800
+      max_completion_tokens: 800
     });
 
     const result = JSON.parse(response.choices[0].message.content);

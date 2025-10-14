@@ -236,7 +236,7 @@ class AIResumeGenerator {
           }
         ],
         temperature: 0.5, // Lower temperature for more consistent factual output
-        max_tokens: 10000  // Increased for complete LaTeX resume generation
+        max_completion_tokens: 10000  // Increased for complete LaTeX resume generation
       });
 
       let latexCode = response.choices[0].message.content.trim();
@@ -327,7 +327,7 @@ class AIResumeGenerator {
           }
         ],
         temperature: 0.5,
-        max_tokens: 10000  // Increased for complete LaTeX resume generation
+        max_completion_tokens: 10000  // Increased for complete LaTeX resume generation
       });
 
       let latexCode = response.choices[0].message.content.trim();
@@ -610,7 +610,7 @@ Output only the LaTeX code for the new ${section} section, from \\section{${sect
         { role: 'user', content: prompt }
       ],
       temperature: 0.7,
-      max_tokens: 1000
+      max_completion_tokens: 1000
     });
 
     return response.choices[0].message.content.trim();

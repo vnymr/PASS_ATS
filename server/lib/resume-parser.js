@@ -84,49 +84,10 @@ class ResumeParser {
       let extractedData;
       let parsingMethod;
 
-      if (validation.useSimpleParser) {
-        // Use fast regex-based parser (no AI, no cost)
-        console.log('✨ Using SIMPLE parser (no AI needed - saving $$$)');
-        try {
-          extractedData = this.simpleParser.parse(text);
-          parsingMethod = 'simple';
-
-          if (!extractedData?.email && !extractedData?.name) {
-            console.log('⚠️  Simple parser extracted insufficient info, falling back to AI...');
-            extractedData = await this.extractInformation(text);
-            parsingMethod = 'ai-fallback';
-          }
-        } catch (err) {
-          console.log('⚠️  Simple parser error, using AI:', err.message);
-          extractedData = await this.extractInformation(text);
-          parsingMethod = 'ai-fallback';
-        }
-      } else if (validation.isWellStructured) {
-        // Try simple parser first, fallback to AI if needed
-        console.log('⚡ Trying SIMPLE parser first, will fallback to AI if needed...');
-        try {
-          extractedData = this.simpleParser.parse(text);
-          parsingMethod = 'simple';
-
-          // Validate extraction quality
-          if (!extractedData.email && !extractedData.name) {
-            console.log('⚠️  Simple parser failed to extract basic info, using AI...');
-            extractedData = await this.extractInformation(text);
-            parsingMethod = 'ai-fallback';
-          } else {
-            console.log('✅ Simple parser succeeded!');
-          }
-        } catch (err) {
-          console.log('⚠️  Simple parser error, using AI:', err.message);
-          extractedData = await this.extractInformation(text);
-          parsingMethod = 'ai-fallback';
-        }
-      } else {
-        // Use AI parser for complex/poorly formatted resumes
-        console.log('🤖 Using AI parser (complex/unstructured resume)');
-        parsingMethod = 'ai';
-        extractedData = await this.extractInformation(text);
-      }
+      // ALWAYS use AI for complete extraction - simple parser is too unreliable
+      console.log('🤖 Using AI parser for complete and accurate extraction');
+      parsingMethod = 'ai';
+      extractedData = await this.extractInformation(text);
 
       console.log(`✅ Resume parsed successfully using ${parsingMethod} method`);
 
