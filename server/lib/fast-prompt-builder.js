@@ -125,6 +125,14 @@ D. MAKE STRATEGIC DECISIONS:
 
 🎯 CORE RULES: What You CAN and CANNOT Do
 
+📝 USER NOTES & ADDITIONAL CONTEXT:
+When the user provides additional notes or information:
+- Review these carefully as they contain valuable context and preferences
+- Look for relevant details that can strengthen the resume for this specific job
+- Consider any skills, experiences, or accomplishments mentioned that weren't in the structured data
+- Use this information to make better decisions about what to emphasize
+- These notes may contain nuances about their work that aren't captured elsewhere
+
 ❌ NEVER FABRICATE THESE (These are LIES):
 - Universities/Schools (can't change "State University" to "MIT")
 - Companies (can't add "Google" if they never worked there)
@@ -409,6 +417,7 @@ OUTPUT: Only LaTeX code`;
 export function buildFastUserPrompt(userProfile, jobDescription, keywords = null) {
   // Streamlined prompt focusing on essential data
   let profileText = '';
+  let additionalInfoSection = '';
 
   // If userProfile is a string (resume text), use it directly
   if (typeof userProfile === 'string') {
@@ -419,6 +428,9 @@ export function buildFastUserPrompt(userProfile, jobDescription, keywords = null
     const experience = userProfile.experience || [];
     const education = userProfile.education || [];
     const skills = userProfile.skills || [];
+
+    // Extract additional info / user notes (critical for user preferences)
+    const additionalInfo = userProfile.additionalInfo || '';
 
     profileText = `
 CONTACT:
@@ -450,6 +462,23 @@ ${education.map(edu => `
 SKILLS:
 ${Array.isArray(skills) ? skills.join(', ') : JSON.stringify(skills)}
 `;
+
+    // Build additional info section if user provided notes
+    if (additionalInfo && additionalInfo.trim().length > 0) {
+      additionalInfoSection = `
+
+ADDITIONAL NOTES FROM USER:
+${additionalInfo}
+
+These notes may contain:
+- Additional context about their experience or skills
+- Specific accomplishments or projects to consider including
+- Preferences about what to emphasize or how to present their background
+- Extra details that complement the structured data above
+
+Review these notes and incorporate relevant information naturally into the resume where appropriate.
+`;
+    }
   }
 
   // Build keyword integration section if keywords provided
@@ -527,6 +556,7 @@ ${jobDescription}
 
 CANDIDATE PROFILE:
 ${profileText}
+${additionalInfoSection}
 
 ${keywordSection}
 
