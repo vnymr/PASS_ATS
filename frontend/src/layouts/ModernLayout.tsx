@@ -103,6 +103,15 @@ export default function ModernLayout({ children }: ModernLayoutProps) {
             </button>
 
             <button
+              className={`modern-nav-item ${location.pathname === '/find-jobs' ? 'active' : ''}`}
+              onClick={() => navigate('/find-jobs')}
+              aria-label="Find Jobs"
+            >
+              <Icons.briefcase size={16} />
+              <span>Jobs</span>
+            </button>
+
+            <button
               className={`modern-nav-item ${location.pathname === '/profile' ? 'active' : ''}`}
               onClick={() => navigate('/profile')}
               aria-label="Profile"

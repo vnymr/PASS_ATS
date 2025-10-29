@@ -20,6 +20,7 @@ import CheckoutSuccess from './pages/CheckoutSuccess';
 import CheckoutCancel from './pages/CheckoutCancel';
 import Support from './pages/Support';
 import Privacy from './pages/Privacy';
+import FindJob from './pages/FindJob';
 
 // Layout components
 import ProtectedRoute from './layouts/ProtectedRoute';
@@ -126,6 +127,13 @@ export default function App() {
         <ProtectedRoute>
           <ModernLayout>
             <DashboardModern />
+          </ModernLayout>
+        </ProtectedRoute>
+      } />
+      <Route path="/find-jobs" element={
+        <ProtectedRoute>
+          <ModernLayout>
+            <FindJob />
           </ModernLayout>
         </ProtectedRoute>
       } />
