@@ -7,8 +7,10 @@
   "scripts": {
     "start": "node server.js",
     "worker": "node worker.js",
+    "auto-apply-worker": "node auto-apply-worker.js",
     "dev": "nodemon server.js",
     "dev:worker": "nodemon worker.js",
+    "dev:auto-apply-worker": "nodemon auto-apply-worker.js",
     "test": "NODE_ENV=test jest --runInBand --detectOpenHandles",
     "test:watch": "NODE_ENV=test jest --watch",
     "test:coverage": "NODE_ENV=test jest --coverage",
