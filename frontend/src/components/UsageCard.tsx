@@ -73,10 +73,15 @@ export default function UsageCard() {
       {usage.limit !== -1 && (
         <div className="modern-usage-progress-container">
           <div className="modern-usage-progress-bar">
-            <div
-              className={`modern-usage-fill ${isAtLimit ? 'full' : isNearLimit ? 'warning' : ''}`}
-              style={{ width: `${Math.min(usagePercent, 100)}%` }}
-            />
+            {(() => {
+              const pct = Math.max(0, Math.min(100, Math.round(Math.min(usagePercent, 100))));
+              const widthClass = `w-[${pct}%]`;
+              return (
+                <div
+                  className={`modern-usage-fill ${isAtLimit ? 'full' : isNearLimit ? 'warning' : ''} ${widthClass}`}
+                />
+              );
+            })()}
           </div>
         </div>
       )}

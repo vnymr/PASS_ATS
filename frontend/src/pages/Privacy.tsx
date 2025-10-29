@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { SignedIn, SignedOut, SignInButton, SignUpButton, UserButton } from '@clerk/clerk-react';
 import logoImg from '../logo.svg';
 import { DottedSurface } from '@/components/ui/dotted-surface';
-import './Privacy.css';
+// Removed legacy CSS import in favor of Tailwind
 
 export default function Privacy() {
   const navigate = useNavigate();
@@ -15,7 +15,7 @@ export default function Privacy() {
 
         <nav className="landing-nav" role="navigation" aria-label="Main navigation">
           <div className="nav-container">
-            <div className="logo fade-in" onClick={() => navigate('/')} style={{ cursor: 'pointer' }}>
+            <div className="logo fade-in cursor-pointer" onClick={() => navigate('/') }>
               <img src={logoImg} alt="HappyResumes Logo" className="logo-img" />
             </div>
             <div className="nav-buttons">

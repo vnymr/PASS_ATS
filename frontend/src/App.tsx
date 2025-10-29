@@ -1,8 +1,7 @@
 import { Routes, Route } from 'react-router-dom';
 import { SignedIn, SignedOut, SignInButton, SignUpButton, UserButton, useAuth, useUser } from '@clerk/clerk-react';
 import { useEffect } from 'react';
-import './styles.css';
-import './styles-modern.css';
+// Tailwind is loaded via index.css in main.tsx
 
 // Page components
 import Landing from './pages/Landing';
@@ -119,7 +118,7 @@ export default function App() {
       <Route path="/generate" element={
         <ProtectedRoute>
           <ModernLayout>
-            <DashboardModern />
+            <GenerateResume />
           </ModernLayout>
         </ProtectedRoute>
       } />

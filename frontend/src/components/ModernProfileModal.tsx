@@ -57,7 +57,7 @@ export default function ModernProfileModal({ onClose }: ModernProfileModalProps)
     return (
       <div className="modern-modal-overlay">
         <div className="modern-modal">
-          <div className="modern-loading" style={{ padding: '48px' }}>
+          <div className="modern-loading p-12">
             <div className="modern-spinner"></div>
             <p>Loading profile...</p>
           </div>
@@ -68,7 +68,7 @@ export default function ModernProfileModal({ onClose }: ModernProfileModalProps)
 
   return (
     <div className="modern-modal-overlay" onClick={onClose}>
-      <div className="modern-modal" style={{ maxWidth: '640px' }} onClick={(e) => e.stopPropagation()}>
+      <div className="modern-modal max-w-[640px]" onClick={(e) => e.stopPropagation()}>
         <div className="modern-modal-header">
           <h2 className="modern-modal-title">Profile Settings</h2>
           <button
@@ -81,7 +81,7 @@ export default function ModernProfileModal({ onClose }: ModernProfileModalProps)
         </div>
 
         <div className="modern-modal-body">
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+          <div className="grid grid-cols-2 gap-4">
             <div className="modern-form-group">
               <label className="modern-form-label">
                 <Icons.user size={14} />
@@ -167,7 +167,7 @@ export default function ModernProfileModal({ onClose }: ModernProfileModalProps)
             </div>
           </div>
 
-          <div className="modern-form-group" style={{ marginTop: '24px' }}>
+          <div className="modern-form-group mt-6">
             <label className="modern-form-label">
               <Icons.fileText size={14} />
               Professional Summary
@@ -178,7 +178,7 @@ export default function ModernProfileModal({ onClose }: ModernProfileModalProps)
               value={profile.summary || ''}
               onChange={(e) => setProfile({...profile, summary: e.target.value})}
               placeholder="A brief overview of your professional background and expertise..."
-              style={{ resize: 'vertical' }}
+              className="modern-form-input resize-y"
             />
           </div>
 
@@ -188,12 +188,11 @@ export default function ModernProfileModal({ onClose }: ModernProfileModalProps)
               Resume Content
             </label>
             <textarea
-              className="modern-form-input"
+              className="modern-form-input resize-y font-mono text-[13px]"
               rows={8}
               value={profile.resumeText || ''}
               onChange={(e) => setProfile({...profile, resumeText: e.target.value})}
               placeholder="Paste your full resume content here..."
-              style={{ resize: 'vertical', fontFamily: 'monospace', fontSize: '13px' }}
             />
           </div>
         </div>

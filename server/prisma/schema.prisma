@@ -8,16 +8,17 @@ datasource db {
 }
 
 model User {
-  id            Int              @id @default(autoincrement())
-  email         String           @unique
-  password      String
-  clerkId       String?          @unique
-  createdAt     DateTime         @default(now())
-  jobs          Job[]
-  profile       Profile?
-  subscription  Subscription?
-  usageTracking UsageTracking[]
-  payments      Payment[]
+  id              Int               @id @default(autoincrement())
+  email           String            @unique
+  password        String
+  clerkId         String?           @unique
+  createdAt       DateTime          @default(now())
+  jobs            Job[]
+  profile         Profile?
+  subscription    Subscription?
+  usageTracking   UsageTracking[]
+  payments        Payment[]
+  autoApplications AutoApplication[]
 }
 
 model Profile {
@@ -175,4 +176,138 @@ enum PaymentStatus {
   SUCCEEDED
   FAILED
   REFUNDED
+}
+
+// Auto-Apply System Models
+
+model AggregatedJob {
+  id                    String            @id @default(cuid())
+  externalId            String            @unique
+  source                String
+  title                 String
+  company               String
+  location              String?
+  salary                String?
+  description           String
+  requirements          String?
+  applyUrl              String
+  companyUrl            String?
+  atsType               String
+  atsCompany            String?
+  atsComplexity         String
+  atsConfidence         Float
+  aiApplyable           Boolean           @default(false)
+  extractedSkills       String[]          @default([])
+  extractedExperience   String?
+  extractedEducation    String?
+  extractedJobLevel     String?
+  extractedKeywords     String[]          @default([])
+  extractedBenefits     String[]          @default([])
+  lastExtractedAt       DateTime?
+  extractionConfidence  Float?
+  postedDate            DateTime
+  expiresAt             DateTime?
+  lastChecked           DateTime          @default(now())
+  isActive              Boolean           @default(true)
+  applications          AutoApplication[]
+
+  @@index([aiApplyable, postedDate])
+  @@index([atsType])
+  @@index([isActive, postedDate])
+  @@index([source])
+  @@index([extractedSkills], type: Gin)
+}
+
+model AutoApplication {
+  id                String                  @id @default(cuid())
+  userId            Int
+  jobId             String
+  status            AutoApplicationStatus   @default(QUEUED)
+  method            String                  @default("AI_AUTO")
+  submittedAt       DateTime?
+  confirmationUrl   String?
+  confirmationId    String?
+  confirmationData  Json?
+  error             String?
+  errorType         String?
+  retryCount        Int                     @default(0)
+  maxRetries        Int                     @default(3)
+  cost              Float                   @default(0)
+  createdAt         DateTime                @default(now())
+  startedAt         DateTime?
+  completedAt       DateTime?
+  user              User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job               AggregatedJob           @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, jobId])
+  @@index([userId, status])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model ApplicationRecipe {
+  id             String             @id @default(cuid())
+  platform       String             @unique
+  atsType        String
+  version        Int                @default(1)
+  steps          Json
+  successRate    Float              @default(1.0)
+  timesUsed      Int                @default(0)
+  failureCount   Int                @default(0)
+  recordingCost  Float              @default(0.80)
+  replayCost     Float              @default(0.05)
+  totalSaved     Float              @default(0.0)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  lastUsed       DateTime?
+  lastFailure    DateTime?
+  recordedBy     String?
+  executions     RecipeExecution[]
+
+  @@index([platform])
+  @@index([atsType])
+  @@index([successRate])
+}
+
+model RecipeExecution {
+  id          String            @id @default(cuid())
+  recipeId    String
+  success     Boolean
+  method      String
+  duration    Int?
+  cost        Float
+  error       String?
+  errorType   String?
+  jobUrl      String?
+  executedAt  DateTime          @default(now())
+  recipe      ApplicationRecipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+
+  @@index([recipeId, executedAt])
+  @@index([success])
+}
+
+model DiscoveredCompany {
+  id             String   @id @default(cuid())
+  atsType        String
+  slug           String
+  name           String?
+  discoveredAt   DateTime @default(now())
+  discoveredFrom String?
+  lastFetchedAt  DateTime
+  isActive       Boolean  @default(true)
+  totalJobs      Int      @default(0)
+  lastJobCount   Int      @default(0)
+
+  @@unique([atsType, slug])
+  @@index([atsType, isActive])
+  @@index([lastFetchedAt])
+}
+
+enum AutoApplicationStatus {
+  QUEUED
+  APPLYING
+  SUBMITTED
+  FAILED
+  CANCELLED
+  RETRYING
 }

@@ -37,13 +37,9 @@ export default function JobCard({ job, onGenerateResume, onViewJob, onAutoApply,
   return (
     <div
       onClick={() => onClick?.(job)}
-      className={`group relative rounded-2xl transition-all hover:scale-[1.01] cursor-pointer ${
+      className={`group relative rounded-2xl transition-all hover:scale-[1.01] cursor-pointer bg-elevated shadow ${
         compact ? 'p-4' : 'p-6'
       }`}
-      style={{
-        backgroundColor: 'var(--background-elevated)',
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04)',
-      }}
     >
       {/* Header Section */}
       <div className={`flex justify-between items-start ${compact ? 'mb-3' : 'mb-4'}`}>
@@ -52,11 +48,7 @@ export default function JobCard({ job, onGenerateResume, onViewJob, onAutoApply,
             {/* Company Logo Placeholder */}
             {!compact && (
               <div
-                className="w-12 h-12 rounded-xl flex items-center justify-center text-lg font-bold flex-shrink-0"
-                style={{
-                  backgroundColor: 'var(--primary-100)',
-                  color: 'var(--primary)',
-                }}
+                className="w-12 h-12 rounded-xl flex items-center justify-center text-lg font-bold flex-shrink-0 bg-[var(--primary-100)] text-[var(--primary)]"
               >
                 {job.company.charAt(0).toUpperCase()}
               </div>
@@ -64,13 +56,12 @@ export default function JobCard({ job, onGenerateResume, onViewJob, onAutoApply,
 
             <div className="flex-1 min-w-0">
               <h3
-                className={`font-bold mb-1 line-clamp-1 ${compact ? 'text-base' : 'text-xl'}`}
-                style={{ color: 'var(--text)' }}
+                className={`font-bold mb-1 line-clamp-1 ${compact ? 'text-base' : 'text-xl'} text-text`}
               >
                 {job.title || 'Untitled role'}
               </h3>
               <div className={`flex items-center gap-2 flex-wrap ${compact ? 'text-xs' : 'text-sm'}`}>
-                <span className="font-semibold" style={{ color: 'var(--primary)' }}>
+                <span className="font-semibold text-primary">
                   {job.company || 'Unknown Company'}
                 </span>
                 <span className="text-gray-400">•</span>
@@ -104,7 +95,7 @@ export default function JobCard({ job, onGenerateResume, onViewJob, onAutoApply,
       {!compact && (
         <div className="flex items-center gap-4 mb-4 text-sm flex-wrap">
           {job.salary && (
-            <div className="flex items-center gap-1.5 font-medium" style={{ color: 'var(--secondary)' }}>
+            <div className="flex items-center gap-1.5 font-medium text-secondary">
               {Icon('dollarSign')}
               <span>{job.salary}</span>
             </div>
@@ -140,7 +131,7 @@ export default function JobCard({ job, onGenerateResume, onViewJob, onAutoApply,
       {compact && (
         <div className="flex items-center gap-3 text-xs text-gray-500 mb-3">
           {job.salary && (
-            <span className="font-medium" style={{ color: 'var(--secondary)' }}>
+            <span className="font-medium text-secondary">
               {job.salary}
             </span>
           )}
@@ -158,11 +149,7 @@ export default function JobCard({ job, onGenerateResume, onViewJob, onAutoApply,
             e.stopPropagation();
             onGenerateResume(job);
           }}
-          className="flex-1 px-4 py-2.5 rounded-xl font-semibold transition-all hover:opacity-90 flex items-center justify-center gap-2"
-          style={{
-            backgroundColor: 'var(--primary)',
-            color: 'var(--background-elevated)',
-          }}
+          className="flex-1 px-4 py-2.5 rounded-xl font-semibold transition-all hover:opacity-90 flex items-center justify-center gap-2 bg-primary text-[var(--background-elevated)]"
         >
           {Icon('sparkles')}
           <span>AI Resume</span>
@@ -174,12 +161,7 @@ export default function JobCard({ job, onGenerateResume, onViewJob, onAutoApply,
             e.stopPropagation();
             onViewJob(job.applyUrl);
           }}
-          className="px-4 py-2.5 rounded-xl font-semibold transition-all hover:opacity-90 flex items-center justify-center gap-2"
-          style={{
-            backgroundColor: 'var(--background)',
-            color: 'var(--text)',
-            boxShadow: '0 0 0 1px rgba(0, 0, 0, 0.08)',
-          }}
+          className="px-4 py-2.5 rounded-xl font-semibold transition-all hover:opacity-90 flex items-center justify-center gap-2 bg-background text-text ring-1 ring-black/10"
         >
           {Icon('externalLink')}
           <span>View</span>
@@ -192,11 +174,7 @@ export default function JobCard({ job, onGenerateResume, onViewJob, onAutoApply,
               e.stopPropagation();
               onAutoApply(job.id);
             }}
-            className="px-4 py-2.5 rounded-xl font-semibold transition-all hover:opacity-90 flex items-center justify-center gap-2"
-            style={{
-              backgroundColor: 'var(--secondary)',
-              color: 'var(--background-elevated)',
-            }}
+            className="px-4 py-2.5 rounded-xl font-semibold transition-all hover:opacity-90 flex items-center justify-center gap-2 bg-secondary text-[var(--background-elevated)]"
           >
             {Icon('zap')}
             <span>Auto Apply</span>
@@ -207,10 +185,7 @@ export default function JobCard({ job, onGenerateResume, onViewJob, onAutoApply,
 
       {/* Hover Effect Overlay */}
       <div
-        className="absolute inset-0 rounded-2xl pointer-events-none transition-opacity opacity-0 group-hover:opacity-100"
-        style={{
-          boxShadow: '0 8px 16px rgba(62, 172, 167, 0.12)',
-        }}
+        className="absolute inset-0 rounded-2xl pointer-events-none transition-opacity opacity-0 group-hover:opacity-100 [box-shadow:0_8px_16px_rgba(62,172,167,0.12)]"
       />
     </div>
   );

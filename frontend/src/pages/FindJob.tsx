@@ -1,5 +1,8 @@
-import { useState, useMemo, useEffect, useCallback, useRef, type FormEvent, type CSSProperties } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef, type FormEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Input } from '../ui/Input';
+import { Button } from '../ui/Button';
+import Card from '../ui/Card';
 import { useAuth } from '@clerk/clerk-react';
 import type { Job as JobType, GetJobsResponse, JobSearchResult } from '../services/api';
 import JobCard from '../components/JobCard';
@@ -202,6 +205,7 @@ export default function FindJob() {
         }
 
         const data = (await response.json()) as GetJobsResponse;
+        console.log('📊 API Response:', { total: data.total, jobCount: data.jobs?.length, firstJob: data.jobs?.[0] });
         if (requestId !== requestIdRef.current) {
           return;
         }
@@ -342,6 +346,10 @@ export default function FindJob() {
       fetchJobs({ offset: 0, append: false });
     }
   }, [fetchJobs, runSearch]);
+
+  useEffect(() => {
+    console.debug('[RUNTIME] Mounted: FindJob');
+  }, []);
 
   useEffect(() => {
     const urlQuery = searchParams.get('q')?.trim() ?? '';
@@ -511,288 +519,71 @@ export default function FindJob() {
   const isInitialLoading = loading && !isLoadingMore;
   const showEmptyState = !isInitialLoading && !error && filteredJobs.length === 0;
 
-  const jobListContainerStyle: CSSProperties = {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '12px',
-    overflow: 'hidden',
-    paddingRight: isMobile ? 0 : '4px',
-  };
-
-  const jobScrollAreaStyle: CSSProperties = isMobile
-    ? {
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '16px',
-      }
-    : {
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '12px',
-        maxHeight: 'calc(100vh - 260px)',
-        overflowY: 'auto',
-        paddingRight: '6px',
-      };
-
-  const detailPanelStyle: CSSProperties = {
-    position: 'relative',
-    alignSelf: 'flex-start',
-  };
-
-  const searchWrapperStyle: CSSProperties = {
-    position: 'sticky',
-    top: '72px',
-    zIndex: 10,
-    backgroundColor: 'var(--background)',
-    padding: isMobile ? '12px 0 16px' : '16px 0 20px',
-    borderBottom: '1px solid rgba(12, 19, 16, 0.06)',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '12px',
-  };
-
-  const searchBarStyle: CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
-    backgroundColor: '#ffffff',
-    border: '1px solid rgba(12, 19, 16, 0.1)',
-    borderRadius: '999px',
-    padding: isMobile ? '12px 16px' : '16px 28px',
-    boxShadow: '0 10px 30px rgba(12, 19, 16, 0.08)',
-    minHeight: '64px',
-    color: 'var(--text)',
-  };
-
-  const searchInputStyle: CSSProperties = {
-    flex: 1,
-    border: 'none',
-    outline: 'none',
-    fontSize: '15px',
-    background: 'transparent',
-    color: 'var(--text)',
-    fontWeight: 500,
-    caretColor: 'var(--primary)',
-  };
-
-  const searchActionsStyle: CSSProperties = {
-    display: 'flex',
-    alignItems: isMobile ? 'flex-start' : 'center',
-    justifyContent: 'space-between',
-    flexWrap: 'wrap',
-    gap: '12px',
-  };
-
-  const filterGroupStyle: CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px',
-    flexWrap: 'wrap',
-  };
-
-  const searchFormStyle: CSSProperties = {
-    display: 'flex',
-    flexDirection: isMobile ? 'column' : 'row',
-    alignItems: 'stretch',
-    gap: isMobile ? '8px' : '12px',
-  };
-
-  const searchButtonStyle: CSSProperties = {
-    padding: isMobile ? '12px 20px' : '16px 32px',
-    borderRadius: '999px',
-    border: 'none',
-    background: 'var(--primary)',
-    color: '#ffffff',
-    fontWeight: 600,
-    fontSize: '15px',
-    cursor: 'pointer',
-    boxShadow: '0 8px 16px rgba(62, 172, 167, 0.18)',
-    transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-    alignSelf: isMobile ? 'stretch' : 'center',
-  };
-
-  const clearButtonStyle: CSSProperties = {
-    border: 'none',
-    background: '#f5f7f7',
-    color: 'var(--gray-600)',
-    cursor: 'pointer',
-    fontSize: '13px',
-    padding: '6px 14px',
-    borderRadius: '999px',
-    fontWeight: 500,
-  };
-
-  const searchIconStyle: CSSProperties = {
-    fontSize: '18px',
-    color: 'var(--accent)',
-    display: 'flex',
-    alignItems: 'center',
-  };
+  // Tailwind replaces previous inline style objects
 
   return (
-    <div
-      style={{
-        flex: 1,
-        width: '100%',
-        padding: isMobile ? '72px 16px 24px' : '88px 24px 32px',
-        backgroundColor: 'var(--background)',
-        minHeight: 'calc(100vh - 64px)',
-        color: 'var(--text)',
-        fontFamily: 'Inter, system-ui, sans-serif',
-      }}
-    >
-      <div
-        style={{
-          maxWidth: '1160px',
-          margin: '0 auto',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '16px',
-        }}
-      >
-        <div style={searchWrapperStyle}>
-          <form onSubmit={handleSearchSubmit} style={searchFormStyle}>
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <div style={searchBarStyle}>
-                <span style={searchIconStyle}>🔍</span>
-                <input
+    <div className={`flex-1 w-full ${isMobile ? 'pt-[72px] px-4 pb-6' : 'pt-[88px] px-6 pb-8'} bg-background min-h-[calc(100vh-64px)] text-text font-sans`}>
+      <div className="max-w-[1160px] mx-auto flex flex-col gap-4">
+        <div className={`sticky top-[72px] z-10 bg-background ${isMobile ? 'pt-3 pb-4' : 'pt-4 pb-5'} border-b border-[rgba(12,19,16,0.06)] flex flex-col gap-3`}>
+          <form onSubmit={handleSearchSubmit} className={`${isMobile ? 'flex flex-col gap-2' : 'flex flex-row items-stretch gap-3'}`}>
+            <div className="flex-1 flex items-center gap-2">
+              <div className="relative flex-1">
+                <Input
                   value={searchInput}
                   onChange={event => setSearchInput(event.target.value)}
                   placeholder="Search by job title, company, or skills…"
-                  style={searchInputStyle}
+                  className={`${isMobile ? 'h-11' : 'h-12'} pl-9`}
                 />
-                {mode === 'search' && loading && !isLoadingMore && (
-                  <div className="animate-spin" style={{ width: '16px', height: '16px', borderRadius: '50%', border: '2px solid rgba(62, 172, 167, 0.35)', borderTopColor: 'var(--primary)' }} />
-                )}
-                {searchInput && (
-                  <button
-                    type="button"
-                    onClick={handleClearSearch}
-                    style={clearButtonStyle}
-                    aria-label="Clear search"
-                  >
-                    ✕
-                  </button>
-                )}
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400">🔍</div>
               </div>
+              <Button type="submit" className={`${isMobile ? 'h-11' : 'h-12'}`}>Search</Button>
             </div>
-            <button type="submit" style={searchButtonStyle}>
-              Search
-            </button>
           </form>
 
-          <div style={searchActionsStyle}>
-            <div style={filterGroupStyle}>
+          <div className={`flex ${isMobile ? 'items-start' : 'items-center'} justify-between flex-wrap gap-3`}>
+            <div className="flex items-center gap-2.5 flex-wrap">
               <button
                 type="button"
                 onClick={toggleRemoteOnly}
-                style={{
-                  borderRadius: '999px',
-                  padding: '6px 14px',
-                  border: remoteOnly ? '1px solid var(--primary)' : '1px solid rgba(12, 19, 16, 0.12)',
-                  background: remoteOnly ? 'var(--primary-50)' : '#ffffff',
-                  color: remoteOnly ? 'var(--primary)' : 'var(--accent)',
-                  fontSize: '13px',
-                  fontWeight: 500,
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease',
-                }}
+                className={`rounded-full px-[14px] py-[6px] text-[13px] font-medium cursor-pointer transition ${remoteOnly ? 'border border-primary bg-[var(--primary-50)] text-primary' : 'border border-[rgba(12,19,16,0.12)] bg-white text-accent'}`}
               >
                 {remoteOnly ? 'Remote only: On' : 'Remote only: Off'}
               </button>
               {mode === 'search' && activeQuery && (
-                <span style={{ fontSize: '13px', color: 'var(--gray-600)' }}>“{activeQuery}”</span>
+                <span className="text-[13px] text-[var(--gray-600)]">“{activeQuery}”</span>
               )}
             </div>
 
-            <div style={{ fontSize: '13px', color: 'var(--gray-600)', fontWeight: 600 }}>
+            <div className="text-[13px] text-[var(--gray-600)] font-semibold">
               {filteredJobs.length} {filteredJobs.length === 1 ? 'role' : 'roles'}
             </div>
           </div>
 
           {mode === 'search' && explanation && (
-            <div
-              style={{
-                fontSize: '12px',
-                color: 'var(--primary)',
-              }}
-            >
-              {explanation}
-            </div>
+            <div className="text-xs text-primary">{explanation}</div>
           )}
         </div>
 
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr',
-            gap: '16px',
-            alignItems: 'flex-start',
-          }}
-        >
-          <div style={jobListContainerStyle}>
-            <div style={jobScrollAreaStyle}>
+        <div className="grid grid-cols-1 gap-4 items-start">
+          <div className={`flex flex-col ${isMobile ? 'gap-4 pr-0' : 'gap-3 pr-1'} overflow-hidden`}>
+            <div className={`${isMobile ? 'flex flex-col gap-4' : 'flex flex-col gap-3 max-h-[calc(100vh-260px)] overflow-y-auto pr-1.5'}`}>
               {isInitialLoading && (
                 <>
                   {Array.from({ length: isMobile ? 4 : 6 }).map((_, index) => (
-                    <div
-                      key={`skeleton-${index}`}
-                      style={{
-                        backgroundColor: 'var(--background-elevated)',
-                        borderRadius: '16px',
-                        border: '1px solid rgba(28, 63, 64, 0.12)',
-                        padding: '20px',
-                        boxShadow: '0 2px 12px rgba(0, 0, 0, 0.04)',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '16px',
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: '64px',
-                          height: '64px',
-                          borderRadius: '16px',
-                          background: 'var(--primary-50)',
-                          opacity: 0.6,
-                        }}
-                      />
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                        <div
-                          style={{
-                            width: '70%',
-                            height: '18px',
-                            borderRadius: '8px',
-                            background: 'rgba(28, 63, 64, 0.12)',
-                            opacity: 0.6,
-                          }}
-                        />
-                        <div
-                          style={{
-                            width: '50%',
-                            height: '14px',
-                            borderRadius: '8px',
-                            background: 'rgba(28, 63, 64, 0.12)',
-                            opacity: 0.6,
-                          }}
-                        />
-                        <div
-                          style={{
-                            width: '85%',
-                            height: '12px',
-                            borderRadius: '6px',
-                            background: 'rgba(28, 63, 64, 0.1)',
-                            opacity: 0.6,
-                          }}
-                        />
-                      </div>
+                  <div key={`skeleton-${index}`} className="bg-elevated rounded-2xl border border-[rgba(28,63,64,0.12)] p-5 shadow-sm flex flex-col gap-4">
+                    <div className="w-16 h-16 rounded-2xl bg-[var(--primary-50)] opacity-60" />
+                    <div className="flex flex-col gap-3">
+                      <div className="w-[70%] h-[18px] rounded-lg bg-[rgba(28,63,64,0.12)] opacity-60" />
+                      <div className="w-1/2 h-[14px] rounded-lg bg-[rgba(28,63,64,0.12)] opacity-60" />
+                      <div className="w-[85%] h-3 rounded-md bg-[rgba(28,63,64,0.10)] opacity-60" />
                     </div>
+                  </div>
                   ))}
                 </>
               )}
 
               {!isInitialLoading && filteredJobs.map(job => (
-                <div key={job.id} style={{ border: selectedJob?.id === job.id ? '2px solid var(--primary)' : '1px solid rgba(12, 19, 16, 0.08)', borderRadius: '16px' }}>
+                <Card key={job.id} className={`${selectedJob?.id === job.id ? 'border-primary-600' : ''}`}>
                   <JobCard
                     job={job}
                     onClick={() => { setSelectedJob(job); setIsDetailOpen(true); }}
@@ -800,41 +591,18 @@ export default function FindJob() {
                     onViewJob={(url) => window.open(url, '_blank', 'noopener')}
                     onAutoApply={(jobId) => handleAutoApply(job)}
                   />
-                </div>
+                </Card>
               ))}
 
               {showEmptyState && (
-                <div
-                  style={{
-                    backgroundColor: 'var(--background-elevated)',
-                    borderRadius: '20px',
-                    border: '1px solid rgba(28, 63, 64, 0.12)',
-                    padding: '40px',
-                    textAlign: 'center',
-                    color: 'var(--gray-600)',
-                    boxShadow: '0 2px 16px rgba(0, 0, 0, 0.06)',
-                  }}
-                >
-                  <div style={{ fontSize: '40px', marginBottom: '12px' }}>🔍</div>
-                  <h3 style={{ fontSize: '20px', fontWeight: 600, marginBottom: '8px', color: 'var(--text)' }}>
-                    No jobs match your filters
-                  </h3>
-                  <p style={{ fontSize: '14px', marginBottom: '20px' }}>
-                    Try broadening your search or turning off filters to see more opportunities.
-                  </p>
+                <div className="bg-elevated rounded-2xl border border-[rgba(28,63,64,0.12)] p-10 text-center text-[var(--gray-600)] shadow-md">
+                  <div className="text-[40px] mb-3">🔍</div>
+                  <h3 className="text-xl font-semibold mb-2 text-text">No jobs match your filters</h3>
+                  <p className="text-sm mb-5">Try broadening your search or turning off filters to see more opportunities.</p>
                   <button
                     type="button"
                     onClick={handleClearSearch}
-                    style={{
-                      padding: '12px 24px',
-                      borderRadius: '12px',
-                      border: 'none',
-                      background: 'var(--primary)',
-                      color: '#ffffff',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      boxShadow: '0 6px 18px rgba(62, 172, 167, 0.25)',
-                    }}
+                    className="px-6 py-3 rounded-xl border-0 bg-primary text-white font-semibold cursor-pointer shadow-[0_6px_18px_rgba(62,172,167,0.25)]"
                   >
                     Reset search
                   </button>
@@ -843,34 +611,12 @@ export default function FindJob() {
             </div>
 
             {error && (
-              <div
-                style={{
-                  marginTop: '8px',
-                  background: 'rgba(239, 68, 68, 0.08)',
-                  border: '1px solid rgba(239, 68, 68, 0.3)',
-                  borderRadius: '14px',
-                  padding: '16px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: '12px',
-                  color: '#b91c1c',
-                  fontSize: '14px',
-                }}
-              >
+              <div className="mt-2 bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.3)] rounded-xl p-4 flex items-center justify-between gap-3 text-[#b91c1c] text-sm">
                 <span>{error}</span>
                 <button
                   type="button"
                   onClick={handleRetry}
-                  style={{
-                    padding: '8px 16px',
-                    borderRadius: '10px',
-                    border: 'none',
-                    background: 'var(--primary)',
-                    color: '#ffffff',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                  }}
+                  className="px-4 py-2 rounded-lg border-0 bg-primary text-white font-semibold cursor-pointer"
                 >
                   Retry
                 </button>
@@ -882,25 +628,14 @@ export default function FindJob() {
                 type="button"
                 onClick={handleLoadMore}
                 disabled={isLoadingMore}
-                style={{
-                  marginTop: '12px',
-                  padding: '12px 20px',
-                  borderRadius: '14px',
-                  border: '1px solid rgba(28, 63, 64, 0.16)',
-                  background: 'var(--background-elevated)',
-                  color: 'var(--accent)',
-                  fontWeight: 600,
-                  cursor: isLoadingMore ? 'not-allowed' : 'pointer',
-                  opacity: isLoadingMore ? 0.6 : 1,
-                  transition: 'all 0.2s ease',
-                }}
+                className={`mt-3 px-5 py-3 rounded-xl border border-[rgba(28,63,64,0.16)] bg-elevated text-accent font-semibold transition ${isLoadingMore ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
               >
                 {isLoadingMore ? 'Loading more jobs…' : 'Load more jobs'}
               </button>
             )}
           </div>
 
-          <div style={detailPanelStyle} />
+          <div className="relative self-start" />
         </div>
       </div>
       <JobDetailPanel

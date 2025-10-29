@@ -124,7 +124,7 @@ export const api = {
   },
 
   async resumes() {
-    const r = await fetch(`${API_URL}/api/jobs?status=COMPLETED&limit=20`, { headers: { ...authHeaders() } });
+    const r = await fetch(`${API_URL}/api/my-jobs?status=COMPLETED&limit=20`, { headers: { ...authHeaders() } });
     const result = await handle<{ jobs: any[] }>(r);
 
     // Transform job data to resume format

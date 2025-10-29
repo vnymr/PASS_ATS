@@ -37,16 +37,7 @@ function UsageBadge() {
 
   return (
     <div
-      style={{
-        padding: '4px 10px',
-        background: isNearLimit ? '#cd0000' : '#000000',
-        borderRadius: '6px',
-        fontSize: '12px',
-        fontWeight: '500',
-        color: '#ffffff',
-        marginLeft: '8px',
-        transition: 'all 0.2s'
-      }}
+      className={`px-2.5 py-1 rounded-md text-xs font-medium text-white ml-2 transition ${isNearLimit ? 'bg-[#cd0000]' : 'bg-black'}`}
     >
       {quota.used}/{quota.limit}
     </div>
@@ -124,7 +115,6 @@ export default function ModernLayout({ children }: ModernLayoutProps) {
               className={`modern-nav-item ${location.pathname === '/billing' || location.pathname === '/pricing' ? 'active' : ''}`}
               onClick={() => navigate('/billing')}
               aria-label="Billing"
-              style={{ display: 'flex', alignItems: 'center' }}
             >
               <Icons.dollarSign size={16} />
               <span>Billing</span>

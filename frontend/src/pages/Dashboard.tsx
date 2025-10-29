@@ -367,10 +367,15 @@ export default function Dashboard() {
                         <span className="ai-ats-value">{score}%</span>
                       </div>
                       <div className="ai-ats-bar">
-                        <div
-                          className={`ai-ats-fill ${score >= 80 ? 'ai-ats-high' : score >= 60 ? 'ai-ats-medium' : 'ai-ats-low'}`}
-                          style={{ width: `${score}%` }}
-                        />
+                        {(() => {
+                          const pct = Math.max(0, Math.min(100, Math.round(score)));
+                          const widthClass = `w-[${pct}%]`;
+                          return (
+                            <div
+                              className={`ai-ats-fill ${score >= 80 ? 'ai-ats-high' : score >= 60 ? 'ai-ats-medium' : 'ai-ats-low'} ${widthClass}`}
+                            />
+                          );
+                        })()}
                       </div>
                     </div>
                   </div>

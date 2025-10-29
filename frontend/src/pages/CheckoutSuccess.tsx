@@ -55,10 +55,11 @@ export default function CheckoutSuccess() {
           <div className="modern-checkout-redirect">
             <p>Redirecting to dashboard in {countdown} seconds...</p>
             <div className="modern-countdown-bar">
-              <div
-                className="modern-countdown-fill"
-                style={{ width: `${(countdown / 5) * 100}%` }}
-              />
+              {(() => {
+                const pct = Math.max(0, Math.min(100, Math.round((countdown / 5) * 100)));
+                const widthClass = `w-[${pct}%]`;
+                return <div className={`modern-countdown-fill ${widthClass}`} />;
+              })()}
             </div>
           </div>
 

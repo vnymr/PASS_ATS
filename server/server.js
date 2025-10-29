@@ -1404,7 +1404,8 @@ app.get('/api/job/:jobId/status', authenticateToken, async (req, res) => {
 });
 
 // User's job history
-app.get('/api/jobs', authenticateToken, async (req, res) => {
+// Renamed to /api/my-jobs to avoid conflict with /routes/jobs.js (aggregated job board listings)
+app.get('/api/my-jobs', authenticateToken, async (req, res) => {
   try {
     const { limit = 20, offset = 0, status } = req.query;
 
@@ -2659,24 +2660,6 @@ app.get('/api/job/:jobId/download/pdf', authenticateToken, async (req, res) => {
   }
 });
 
-// Static file serving in production
-if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, '..', 'frontend', 'dist')));
-
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '..', 'frontend', 'dist', 'index.html'));
-  });
-}
-
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error('Unhandled error:', err);
-  res.status(500).json({
-    error: 'Internal server error',
-    message: process.env.NODE_ENV === 'development' ? err.message : undefined
-  });
-});
-
 // NEW SIMPLIFIED AI GENERATION ENDPOINT
 import { generateResumeEndpoint, checkCompilersEndpoint } from './lib/simplified-api.js';
 import { extractJobHandler } from './routes/extract-job.js';
@@ -2693,11 +2676,29 @@ app.get('/api/check-compilers', authenticateToken, checkCompilersEndpoint);
 // Job extraction endpoint for Chrome extension
 app.post('/api/extract-job', authenticateToken, extractJobHandler);
 
-// Mount new routers
+// Mount new routers - MUST be before static file serving!
 app.use('/api', authenticateToken, jobsRouter);
 app.use('/api', authenticateToken, aiSearchRouter);
 app.use('/api', authenticateToken, autoApplyRouter);
 app.use('/api', authenticateToken, diagnosticsRouter);
+
+// Static file serving in production - MUST be AFTER API routes!
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(path.join(__dirname, '..', 'frontend', 'dist')));
+
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '..', 'frontend', 'dist', 'index.html'));
+  });
+}
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err);
+  res.status(500).json({
+    error: 'Internal server error',
+    message: process.env.NODE_ENV === 'development' ? err.message : undefined
+  });
+});
 
 // Start server
 const PORT = config.server.port;

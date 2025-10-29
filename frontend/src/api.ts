@@ -72,7 +72,7 @@ export const api = {
     return Promise.resolve({ month: new Date().toISOString().slice(0, 7), used: 0, remaining: 100, limit: 100 });
   },
   async resumes() {
-    const r = await fetch(`${API_URL}/api/jobs?status=COMPLETED&limit=20`, { headers: { ...authHeaders() } });
+    const r = await fetch(`${API_URL}/api/my-jobs?status=COMPLETED&limit=20`, { headers: { ...authHeaders() } });
     const result = await handle<{ jobs: any[] }>(r);
     return result.jobs.map((job: any) => ({
       fileName: `resume_${job.id}.pdf`,

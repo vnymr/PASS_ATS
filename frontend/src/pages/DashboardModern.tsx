@@ -5,6 +5,20 @@ import { api, type ResumeEntry, type Profile } from '../api-clerk';
 import Icons from '../components/ui/icons';
 import UpgradeLimitModal from '../components/UpgradeLimitModal';
 import ProfileCompletionBanner from '../components/ProfileCompletionBanner';
+import { SectionHeader } from '../ui/SectionHeader';
+import Card, { CardContent } from '../ui/Card';
+import { Input } from '../ui/Input';
+import { Button } from '../ui/Button';
+import { Badge } from '../ui/Badge';
+import { PromptBox } from '../components/ui/chatgpt-prompt-input';
+
+// Simple in-memory cache
+const dashboardCache = {
+  resumes: null as ResumeEntry[] | null,
+  profile: null as Profile | null,
+  timestamp: 0,
+  maxAge: 30000, // 30 seconds
+};
 
 export default function DashboardModern() {
   const { getToken } = useAuth();
@@ -22,9 +36,18 @@ export default function DashboardModern() {
   const [hoveredCard, setHoveredCard] = useState<number | null>(null);
   const [showLimitModal, setShowLimitModal] = useState(false);
   const [usageLimit, setUsageLimit] = useState({ used: 0, limit: 5 });
+  const hasLoadedRef = useRef(false);
 
   useEffect(() => {
-    loadDashboardData();
+    // Only load once per mount
+    if (!hasLoadedRef.current) {
+      hasLoadedRef.current = true;
+      loadDashboardData();
+    }
+  }, []);
+
+  useEffect(() => {
+    console.debug('[RUNTIME] Mounted: DashboardModern');
   }, []);
 
   useEffect(() => {
@@ -33,6 +56,19 @@ export default function DashboardModern() {
 
   async function loadDashboardData() {
     try {
+      // Check cache first - cache is valid if we have data and it's fresh
+      const now = Date.now();
+      const cacheValid = dashboardCache.timestamp > 0 && (now - dashboardCache.timestamp) < dashboardCache.maxAge;
+
+      if (cacheValid) {
+        console.log('📦 Using cached dashboard data');
+        setResumes(dashboardCache.resumes || []);
+        setProfile(dashboardCache.profile);
+        setLoading(false);
+        return;
+      }
+
+      console.log('🔄 Fetching fresh dashboard data');
       const token = await getToken();
       const [resumesData, profileData] = await Promise.all([
         api.getResumes(token || undefined),
@@ -41,13 +77,19 @@ export default function DashboardModern() {
 
       setProfile(profileData);
 
+      let resumesList: ResumeEntry[] = [];
       if (Array.isArray(resumesData)) {
-        setResumes(resumesData);
+        resumesList = resumesData;
       } else if (resumesData && typeof resumesData === 'object' && 'resumes' in resumesData) {
-        setResumes((resumesData as any).resumes || []);
-      } else {
-        setResumes([]);
+        resumesList = (resumesData as any).resumes || [];
       }
+
+      setResumes(resumesList);
+
+      // Update cache - always update, even if data is null/empty
+      dashboardCache.resumes = resumesList;
+      dashboardCache.profile = profileData;
+      dashboardCache.timestamp = Date.now();
     } catch (err) {
       console.error('Failed to load dashboard:', err);
       setResumes([]);
@@ -107,20 +149,26 @@ export default function DashboardModern() {
       console.log('✅ Job completed, fetching resumes...');
       const resumesData = await api.getResumes(token || undefined);
 
+      let resumesList: ResumeEntry[] = [];
       if (Array.isArray(resumesData)) {
+        resumesList = resumesData;
         setResumes(resumesData);
         if (resumesData.length > 0) {
           setLastGenerated(resumesData[0]);
           console.log(`📄 Found ${resumesData.length} resumes`);
         }
       } else if (resumesData && typeof resumesData === 'object' && 'resumes' in resumesData) {
-        const resumesList = (resumesData as any).resumes || [];
+        resumesList = (resumesData as any).resumes || [];
         setResumes(resumesList);
         if (resumesList.length > 0) {
           setLastGenerated(resumesList[0]);
           console.log(`📄 Found ${resumesList.length} resumes`);
         }
       }
+
+      // Update cache with new resume
+      dashboardCache.resumes = resumesList;
+      dashboardCache.timestamp = Date.now();
 
       setJobDescription('');
     } catch (err: any) {
@@ -204,17 +252,6 @@ export default function DashboardModern() {
   };
 
 
-  if (loading) {
-    return (
-      <div className="modern-loading-enhanced">
-        <div className="modern-loading-circle">
-          <div className="modern-loading-inner"></div>
-        </div>
-        <p className="modern-loading-text">Initializing workspace...</p>
-      </div>
-    );
-  }
-
   const filteredResumes = getFilteredResumes();
 
   return (
@@ -247,48 +284,24 @@ export default function DashboardModern() {
             {/* Profile Completion Banner - shown above job description if profile incomplete or missing */}
             <ProfileCompletionBanner isComplete={profile?.isComplete ?? false} />
 
-            <div className="modern-textarea-container">
-              <textarea
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleGenerate();
+              }}
+              className="w-full"
+            >
+              <PromptBox
                 ref={textareaRef}
-                className="modern-textarea-enhanced"
-                placeholder="Paste the job description here to generate a tailored resume..."
                 value={jobDescription}
                 onChange={(e) => {
                   setJobDescription(e.target.value);
                   setError('');
                 }}
-                onKeyDown={handleKeyDown}
+                placeholder="Paste the job description here to generate a tailored resume..."
                 disabled={isGenerating}
-                aria-label="Job description"
               />
-
-              <div className="modern-textarea-footer">
-                <div className="modern-keyboard-hint">
-                  <kbd className="modern-key">Ctrl</kbd>
-                  <span>+</span>
-                  <kbd className="modern-key">Enter</kbd>
-                  <span>to generate</span>
-                </div>
-
-                <button
-                  className={`modern-generate-btn ${isGenerating ? 'generating' : ''}`}
-                  onClick={handleGenerate}
-                  disabled={isGenerating || !jobDescription.trim()}
-                >
-                  {isGenerating ? (
-                    <>
-                      <div className="modern-btn-spinner"></div>
-                      <span>Generating...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Icons.zap size={18} />
-                      <span>Generate Resume</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
+            </form>
 
             {/* Progress Indicator */}
             {isGenerating && (
@@ -341,108 +354,105 @@ export default function DashboardModern() {
           </div>
         </div>
 
-        {/* History Section */}
-        <div id="history-section" className="modern-history-section">
-          <div className="modern-history-header">
-            <div className="modern-history-title-group">
-              <Icons.clock size={24} />
-              <h2>Generation History</h2>
-              <span className="modern-history-count">{filteredResumes.length}</span>
-            </div>
-
-            <div className="modern-history-controls">
-              <div className="modern-search-box">
-                <Icons.search size={18} />
-                <input
-                  type="text"
-                  placeholder="Search resumes..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="modern-search-input-enhanced"
-                />
-                {searchTerm && (
-                  <button
-                    onClick={() => setSearchTerm('')}
-                    className="modern-search-clear"
-                  >
-                    <Icons.x size={14} />
-                  </button>
-                )}
-              </div>
-
-              <div className="modern-filter-group">
-                {['all', 'recent', 'week'].map((filterType) => (
-                  <button
-                    key={filterType}
-                    className={`modern-filter-btn ${filter === filterType ? 'active' : ''}`}
-                    onClick={() => setFilter(filterType as any)}
-                  >
-                    {filterType.charAt(0).toUpperCase() + filterType.slice(1)}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {filteredResumes.length > 0 ? (
-            <div className="modern-resume-grid">
-              {filteredResumes.map((resume, idx) => (
-                <div
-                  key={idx}
-                  className={`modern-resume-card ${hoveredCard === idx ? 'hovered' : ''}`}
-                  onMouseEnter={() => setHoveredCard(idx)}
-                  onMouseLeave={() => setHoveredCard(null)}
-                >
-                  <div className="modern-resume-card-inner">
-                    <div className="modern-resume-icon">
-                      <Icons.fileText size={32} />
-                    </div>
-
-                    <div className="modern-resume-content">
-                      <h3 className="modern-resume-company">
-                        {resume.company || 'Unknown Company'}
-                      </h3>
-                      <p className="modern-resume-role">
-                        {resume.role || 'Position not specified'}
-                      </p>
-
-                      <div className="modern-resume-meta">
-                        <span className="modern-resume-date">
-                          <Icons.calendar size={14} />
-                          {formatDate(resume.createdAt)}
-                        </span>
-                        <span className="modern-resume-size">
-                          <Icons.file size={14} />
-                          {formatFileSize()}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="modern-resume-actions">
-                      <button
-                        className="modern-resume-download"
-                        onClick={() => downloadResume(resume.fileName)}
-                        aria-label="Download resume"
-                      >
-                        <Icons.download size={18} />
-                      </button>
-                    </div>
+        {/* History Section (refactored to UI kit) */}
+        <div id="history-section" className="mt-10">
+          <SectionHeader
+            icon={<Icons.clock size={22} />}
+            title="Generation History"
+            count={filteredResumes.length}
+            right={
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <Input
+                    placeholder="Search resumes..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-9 w-64"
+                  />
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400">
+                    <Icons.search size={16} />
                   </div>
                 </div>
+                <Button variant={filter === 'all' ? 'solid' : 'outline'} size="sm" onClick={() => setFilter('all')}>All</Button>
+                <Button variant={filter === 'recent' ? 'solid' : 'outline'} size="sm" onClick={() => setFilter('recent')}>Recent</Button>
+                <Button variant={filter === 'week' ? 'solid' : 'outline'} size="sm" onClick={() => setFilter('week')}>Week</Button>
+              </div>
+            }
+            className="mb-6"
+          />
+
+          {loading ? (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {[1, 2, 3].map((i) => (
+                <Card key={i}>
+                  <CardContent className="pt-5">
+                    <div className="flex items-start gap-3 animate-pulse">
+                      <div className="w-5 h-5 bg-gray-200 rounded"></div>
+                      <div className="flex-1 space-y-2">
+                        <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                        <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                        <div className="flex gap-3 mt-2">
+                          <div className="h-3 bg-gray-200 rounded w-20"></div>
+                          <div className="h-3 bg-gray-200 rounded w-16"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : filteredResumes.length > 0 ? (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {filteredResumes.map((resume, idx) => (
+                <Card key={idx}>
+                  <CardContent className="pt-5">
+                    <div className="flex items-start gap-3">
+                      <div className="text-primary-600 mt-0.5"><Icons.fileText size={20} /></div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <h3 className="font-semibold truncate">{resume.company || 'Unknown Company'}</h3>
+                            <p className="text-xs text-neutral-600 truncate">{resume.role || 'Position not specified'}</p>
+                          </div>
+                        </div>
+                        <div className="mt-2 flex items-center gap-3 text-xs text-neutral-500">
+                          <span className="inline-flex items-center gap-1">
+                            <Icons.calendar size={14} />
+                            {formatDate(resume.createdAt)}
+                          </span>
+                          <span className="inline-flex items-center gap-1">
+                            <Icons.file size={14} />
+                            {formatFileSize()}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="self-start">
+                        <Button
+                          aria-label="Download resume"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => downloadResume(resume.fileName)}
+                        >
+                          <Icons.download size={16} />
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
               ))}
             </div>
           ) : (
-            <div className="modern-empty-state">
-              <div className="modern-empty-illustration">
-                <Icons.inbox size={64} />
-              </div>
-              <h3>No resumes found</h3>
-              <p>
-                {searchTerm
-                  ? `No results matching "${searchTerm}"`
-                  : 'Generate your first resume to get started'}
-              </p>
-            </div>
+            <Card>
+              <CardContent className="pt-5">
+                <div className="text-center py-8">
+                  <div className="mx-auto mb-3 text-neutral-400"><Icons.inbox size={40} /></div>
+                  <h3 className="text-base font-semibold">No resumes found</h3>
+                  <p className="text-sm text-neutral-600">
+                    {searchTerm ? `No results matching "${searchTerm}"` : 'Generate your first resume to get started'}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
           )}
         </div>
       </div>

@@ -1,6 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { api, type ResumeEntry } from '../api-adapter';
 import Icons from '../components/ui/icons';
+import { SectionHeader } from '../ui/SectionHeader';
+import Card, { CardContent } from '../ui/Card';
+import { Input } from '../ui/Input';
+import { Button } from '../ui/Button';
+import { Badge } from '../ui/Badge';
 
 export default function History() {
   const [resumes, setResumes] = useState<ResumeEntry[]>([]);
@@ -82,9 +87,11 @@ export default function History() {
 
   if (loading) {
     return (
-      <div className="loading-container">
-        <Icons.loader className="animate-spin" size={48} />
-        <p>Loading resume history...</p>
+      <div className="flex items-center justify-center py-16">
+        <div className="flex flex-col items-center gap-3 text-neutral-600">
+          <Icons.loader className="animate-spin" size={32} />
+          <p className="text-sm">Loading resume history...</p>
+        </div>
       </div>
     );
   }
@@ -92,163 +99,127 @@ export default function History() {
   const filteredResumes = getFilteredResumes();
 
   return (
-    <div className="history-container">
-      <div className="page-header">
-        <div className="page-header-content">
-          <h1 className="page-title">Resume History</h1>
-          <p className="page-subtitle">
-            View and manage all your generated resumes. Download, share, or track your applications.
-          </p>
-        </div>
-      </div>
+    <div className="max-w-5xl mx-auto px-4 py-8">
+      <SectionHeader
+        icon={<Icons.clock size={22} />}
+        title="Generation History"
+        count={filteredResumes.length}
+        right={
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Input
+                placeholder="Search by company or role..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-9 w-72"
+              />
+              <div className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400">
+                <Icons.search size={16} />
+              </div>
+            </div>
+            <Button variant={filter === 'all' ? 'solid' : 'outline'} size="sm" onClick={() => setFilter('all')}>All</Button>
+            <Button variant={filter === 'recent' ? 'solid' : 'outline'} size="sm" onClick={() => setFilter('recent')}>Recent</Button>
+            <Button variant={filter === 'this-month' ? 'solid' : 'outline'} size="sm" onClick={() => setFilter('this-month')}>Week</Button>
+          </div>
+        }
+        className="mb-6"
+      />
 
-      {/* Filters and Search */}
-      <div className="history-controls">
-        <div className="search-box">
-          <Icons.search size={18} className="search-icon" />
-          <input
-            type="text"
-            placeholder="Search by company or role..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="search-input"
-          />
-        </div>
-
-        <div className="filter-tabs">
-          <button
-            className={`filter-tab ${filter === 'all' ? 'active' : ''}`}
-            onClick={() => setFilter('all')}
-          >
-            All Resumes
-          </button>
-          <button
-            className={`filter-tab ${filter === 'recent' ? 'active' : ''}`}
-            onClick={() => setFilter('recent')}
-          >
-            Recent (7 days)
-          </button>
-          <button
-            className={`filter-tab ${filter === 'this-month' ? 'active' : ''}`}
-            onClick={() => setFilter('this-month')}
-          >
-            This Month
-          </button>
-        </div>
-      </div>
-
-      {/* Results Summary */}
-      <div className="results-summary">
-        <p>
-          Showing {filteredResumes.length} of {resumes.length} resumes
-          {searchTerm && ` matching "${searchTerm}"`}
-        </p>
-      </div>
-
-      {/* Resume List */}
       {error && (
-        <div className="error-message">
+        <div className="mb-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 inline-flex items-center gap-2">
           <Icons.alertCircle size={16} />
           {error}
         </div>
       )}
 
       {filteredResumes.length > 0 ? (
-        <div className="resumes-grid">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filteredResumes.map((resume, idx) => {
             const score = getATSScore();
             const status = getStatus();
             return (
-              <div key={idx} className="resume-card">
-                <div className="resume-header">
-                  <div className="resume-title">
-                    <h3 className="resume-company">
-                      {resume.jobUrl ? (
-                        <a 
-                          href={resume.jobUrl} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="company-link"
-                        >
-                          {resume.company || 'Unknown Company'}
-                        </a>
-                      ) : (
-                        resume.company || 'Unknown Company'
-                      )}
-                    </h3>
-                    <p className="resume-role">{resume.role || 'Position'}</p>
+              <Card key={idx}>
+                <CardContent className="pt-5">
+                  <div className="flex items-start gap-3">
+                    <div className="text-primary-600 mt-0.5"><Icons.fileText size={20} /></div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <h3 className="font-semibold truncate">
+                            {resume.jobUrl ? (
+                              <a href={resume.jobUrl} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                                {resume.company || 'Unknown Company'}
+                              </a>
+                            ) : (
+                              resume.company || 'Unknown Company'
+                            )}
+                          </h3>
+                          <p className="text-xs text-neutral-600 truncate">{resume.role || 'Position'}</p>
+                        </div>
+                        <Badge>{status}</Badge>
+                      </div>
+                      <div className="mt-2 flex items-center gap-3 text-xs text-neutral-500">
+                        <span className="inline-flex items-center gap-1">
+                          <Icons.calendar size={14} />
+                          {resume.createdAt ? new Date(resume.createdAt).toLocaleDateString() : 'N/A'}
+                        </span>
+                        <span className="inline-flex items-center gap-1">
+                          <Icons.barChart2 size={14} />
+                          ATS: {score}%
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="resume-status">
-                    <span className={`status-badge ${
-                      status === 'Completed' ? 'status-completed' :
-                      status === 'Submitted' ? 'status-submitted' :
-                      'status-review'
-                    }`}>
-                      {status}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="resume-meta">
-                  <div className="meta-item">
-                    <Icons.calendar size={14} />
-                    <span>
-                      {resume.createdAt ? new Date(resume.createdAt).toLocaleDateString() : 'N/A'}
-                    </span>
-                  </div>
-                  <div className="meta-item">
-                    <Icons.barChart2 size={14} />
-                    <span>ATS Score: {score}%</span>
-                  </div>
-                </div>
-
-                <div className="resume-actions">
-                  <button
-                    onClick={() => downloadResume(resume.fileName)}
-                    className="btn btn-primary btn-sm"
-                    title="Download PDF"
-                  >
-                    <Icons.download size={16} />
-                    Download PDF
-                  </button>
-                  {resume.texUrl && (
-                    <button
-                      onClick={() => window.open(resume.texUrl, '_blank')}
-                      className="btn btn-ghost btn-sm"
-                      title="View LaTeX Source"
+                  <div className="mt-4 flex items-center justify-between">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => downloadResume(resume.fileName)}
+                      aria-label="Download resume"
                     >
-                      <Icons.code size={16} />
-                      LaTeX
-                    </button>
-                  )}
-                </div>
-              </div>
+                      <Icons.download size={16} />
+                      Download
+                    </Button>
+                    {resume.texUrl && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => window.open(resume.texUrl!, '_blank')}
+                        aria-label="View LaTeX source"
+                      >
+                        <Icons.code size={16} />
+                        LaTeX
+                      </Button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
             );
           })}
         </div>
       ) : (
-        <div className="empty-state">
-          <Icons.fileText size={48} className="empty-icon" />
-          <h3 className="empty-title">No resumes found</h3>
-          <p className="empty-text">
-            {searchTerm 
-              ? `No resumes match "${searchTerm}". Try a different search term.`
-              : filter === 'recent' 
-                ? 'No resumes generated in the last 7 days.'
-                : filter === 'this-month'
-                  ? 'No resumes generated this month.'
-                  : 'You haven\'t generated any resumes yet.'
-            }
-          </p>
-          {!searchTerm && filter === 'all' && (
-            <button 
-              onClick={() => window.location.href = '/generate'}
-              className="btn btn-primary"
-            >
-              Generate Your First Resume
-            </button>
-          )}
-        </div>
+        <Card>
+          <CardContent className="pt-5">
+            <div className="text-center py-8">
+              <div className="mx-auto mb-3 text-neutral-400"><Icons.fileText size={40} /></div>
+              <h3 className="text-base font-semibold">No resumes found</h3>
+              <p className="text-sm text-neutral-600 mt-1">
+                {searchTerm
+                  ? `No resumes match "${searchTerm}". Try a different search term.`
+                  : filter === 'recent'
+                    ? 'No resumes generated in the last 7 days.'
+                    : filter === 'this-month'
+                      ? 'No resumes generated this month.'
+                      : 'You have not generated any resumes yet.'}
+              </p>
+              {!searchTerm && filter === 'all' && (
+                <Button className="mt-4" onClick={() => (window.location.href = '/generate')}>
+                  Generate Your First Resume
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
       )}
     </div>
   );

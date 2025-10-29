@@ -2,6 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@clerk/clerk-react';
 import Icons from '../components/ui/icons';
 import BillingSection from '../components/BillingSection';
+import { Tabs } from '../ui/Tabs';
+import Card, { CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '../ui/Card';
+import { Label } from '../ui/Label';
+import { Input } from '../ui/Input';
+import { Textarea } from '../ui/Textarea';
+import { Button } from '../ui/Button';
 
 // Define the profile type with all fields
 type Profile = {
@@ -64,6 +70,10 @@ export default function MemoryProfile() {
       setLoading(false);
     }
   }, [isLoaded, isSignedIn]);
+
+  useEffect(() => {
+    console.debug('[RUNTIME] Mounted: MemoryProfile');
+  }, []);
 
   // Auto-dismiss error and success messages after 3 seconds
   useEffect(() => {
@@ -400,347 +410,242 @@ export default function MemoryProfile() {
   }
 
   return (
-    <>
-      {/* Toast Notifications */}
+    <div className="max-w-5xl mx-auto px-4 py-8">
       {(error || success) && (
-        <div className="toast-container">
+        <div className="mb-4">
           {error && (
-            <div className="toast error">
-              <div className="toast-icon">✕</div>
-              <div className="toast-message">{error}</div>
+            <div className="mb-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 inline-flex items-center gap-2">
+              <span>✕</span>
+              <span>{error}</span>
             </div>
           )}
           {success && (
-            <div className="toast success">
-              <div className="toast-icon">✓</div>
-              <div className="toast-message">Profile saved successfully!</div>
+            <div className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 inline-flex items-center gap-2">
+              <span>✓</span>
+              <span>Profile saved successfully!</span>
             </div>
           )}
         </div>
       )}
 
-      {/* Sidebar Layout */}
-      <div className="profile-layout">
-        {/* Sidebar Navigation */}
-        <aside className="profile-sidebar">
-          <nav className="profile-sidebar-nav">
-            <button
-              className={`profile-sidebar-item ${activeTab === 'personal' ? 'active' : ''}`}
-              onClick={() => setActiveTab('personal')}
-            >
-              <Icons.user size={18} />
-              <span>Personal</span>
-            </button>
-            <button
-              className={`profile-sidebar-item ${activeTab === 'summary' ? 'active' : ''}`}
-              onClick={() => setActiveTab('summary')}
-            >
-              <Icons.fileText size={18} />
-              <span>Summary</span>
-            </button>
-            <button
-              className={`profile-sidebar-item ${activeTab === 'skills' ? 'active' : ''}`}
-              onClick={() => setActiveTab('skills')}
-            >
-              <Icons.award size={18} />
-              <span>Skills</span>
-            </button>
-            <button
-              className={`profile-sidebar-item ${activeTab === 'experience' ? 'active' : ''}`}
-              onClick={() => setActiveTab('experience')}
-            >
-              <Icons.briefcase size={18} />
-              <span>Experience</span>
-            </button>
-            <button
-              className={`profile-sidebar-item ${activeTab === 'additional' ? 'active' : ''}`}
-              onClick={() => setActiveTab('additional')}
-            >
-              <Icons.fileText size={18} />
-              <span>Notes</span>
-            </button>
-            <button
-              className={`profile-sidebar-item ${activeTab === 'resume' ? 'active' : ''}`}
-              onClick={() => setActiveTab('resume')}
-            >
-              <Icons.file size={18} />
-              <span>Resume</span>
-            </button>
-            <button
-              className={`profile-sidebar-item ${activeTab === 'billing' ? 'active' : ''}`}
-              onClick={() => setActiveTab('billing')}
-            >
-              <Icons.creditCard size={18} />
-              <span>Billing</span>
-            </button>
-          </nav>
-        </aside>
+      <Tabs
+        value={activeTab}
+        onChange={(t) => setActiveTab(t)}
+        tabs={[
+          { value: 'personal', label: 'Personal' },
+          { value: 'summary', label: 'Summary' },
+          { value: 'skills', label: 'Skills' },
+          { value: 'experience', label: 'Experience' },
+          { value: 'additional', label: 'Notes' },
+          { value: 'resume', label: 'Resume' },
+          { value: 'billing', label: 'Billing' },
+        ]}
+        className="mb-6"
+      />
 
-        {/* Main Content */}
-        <main className="profile-main">
-
-        {/* Tab Content */}
-        <div className="modern-profile-content">
-          {activeTab === 'personal' ? (
-            <div className="profile-section">
-              <h1 className="profile-section-title">Personal</h1>
-              <p className="profile-section-subtitle">Your basic contact details</p>
-
-              <div className="profile-form-grid">
-                <div className="profile-form-field">
-                  <label className="profile-form-label">Full Name</label>
-                  <input
-                    type="text"
-                    className="profile-form-input"
-                    value={formData.name}
-                    onChange={(e) => setFormData({...formData, name: e.target.value})}
-                    placeholder="John Doe"
-                  />
-                </div>
-
-                <div className="profile-form-field">
-                  <label className="profile-form-label">Email</label>
-                  <input
-                    type="email"
-                    className="profile-form-input"
-                    value={formData.email}
-                    onChange={(e) => setFormData({...formData, email: e.target.value})}
-                    placeholder="john.doe@example.com"
-                  />
-                </div>
-
-                <div className="profile-form-field">
-                  <label className="profile-form-label">Phone</label>
-                  <input
-                    type="tel"
-                    className="profile-form-input"
-                    value={formData.phone}
-                    onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                    placeholder="+1 (555) 123-4567"
-                  />
-                </div>
-
-                <div className="profile-form-field">
-                  <label className="profile-form-label">Location</label>
-                  <input
-                    type="text"
-                    className="profile-form-input"
-                    value={formData.location}
-                    onChange={(e) => setFormData({...formData, location: e.target.value})}
-                    placeholder="San Francisco, CA"
-                  />
-                </div>
-
-                <div className="profile-form-field">
-                  <label className="profile-form-label">LinkedIn</label>
-                  <input
-                    type="url"
-                    className="profile-form-input"
-                    value={formData.linkedin}
-                    onChange={(e) => setFormData({...formData, linkedin: e.target.value})}
-                    placeholder="https://linkedin.com/in/johndoe"
-                  />
-                </div>
-
-                <div className="profile-form-field">
-                  <label className="profile-form-label">Website</label>
-                  <input
-                    type="url"
-                    className="profile-form-input"
-                    value={formData.website}
-                    onChange={(e) => setFormData({...formData, website: e.target.value})}
-                    placeholder="https://johndoe.com"
-                  />
-                </div>
+      {activeTab === 'personal' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Personal</CardTitle>
+            <CardDescription>Your basic contact details</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label>Full Name</Label>
+                <Input value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="John Doe" />
+              </div>
+              <div>
+                <Label>Email</Label>
+                <Input type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} placeholder="john.doe@example.com" />
+              </div>
+              <div>
+                <Label>Phone</Label>
+                <Input value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} placeholder="+1 (555) 123-4567" />
+              </div>
+              <div>
+                <Label>Location</Label>
+                <Input value={formData.location} onChange={(e) => setFormData({ ...formData, location: e.target.value })} placeholder="San Francisco, CA" />
+              </div>
+              <div>
+                <Label>LinkedIn</Label>
+                <Input value={formData.linkedin} onChange={(e) => setFormData({ ...formData, linkedin: e.target.value })} placeholder="https://linkedin.com/in/johndoe" />
+              </div>
+              <div>
+                <Label>Website</Label>
+                <Input value={formData.website} onChange={(e) => setFormData({ ...formData, website: e.target.value })} placeholder="https://johndoe.com" />
               </div>
             </div>
-          ) : activeTab === 'summary' ? (
-            <div className="profile-section">
-              <h1 className="profile-section-title">Professional Summary</h1>
-              <p className="profile-section-subtitle">Brief overview of your professional background and career objectives</p>
+          </CardContent>
+        </Card>
+      )}
 
-              <div className="profile-form-field full-width">
-                <label className="profile-form-label">Summary</label>
-                <textarea
-                  className="profile-form-textarea"
-                  value={formData.summary}
-                  onChange={(e) => setFormData({...formData, summary: e.target.value})}
-                  placeholder="Write a compelling summary of your professional experience, key achievements, technical skills, and career objectives. This summary will be tailored for each job application.
-
-Example: Experienced Software Engineer with 5+ years of expertise in full-stack development, specializing in React, Node.js, and cloud technologies. Proven track record of delivering scalable solutions..."
-                  rows={12}
-                />
-                <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)', fontSize: '14px' }}>
-                  <Icons.info size={14} />
-                  <span>Tip: Write 3-5 sentences highlighting your experience, skills, and what makes you unique.</span>
-                </div>
-              </div>
-            </div>
-          ) : activeTab === 'skills' ? (
-            <div className="profile-section">
-              <h1 className="profile-section-title">Skills & Expertise</h1>
-              <p className="profile-section-subtitle">Your technical and professional skills</p>
-
-              <div className="modern-profile-skills">
-                <div className="modern-profile-skill-input-group">
-                  <input
-                    type="text"
-                    className="modern-profile-input"
-                    value={newSkill}
-                    onChange={(e) => setNewSkill(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && addSkill()}
-                    placeholder="Add a skill..."
-                  />
-                  <button onClick={addSkill} className="modern-profile-add-btn">
-                    <Icons.plus size={20} />
-                    Add
-                  </button>
-                </div>
-                <div className="modern-profile-skills-list">
-                  {formData.skills.map((skill) => (
-                    <span key={skill} className="modern-profile-skill-tag">
-                      {skill}
-                      <button
-                        onClick={() => removeSkill(skill)}
-                        className="modern-profile-skill-remove"
-                        aria-label={`Remove ${skill}`}
-                      >
-                        <Icons.x size={14} />
-                      </button>
-                    </span>
-                  ))}
-                  {formData.skills.length === 0 && (
-                    <p className="modern-profile-empty-state">
-                      No skills added yet. Start adding your skills above or upload a resume to auto-fill.
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-          ) : activeTab === 'experience' ? (
-            <div className="profile-section">
-              <h1 className="profile-section-title">Work Experience</h1>
-              <p className="profile-section-subtitle">Your professional work history</p>
-
-              <div className="modern-profile-experiences">
-                {formData.experiences.map((exp, index) => (
-                  <div key={index} className="modern-profile-experience-card">
-                    <div className="modern-profile-experience-header">
-                      <h3 className="modern-profile-experience-title">{exp.role}</h3>
-                      <span className="modern-profile-experience-company">{exp.company}</span>
-                    </div>
-                    <div className="modern-profile-experience-meta">
-                      <span className="modern-profile-experience-date">{exp.dates}</span>
-                      {exp.location && <span className="modern-profile-experience-location">{exp.location}</span>}
-                    </div>
-                    {exp.bullets && exp.bullets.length > 0 && (
-                      <ul className="modern-profile-experience-bullets">
-                        {exp.bullets.map((bullet: string, idx: number) => (
-                          <li key={idx}>{bullet}</li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                ))}
-                {formData.experiences.length === 0 && (
-                  <p className="modern-profile-empty-state">
-                    No experiences added yet. Upload a resume to auto-fill your work history.
-                  </p>
-                )}
-              </div>
-            </div>
-          ) : activeTab === 'additional' ? (
-            <div className="profile-section">
-              <h1 className="profile-section-title">Additional Information</h1>
-              <p className="profile-section-subtitle">Any other relevant details or notes</p>
-
-              <div className="profile-form-field full-width">
-                <label className="profile-form-label">Additional Information</label>
-                <textarea
-                  className="profile-form-textarea"
-                  value={additionalInfo}
-                  onChange={(e) => setAdditionalInfo(e.target.value)}
-                  placeholder="Add any additional information, certifications, awards, or notes..."
-                  rows={12}
-                />
-              </div>
-            </div>
-          ) : activeTab === 'resume' ? (
-            <div className="profile-section">
-              <h1 className="profile-section-title">Resume Text</h1>
-              <p className="profile-section-subtitle">Raw text content of your resume</p>
-
-              <div className="profile-form-field full-width">
-                <label className="profile-form-label">Resume Content</label>
-                <textarea
-                  className="profile-form-textarea"
-                  style={{ fontFamily: 'ui-monospace, monospace' }}
-                  value={resumeText}
-                  onChange={(e) => setResumeText(e.target.value)}
-                  placeholder="Paste your resume content here or upload a file to auto-fill..."
-                  rows={20}
-                />
-              </div>
-            </div>
-          ) : activeTab === 'billing' ? (
-            <BillingSection />
-          ) : null}
-        </div>
-
-        {/* Action Buttons */}
-        {activeTab !== 'billing' && (
-            <div className="profile-actions">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".pdf,.docx,.txt"
-                onChange={handleResumeUpload}
-                style={{ display: 'none' }}
+      {activeTab === 'summary' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Professional Summary</CardTitle>
+            <CardDescription>Brief overview of your professional background and career objectives</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div>
+              <Label>Summary</Label>
+              <Textarea
+                value={formData.summary}
+                onChange={(e) => setFormData({ ...formData, summary: e.target.value })}
+                placeholder={
+                  'Write a compelling summary of your professional experience, key achievements, technical skills, and career objectives.'
+                }
+                rows={12}
               />
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploadingResume}
-                className="modern-btn-secondary"
-              >
-                {uploadingResume ? (
-                  <>
-                    <div className="modern-btn-spinner"></div>
-                    Parsing...
-                  </>
-                ) : (
-                  <>
-                    <Icons.upload size={18} />
-                    Upload Resume
-                  </>
-                )}
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="modern-btn-primary"
-              >
-                {saving ? (
-                  <>
-                    <div className="modern-btn-spinner"></div>
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <Icons.check size={18} />
-                    Save Profile
-                  </>
-                )}
-              </button>
-              {autoSaving && (
-                <span className="auto-save-indicator">
-                  <Icons.loader className="animate-spin" size={14} />
-                  Auto-saving...
+              <div className="mt-3 flex items-center gap-2 text-neutral-600 text-sm">
+                <Icons.info size={14} />
+                <span>Tip: Write 3-5 sentences highlighting your experience, skills, and what makes you unique.</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {activeTab === 'skills' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Skills & Expertise</CardTitle>
+            <CardDescription>Your technical and professional skills</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex gap-2">
+              <Input
+                value={newSkill}
+                onChange={(e) => setNewSkill(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && addSkill()}
+                placeholder="Add a skill..."
+              />
+              <Button onClick={addSkill} variant="outline">
+                <Icons.plus size={18} />
+                Add
+              </Button>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {formData.skills.map((skill) => (
+                <span key={skill} className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 text-neutral-700 px-3 py-1 text-sm">
+                  {skill}
+                  <button onClick={() => removeSkill(skill)} aria-label={`Remove ${skill}`} className="text-neutral-500 hover:text-neutral-700">
+                    <Icons.x size={14} />
+                  </button>
                 </span>
+              ))}
+              {formData.skills.length === 0 && (
+                <p className="text-sm text-neutral-600">No skills added yet. Start adding your skills above or upload a resume to auto-fill.</p>
               )}
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {activeTab === 'experience' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Work Experience</CardTitle>
+            <CardDescription>Your professional work history</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col gap-3">
+              {formData.experiences.map((exp, index) => (
+                <div key={index} className="rounded-xl border border-neutral-200 p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-semibold">{exp.role}</h3>
+                      <p className="text-sm text-neutral-600">{exp.company}</p>
+                    </div>
+                    <div className="text-sm text-neutral-500">{exp.dates}</div>
+                  </div>
+                  {exp.location && <div className="text-xs text-neutral-500 mt-1">{exp.location}</div>}
+                  {exp.bullets && exp.bullets.length > 0 && (
+                    <ul className="mt-3 list-disc pl-5 text-sm text-neutral-700">
+                      {exp.bullets.map((bullet: string, idx: number) => (
+                        <li key={idx}>{bullet}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ))}
+              {formData.experiences.length === 0 && (
+                <p className="text-sm text-neutral-600">No experiences added yet. Upload a resume to auto-fill your work history.</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {activeTab === 'additional' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Additional Information</CardTitle>
+            <CardDescription>Any other relevant details or notes</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div>
+              <Label>Additional Information</Label>
+              <Textarea value={additionalInfo} onChange={(e) => setAdditionalInfo(e.target.value)} placeholder="Add any additional information, certifications, awards, or notes..." rows={10} />
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {activeTab === 'resume' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Resume Text</CardTitle>
+            <CardDescription>Raw text content of your resume</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div>
+              <Label>Resume Content</Label>
+              <Textarea className="font-mono" value={resumeText} onChange={(e) => setResumeText(e.target.value)} placeholder="Paste your resume content here or upload a file to auto-fill..." rows={16} />
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {activeTab === 'billing' && <BillingSection />}
+
+      {activeTab !== 'billing' && (
+        <div className="flex items-center gap-3 mt-6">
+          <input ref={fileInputRef} type="file" accept=".pdf,.docx,.txt" onChange={handleResumeUpload} className="hidden" />
+          <Button onClick={() => fileInputRef.current?.click()} variant="outline" disabled={uploadingResume}>
+            {uploadingResume ? (
+              <>
+                <div className="modern-btn-spinner" />
+                Parsing...
+              </>
+            ) : (
+              <>
+                <Icons.upload size={18} />
+                Upload Resume
+              </>
+            )}
+          </Button>
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? (
+              <>
+                <div className="modern-btn-spinner" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Icons.check size={18} />
+                Save Profile
+              </>
+            )}
+          </Button>
+          {autoSaving && (
+            <span className="text-sm text-neutral-600 inline-flex items-center gap-2">
+              <Icons.loader className="animate-spin" size={14} />
+              Auto-saving...
+            </span>
           )}
-        </main>
-      </div>
-    </>
+        </div>
+      )}
+    </div>
   );
 }

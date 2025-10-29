@@ -4,7 +4,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { ClerkProvider } from '@clerk/clerk-react';
 import { ThemeProvider } from 'next-themes';
 import App from './App';
-import './styles.css';
+import './index.css';
 
 const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY || 'pk_test_placeholder';
 
@@ -30,70 +30,39 @@ function ClerkErrorBoundary({ children }: { children: React.ReactNode }) {
 
   if (hasError) {
     return (
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: '100vh',
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-        padding: '20px',
-        fontFamily: 'system-ui, -apple-system, sans-serif'
-      }}>
-        <div style={{
-          background: 'white',
-          padding: '40px',
-          borderRadius: '20px',
-          maxWidth: '600px',
-          boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
-        }}>
-          <h1 style={{ color: '#333', marginBottom: '20px' }}>⚠️ Authentication Service Blocked</h1>
-          <p style={{ color: '#666', lineHeight: '1.6', marginBottom: '20px' }}>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-500 to-accent-600 p-5 font-sans">
+        <div className="bg-white text-gray-800 rounded-2xl max-w-[600px] w-full shadow-2xl p-10">
+          <h1 className="text-xl font-semibold mb-5">⚠️ Authentication Service Blocked</h1>
+          <p className="text-gray-600 leading-relaxed mb-5">
             Our authentication service (Clerk) is being blocked. This is usually caused by:
           </p>
-          <ul style={{ color: '#666', marginLeft: '20px', marginBottom: '20px' }}>
+          <ul className="text-gray-600 list-disc pl-5 mb-5">
             <li>Ad blocker (uBlock Origin, AdBlock Plus, Brave Shields)</li>
             <li>Privacy extension blocking third-party scripts</li>
             <li>Browser privacy settings</li>
           </ul>
-          <p style={{ color: '#666', marginBottom: '20px' }}>
+          <p className="text-gray-600 mb-7">
             <strong>Quick fix:</strong>
           </p>
-          <ol style={{ color: '#666', marginLeft: '20px', marginBottom: '30px', lineHeight: '1.8' }}>
+          <ol className="text-gray-600 list-decimal pl-5 mb-8 leading-7">
             <li>Disable your ad blocker for happyresumes.com</li>
             <li>Or whitelist: *.clerk.accounts.dev</li>
             <li>Refresh the page</li>
           </ol>
-          <button
-            onClick={() => window.location.reload()}
-            style={{
-              background: '#667eea',
-              color: 'white',
-              border: 'none',
-              padding: '12px 24px',
-              borderRadius: '8px',
-              fontSize: '16px',
-              fontWeight: '600',
-              cursor: 'pointer',
-              marginRight: '10px'
-            }}
-          >
-            🔄 Retry
-          </button>
-          <a
-            href="/debug.html"
-            style={{
-              display: 'inline-block',
-              background: '#6c757d',
-              color: 'white',
-              textDecoration: 'none',
-              padding: '12px 24px',
-              borderRadius: '8px',
-              fontSize: '16px',
-              fontWeight: '600'
-            }}
-          >
-            🔍 Run Diagnostics
-          </a>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => window.location.reload()}
+              className="inline-flex items-center justify-center bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg text-base font-semibold"
+            >
+              🔄 Retry
+            </button>
+            <a
+              href="/debug.html"
+              className="inline-block bg-gray-600 hover:bg-gray-700 text-white no-underline px-4 py-2 rounded-lg text-base font-semibold"
+            >
+              🔍 Run Diagnostics
+            </a>
+          </div>
         </div>
       </div>
     );

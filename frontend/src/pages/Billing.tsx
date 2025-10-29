@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '@clerk/clerk-react';
 import { useNavigate } from 'react-router-dom';
 import { api, type Quota } from '../api-clerk';
+import Card, { CardHeader, CardTitle, CardDescription, CardContent } from '../ui/Card';
+import { Button } from '../ui/Button';
 
 interface BillingData {
   subscription: {
@@ -19,6 +21,10 @@ export default function Billing() {
 
   useEffect(() => {
     loadBillingData();
+  }, []);
+
+  useEffect(() => {
+    console.debug('[RUNTIME] Mounted: Billing');
   }, []);
 
   async function loadBillingData() {
@@ -96,9 +102,9 @@ export default function Billing() {
 
   if (!data || !data.usage) {
     return (
-      <div style={{ padding: '40px', textAlign: 'center' }}>
-        <div className="modern-btn-spinner" style={{ margin: '0 auto' }}></div>
-        <p style={{ marginTop: '15px', color: '#94a3b8' }}>Loading billing information...</p>
+      <div className="p-10 text-center">
+        <div className="modern-btn-spinner mx-auto"></div>
+        <p className="mt-4 text-neutral-500">Loading billing information...</p>
       </div>
     );
   }
@@ -109,184 +115,47 @@ export default function Billing() {
   const isFree = subscription.tier === 'FREE';
 
   return (
-    <div
-      style={{
-        background: '#0a0a0a',
-        minHeight: '100vh',
-        padding: '60px 0'
-      }}
-    >
-      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 24px' }}>
-      {/* Back button */}
-      <button
-        onClick={() => navigate('/dashboard')}
-        style={{
-          background: 'transparent',
-          border: '1px solid rgba(255, 255, 255, 0.2)',
-          color: '#ffffff',
-          cursor: 'pointer',
-          marginBottom: '40px',
-          fontSize: '14px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          padding: '8px 16px',
-          borderRadius: '6px',
-          transition: 'all 0.2s'
-        }}
-        onMouseOver={(e) => {
-          e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.4)';
-          e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
-        }}
-        onMouseOut={(e) => {
-          e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
-          e.currentTarget.style.background = 'transparent';
-        }}
-      >
-        ← Back to Dashboard
-      </button>
+    <div className="max-w-5xl mx-auto px-4 py-8">
+      <Button variant="outline" onClick={() => navigate('/dashboard')} className="mb-6">← Back to Dashboard</Button>
 
-      <h1 style={{ marginBottom: '12px', fontSize: '2.5rem', fontWeight: '700', color: '#ffffff', letterSpacing: '-0.02em' }}>Subscription & Usage</h1>
-      <p style={{ color: '#888', marginBottom: '60px', fontSize: '1.125rem', maxWidth: '600px' }}>
-        Manage your subscription and view your usage statistics
-      </p>
+      <h1 className="mb-2 text-3xl font-bold text-neutral-900 tracking-tight">Subscription & Usage</h1>
+      <p className="text-neutral-600 mb-8">Manage your subscription and view your usage statistics</p>
 
-      {/* Current Plan Card */}
-      <div
-        style={{
-          background: '#0a0a0a',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
-          borderRadius: '0',
-          padding: '48px',
-          color: '#ffffff',
-          marginBottom: '32px'
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'flex-start',
-            marginBottom: '30px',
-            flexWrap: 'wrap',
-            gap: '20px'
-          }}
-        >
-          <div>
-            <div
-              style={{
-                fontSize: '12px',
-                color: '#666',
-                marginBottom: '8px',
-                textTransform: 'uppercase',
-                letterSpacing: '1.5px',
-                fontWeight: '500'
-              }}
-            >
-              Current Plan
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Current Plan</CardTitle>
+          <CardDescription>Your active subscription and usage</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex justify-between items-start mb-5 flex-wrap gap-5">
+            <div>
+              <div className="text-xs text-neutral-500 mb-1 uppercase tracking-wider font-medium">Plan</div>
+              <div className="text-2xl font-semibold text-neutral-900">{subscription.tier}</div>
             </div>
-            <div style={{ fontSize: '1.75rem', fontWeight: '600', color: '#ffffff' }}>
-              {subscription.tier}
+            <div className="text-right">
+              <div className="text-4xl font-bold leading-none text-neutral-900">{usage.remaining}</div>
+              <div className="text-sm text-neutral-500 mt-1">remaining this month</div>
             </div>
           </div>
-
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: '3rem', fontWeight: '700', lineHeight: 1, color: '#ffffff' }}>
-              {usage.remaining}
-            </div>
-            <div style={{ fontSize: '14px', color: '#888', marginTop: '8px' }}>
-              remaining this month
-            </div>
+          <div className="text-sm mb-2 text-neutral-600">{usage.used} of {usage.limit} resumes used this month</div>
+          <div className="h-2 w-full rounded-full bg-neutral-200 overflow-hidden">
+            {(() => {
+              const pct = Math.max(0, Math.min(100, Math.round(percentage)));
+              return <div style={{ width: `${pct}%` }} className="h-full bg-primary-600 transition-[width] duration-300" />;
+            })()}
           </div>
-        </div>
+          {isNearLimit && (
+            <div className="mt-2 text-sm text-neutral-600 inline-flex items-center gap-2">
+              <span>⚠️</span>
+              <span>You're running low on resumes</span>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
-        {/* Usage info */}
-        <div
-          style={{
-            fontSize: '0.95rem',
-            marginBottom: '12px',
-            color: '#888'
-          }}
-        >
-          {usage.used} of {usage.limit} resumes used this month
-        </div>
-
-        {/* Progress bar */}
-        <div
-          style={{
-            background: 'rgba(255,255,255,0.1)',
-            borderRadius: '0',
-            height: '4px',
-            overflow: 'hidden'
-          }}
-        >
-          <div
-            style={{
-              width: `${percentage}%`,
-              height: '100%',
-              background: isNearLimit ? '#ffffff' : '#ffffff',
-              transition: 'width 0.3s'
-            }}
-          />
-        </div>
-
-        {isNearLimit && (
-          <div
-            style={{
-              marginTop: '12px',
-              fontSize: '0.875rem',
-              color: '#888',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px'
-            }}
-          >
-            <span>⚠️</span>
-            <span>You're running low on resumes</span>
-          </div>
-        )}
-      </div>
-
-      {/* Action Buttons */}
-      <div
-        style={{
-          display: 'flex',
-          gap: '12px',
-          marginBottom: '24px',
-          flexWrap: 'wrap'
-        }}
-      >
+      <div className="flex gap-3 mb-6 flex-wrap">
         {isFree ? (
-          <button
-            onClick={handleUpgrade}
-            disabled={loading}
-            style={{
-              flex: 1,
-              minWidth: '250px',
-              padding: '14px 28px',
-              background: '#ffffff',
-              color: '#000000',
-              border: 'none',
-              borderRadius: '6px',
-              fontSize: '1rem',
-              fontWeight: '500',
-              cursor: loading ? 'not-allowed' : 'pointer',
-              opacity: loading ? 0.5 : 1,
-              transition: 'background 0.2s',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px'
-            }}
-            onMouseOver={(e) => {
-              if (!loading) {
-                e.currentTarget.style.background = '#f0f0f0';
-              }
-            }}
-            onMouseOut={(e) => {
-              e.currentTarget.style.background = '#ffffff';
-            }}
-          >
+          <Button onClick={handleUpgrade} disabled={loading} className="min-w-[250px]">
             {loading ? (
               <>
                 <div className="modern-btn-spinner"></div>
@@ -295,36 +164,9 @@ export default function Billing() {
             ) : (
               'Upgrade to Pro or Unlimited'
             )}
-          </button>
+          </Button>
         ) : (
-          <button
-            onClick={handleManageSubscription}
-            disabled={loading}
-            style={{
-              flex: 1,
-              minWidth: '250px',
-              padding: '14px 28px',
-              background: 'transparent',
-              color: '#ffffff',
-              border: '1px solid rgba(255, 255, 255, 0.2)',
-              borderRadius: '6px',
-              fontSize: '1rem',
-              fontWeight: '500',
-              cursor: loading ? 'not-allowed' : 'pointer',
-              opacity: loading ? 0.5 : 1,
-              transition: 'all 0.2s'
-            }}
-            onMouseOver={(e) => {
-              if (!loading) {
-                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
-                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.4)';
-              }
-            }}
-            onMouseOut={(e) => {
-              e.currentTarget.style.background = 'transparent';
-              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
-            }}
-          >
+          <Button variant="outline" onClick={handleManageSubscription} disabled={loading} className="min-w-[250px]">
             {loading ? (
               <>
                 <div className="modern-btn-spinner"></div>
@@ -333,131 +175,46 @@ export default function Billing() {
             ) : (
               'Manage Subscription'
             )}
-          </button>
+          </Button>
         )}
       </div>
 
-      {/* Plan comparison link */}
-      <div style={{ textAlign: 'center', marginTop: '24px' }}>
-        <a
-          href="https://happyresumes.com/#pricing"
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            color: '#ffffff',
-            textDecoration: 'none',
-            fontSize: '0.875rem',
-            fontWeight: '500'
-          }}
-          onMouseOver={(e) => {
-            e.currentTarget.style.textDecoration = 'underline';
-          }}
-          onMouseOut={(e) => {
-            e.currentTarget.style.textDecoration = 'none';
-          }}
-        >
-          Compare all plans →
-        </a>
-      </div>
-
-      {/* Feature list for current tier */}
-      <div
-        style={{
-          marginTop: '40px',
-          padding: '32px',
-          background: '#0a0a0a',
-          borderRadius: '0',
-          border: '1px solid rgba(255, 255, 255, 0.1)'
-        }}
-      >
-        <h3 style={{ marginBottom: '20px', fontSize: '1.125rem', fontWeight: '600', color: '#ffffff' }}>
-          What's included in {subscription.tier}
-        </h3>
-
-        <ul
-          style={{
-            listStyle: 'none',
-            padding: 0,
-            margin: 0
-          }}
-        >
-          {subscription.tier === 'FREE' && (
-            <>
-              <li style={{ padding: '10px 0', display: 'flex', gap: '12px', alignItems: 'flex-start', color: '#ffffff', fontSize: '1rem' }}>
-                <span style={{ color: '#ffffff', fontSize: '18px' }}>✓</span>
-                <span>50 AI-generated resumes per month</span>
-              </li>
-              <li style={{ padding: '10px 0', display: 'flex', gap: '12px', alignItems: 'flex-start', color: '#ffffff', fontSize: '1rem' }}>
-                <span style={{ color: '#ffffff', fontSize: '18px' }}>✓</span>
-                <span>ATS-optimized formatting</span>
-              </li>
-              <li style={{ padding: '10px 0', display: 'flex', gap: '12px', alignItems: 'flex-start', color: '#ffffff', fontSize: '1rem' }}>
-                <span style={{ color: '#ffffff', fontSize: '18px' }}>✓</span>
-                <span>Instant PDF downloads</span>
-              </li>
-              <li style={{ padding: '10px 0', display: 'flex', gap: '12px', alignItems: 'flex-start', color: '#ffffff', fontSize: '1rem' }}>
-                <span style={{ color: '#ffffff', fontSize: '18px' }}>✓</span>
-                <span>Job description analysis</span>
-              </li>
-            </>
-          )}
-
-          {subscription.tier === 'PRO' && (
-            <>
-              <li style={{ padding: '10px 0', display: 'flex', gap: '12px', alignItems: 'flex-start', color: '#ffffff', fontSize: '1rem' }}>
-                <span style={{ color: '#ffffff', fontSize: '18px' }}>✓</span>
-                <span>100 AI-generated resumes per month</span>
-              </li>
-              <li style={{ padding: '10px 0', display: 'flex', gap: '12px', alignItems: 'flex-start', color: '#ffffff', fontSize: '1rem' }}>
-                <span style={{ color: '#ffffff', fontSize: '18px' }}>✓</span>
-                <span>Advanced ATS optimization</span>
-              </li>
-              <li style={{ padding: '10px 0', display: 'flex', gap: '12px', alignItems: 'flex-start', color: '#ffffff', fontSize: '1rem' }}>
-                <span style={{ color: '#ffffff', fontSize: '18px' }}>✓</span>
-                <span>LaTeX source code access</span>
-              </li>
-              <li style={{ padding: '10px 0', display: 'flex', gap: '12px', alignItems: 'flex-start', color: '#ffffff', fontSize: '1rem' }}>
-                <span style={{ color: '#ffffff', fontSize: '18px' }}>✓</span>
-                <span>Priority support</span>
-              </li>
-              <li style={{ padding: '10px 0', display: 'flex', gap: '12px', alignItems: 'flex-start', color: '#ffffff', fontSize: '1rem' }}>
-                <span style={{ color: '#ffffff', fontSize: '18px' }}>✓</span>
-                <span>Custom resume templates</span>
-              </li>
-            </>
-          )}
-
-          {subscription.tier === 'UNLIMITED' && (
-            <>
-              <li style={{ padding: '10px 0', display: 'flex', gap: '12px', alignItems: 'flex-start', color: '#ffffff', fontSize: '1rem' }}>
-                <span style={{ color: '#ffffff', fontSize: '18px' }}>✓</span>
-                <span>Unlimited AI-generated resumes</span>
-              </li>
-              <li style={{ padding: '10px 0', display: 'flex', gap: '12px', alignItems: 'flex-start', color: '#ffffff', fontSize: '1rem' }}>
-                <span style={{ color: '#ffffff', fontSize: '18px' }}>✓</span>
-                <span>Advanced ATS optimization</span>
-              </li>
-              <li style={{ padding: '10px 0', display: 'flex', gap: '12px', alignItems: 'flex-start', color: '#ffffff', fontSize: '1rem' }}>
-                <span style={{ color: '#ffffff', fontSize: '18px' }}>✓</span>
-                <span>LaTeX source code access</span>
-              </li>
-              <li style={{ padding: '10px 0', display: 'flex', gap: '12px', alignItems: 'flex-start', color: '#ffffff', fontSize: '1rem' }}>
-                <span style={{ color: '#ffffff', fontSize: '18px' }}>✓</span>
-                <span>Priority 24/7 support</span>
-              </li>
-              <li style={{ padding: '10px 0', display: 'flex', gap: '12px', alignItems: 'flex-start', color: '#ffffff', fontSize: '1rem' }}>
-                <span style={{ color: '#ffffff', fontSize: '18px' }}>✓</span>
-                <span>Custom resume templates</span>
-              </li>
-              <li style={{ padding: '10px 0', display: 'flex', gap: '12px', alignItems: 'flex-start', color: '#ffffff', fontSize: '1rem' }}>
-                <span style={{ color: '#ffffff', fontSize: '18px' }}>✓</span>
-                <span>Early access to new features</span>
-              </li>
-            </>
-          )}
-        </ul>
-      </div>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>What’s included in {subscription.tier}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ul className="list-none p-0 m-0 text-neutral-900">
+            {subscription.tier === 'FREE' && (
+              <>
+                <li className="py-2.5 flex gap-3 items-start"><span>✓</span><span>50 AI-generated resumes per month</span></li>
+                <li className="py-2.5 flex gap-3 items-start"><span>✓</span><span>ATS-optimized formatting</span></li>
+                <li className="py-2.5 flex gap-3 items-start"><span>✓</span><span>Instant PDF downloads</span></li>
+                <li className="py-2.5 flex gap-3 items-start"><span>✓</span><span>Job description analysis</span></li>
+              </>
+            )}
+            {subscription.tier === 'PRO' && (
+              <>
+                <li className="py-2.5 flex gap-3 items-start"><span>✓</span><span>100 AI-generated resumes per month</span></li>
+                <li className="py-2.5 flex gap-3 items-start"><span>✓</span><span>Advanced ATS optimization</span></li>
+                <li className="py-2.5 flex gap-3 items-start"><span>✓</span><span>LaTeX source code access</span></li>
+                <li className="py-2.5 flex gap-3 items-start"><span>✓</span><span>Priority support</span></li>
+                <li className="py-2.5 flex gap-3 items-start"><span>✓</span><span>Custom resume templates</span></li>
+              </>
+            )}
+            {subscription.tier === 'UNLIMITED' && (
+              <>
+                <li className="py-2.5 flex gap-3 items-start"><span>✓</span><span>Unlimited AI-generated resumes</span></li>
+                <li className="py-2.5 flex gap-3 items-start"><span>✓</span><span>Advanced ATS optimization</span></li>
+                <li className="py-2.5 flex gap-3 items-start"><span>✓</span><span>LaTeX source code access</span></li>
+                <li className="py-2.5 flex gap-3 items-start"><span>✓</span><span>Priority 24/7 support</span></li>
+                <li className="py-2.5 flex gap-3 items-start"><span>✓</span><span>Custom resume templates</span></li>
+                <li className="py-2.5 flex gap-3 items-start"><span>✓</span><span>Early access to new features</span></li>
+              </>
+            )}
+          </ul>
+        </CardContent>
+      </Card>
     </div>
   );
 }

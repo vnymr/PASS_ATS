@@ -94,7 +94,7 @@ export default function ModernSettingsModal({ onClose }: ModernSettingsModalProp
             </label>
           </div>
 
-          <div className="modern-setting-row" style={{ borderBottom: 'none' }}>
+          <div className="modern-setting-row border-b-0">
             <div className="modern-setting-info">
               <h4>Beta Features</h4>
               <p>Try experimental features before release</p>

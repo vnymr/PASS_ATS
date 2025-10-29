@@ -94,60 +94,27 @@ function UsageStats() {
   const percentage = (quota.used / quota.limit) * 100;
 
   return (
-    <div
-      style={{
-        background: '#000000',
-        padding: '30px',
-        borderRadius: '12px',
-        marginBottom: '40px',
-        color: '#ffffff',
-        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
-      }}
-    >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '20px' }}>
+    <div className="bg-black text-white rounded-xl mb-10 shadow-md p-8">
+      <div className="flex justify-between items-center flex-wrap gap-5">
         <div>
-          <h3 style={{ margin: '0 0 10px 0', fontSize: '20px' }}>
-            Current Plan: {subscription.tier || 'FREE'}
-          </h3>
-          <p style={{ margin: 0, opacity: 0.9 }}>
-            {quota.used} of {quota.limit} resumes used this month
-          </p>
+          <h3 className="m-0 mb-2 text-xl">Current Plan: {subscription.tier || 'FREE'}</h3>
+          <p className="m-0 opacity-90">{quota.used} of {quota.limit} resumes used this month</p>
         </div>
 
-        <div style={{ textAlign: 'right' }}>
-          <div
-            style={{
-              fontSize: '36px',
-              fontWeight: '700',
-              marginBottom: '5px'
-            }}
-          >
-            {quota.remaining}
-          </div>
-          <div style={{ fontSize: '14px', opacity: 0.9 }}>
-            remaining this month
-          </div>
+        <div className="text-right">
+          <div className="text-4xl font-bold mb-1">{quota.remaining}</div>
+          <div className="text-sm opacity-90">remaining this month</div>
         </div>
       </div>
 
       {/* Progress bar */}
-      <div
-        style={{
-          marginTop: '20px',
-          background: 'rgba(255,255,255,0.2)',
-          borderRadius: '10px',
-          height: '8px',
-          overflow: 'hidden'
-        }}
-      >
-        <div
-          style={{
-            width: `${percentage}%`,
-            height: '100%',
-            background: percentage >= 80 ? '#cd0000' : '#ffffff',
-            transition: 'width 0.3s'
-          }}
-        />
+      <div className="mt-5 bg-white/20 rounded-[10px] h-2 overflow-hidden">
+        {(() => {
+          const pct = Math.max(0, Math.min(100, Math.round(percentage)));
+          const widthClass = `w-[${pct}%]`;
+          const colorClass = percentage >= 80 ? 'bg-red-600' : 'bg-white';
+          return <div className={`${widthClass} h-full ${colorClass} transition-[width] duration-300`} />;
+        })()}
       </div>
     </div>
   );
