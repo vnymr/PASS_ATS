@@ -19,7 +19,9 @@ export default function JobCard({ job, onGenerateResume, onViewJob, onAutoApply,
 
   // Format date to relative time
   const formatDate = (dateString: string) => {
+    if (!dateString) return 'Recently posted';
     const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) return 'Recently posted';
     const now = new Date();
     const diffTime = Math.abs(now.getTime() - date.getTime());
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
@@ -28,7 +30,8 @@ export default function JobCard({ job, onGenerateResume, onViewJob, onAutoApply,
     if (diffDays === 1) return 'Yesterday';
     if (diffDays < 7) return `${diffDays}d ago`;
     if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
-    return `${Math.floor(diffDays / 30)}mo ago`;
+    const months = Math.floor(diffDays / 30);
+    return `${months}mo ago`;
   };
 
   return (
@@ -64,16 +67,16 @@ export default function JobCard({ job, onGenerateResume, onViewJob, onAutoApply,
                 className={`font-bold mb-1 line-clamp-1 ${compact ? 'text-base' : 'text-xl'}`}
                 style={{ color: 'var(--text)' }}
               >
-                {job.title}
+                {job.title || 'Untitled role'}
               </h3>
               <div className={`flex items-center gap-2 flex-wrap ${compact ? 'text-xs' : 'text-sm'}`}>
                 <span className="font-semibold" style={{ color: 'var(--primary)' }}>
-                  {job.company}
+                  {job.company || 'Unknown Company'}
                 </span>
                 <span className="text-gray-400">•</span>
                 <span className="text-gray-600 flex items-center gap-1">
                   {Icon('mapPin')}
-                  {job.location}
+                  {job.location || 'Location not specified'}
                 </span>
               </div>
             </div>

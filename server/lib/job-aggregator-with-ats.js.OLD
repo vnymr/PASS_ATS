@@ -1,0 +1,688 @@
+// Job Aggregation Service with ATS Detection
+// Fetches jobs from various sources and detects their ATS platform
+
+import atsDetector from './ats-detector.js';
+
+class JobAggregatorWithATS {
+  constructor() {
+    this.sources = {
+      adzuna: {
+        baseUrl: 'https://api.adzuna.com/v1/api/jobs/us/search/1',
+        requiresKey: true
+      },
+      remotive: {
+        baseUrl: 'https://remotive.com/api/remote-jobs',
+        requiresKey: false
+      },
+      jsearch: {
+        baseUrl: 'https://jsearch.p.rapidapi.com/search',
+        requiresKey: true
+      },
+      reed: {
+        baseUrl: 'https://www.reed.co.uk/api/1.0/search',
+        requiresKey: true
+      },
+      jooble: {
+        baseUrl: 'https://jooble.org/api',
+        requiresKey: true
+      }
+    };
+  }
+
+  /**
+   * Fetch jobs from Adzuna API
+   * @param {Object} searchParams - Search parameters
+   * @returns {Array} Jobs with ATS detection
+   */
+  async fetchFromAdzuna(searchParams = {}) {
+    const allJobs = [];
+    const resultsPerPage = 50; // Adzuna max per page
+    const maxPages = Math.ceil((searchParams.limit || 5000) / resultsPerPage);
+
+    const appId = process.env.ADZUNA_APP_ID;
+    const appKey = process.env.ADZUNA_API_KEY;
+    const country = process.env.ADZUNA_COUNTRY || 'us';
+
+    if (!appId || !appKey) {
+      console.log('⚠️ Adzuna: Missing ADZUNA_APP_ID or ADZUNA_API_KEY. Skipping fetch.');
+      return [];
+    }
+
+    console.log(`📥 Fetching up to ${searchParams.limit || 5000} jobs from Adzuna (${maxPages} pages)...`);
+
+    // helper to sleep ms
+    const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+    let consecutive429 = 0;
+
+    for (let page = 1; page <= maxPages; page++) {
+      const params = new URLSearchParams({
+        app_id: appId,
+        app_key: appKey,
+        results_per_page: resultsPerPage,
+        max_days_old: searchParams.maxDaysOld || 1,  // Last 24 hours only
+        sort_by: 'date'  // Get newest jobs first
+      });
+
+      // Only add 'what' and 'where' if they have values
+      if (searchParams.keywords) {
+        params.append('what', searchParams.keywords);
+      }
+      if (searchParams.location) {
+        params.append('where', searchParams.location);
+      }
+
+      try {
+        const url = `https://api.adzuna.com/v1/api/jobs/${country}/search/${page}?${params}`;
+        const response = await fetch(url, {
+          headers: {
+            'User-Agent': 'HappyResumes Job Aggregator'
+          }
+        });
+
+        if (!response.ok) {
+          if (response.status === 429) {
+            consecutive429++;
+            const backoffMs = Math.min(60000, 1000 * Math.pow(2, consecutive429));
+            console.warn(`⏳ Adzuna rate limited (429) on page ${page}. Backing off ${backoffMs}ms...`);
+            await sleep(backoffMs);
+            page--; // retry same page after backoff
+            continue;
+          }
+
+          const text = await response.text().catch(() => '');
+          console.error(`Adzuna API error (page ${page}): ${response.status} ${response.statusText} ${text?.slice(0, 200)}`);
+          break; // Stop if we hit an error
+        }
+
+        const data = await response.json();
+
+        if (!data.results || data.results.length === 0) {
+          console.log(`No more results at page ${page}`);
+          break; // No more results
+        }
+
+        // Process each job and detect ATS
+        const pageJobs = data.results.map(job => {
+          const atsInfo = atsDetector.detectFromURL(job.redirect_url);
+          const companyId = atsDetector.extractCompanyIdentifier(
+            job.redirect_url,
+            atsInfo.atsType
+          );
+
+          return {
+            // Job details
+            externalId: `adzuna_${job.id}`,
+            source: 'adzuna',
+            title: job.title,
+            company: job.company?.display_name || 'Unknown Company',
+            location: job.location?.display_name || 'Unknown Location',
+            salary: this.formatSalary(job.salary_min, job.salary_max),
+            description: job.description,
+            applyUrl: job.redirect_url,
+            postedDate: new Date(job.created),
+
+            // ATS detection
+            atsType: atsInfo.atsType,
+            atsCompany: companyId,
+            atsComplexity: atsInfo.complexity,
+            atsConfidence: atsInfo.confidence,
+            atsDescription: atsInfo.description,
+            aiApplyable: atsInfo.aiApplyable,
+
+            // Metadata
+            detectionMethod: atsInfo.detectionMethod,
+            publicAPI: atsInfo.publicAPI || false
+          };
+        });
+
+        allJobs.push(...pageJobs);
+        console.log(`✅ Page ${page}: ${pageJobs.length} jobs (total: ${allJobs.length})`);
+
+        // Reset 429 counter on success
+        consecutive429 = 0;
+
+        // Small delay to avoid rate limiting (<= 25 req/min ≈ one every 2400ms)
+        await sleep(2500);
+
+      } catch (error) {
+        console.error(`Adzuna fetch failed (page ${page}):`, error.message);
+        break;
+      }
+    }
+
+    console.log(`✅ Total fetched from Adzuna: ${allJobs.length} jobs`);
+    return allJobs;
+  }
+
+  /**
+   * Fetch jobs from Remotive API (remote jobs only)
+   * @returns {Array} Jobs with ATS detection
+   */
+  async fetchFromRemotive() {
+    try {
+      const response = await fetch(this.sources.remotive.baseUrl);
+
+      if (!response.ok) {
+        console.error('Remotive API error:', response.status);
+        return [];
+      }
+
+      const data = await response.json();
+
+      // Remotive returns { jobs: [...] }
+      const jobs = (data.jobs || []).map(job => {
+        const atsInfo = atsDetector.detectFromURL(job.url);
+        const companyId = atsDetector.extractCompanyIdentifier(job.url, atsInfo.atsType);
+
+        return {
+          externalId: `remotive_${job.id}`,
+          source: 'remotive',
+          title: job.title,
+          company: job.company_name,
+          location: 'Remote',
+          salary: job.salary || null,
+          description: job.description,
+          applyUrl: job.url,
+          postedDate: new Date(job.publication_date),
+
+          // ATS detection
+          atsType: atsInfo.atsType,
+          atsCompany: companyId,
+          atsComplexity: atsInfo.complexity,
+          atsConfidence: atsInfo.confidence,
+          atsDescription: atsInfo.description,
+          aiApplyable: atsInfo.aiApplyable,
+
+          detectionMethod: atsInfo.detectionMethod,
+          publicAPI: atsInfo.publicAPI || false
+        };
+      });
+
+      console.log(`✅ Fetched ${jobs.length} jobs from Remotive`);
+      return jobs;
+
+    } catch (error) {
+      console.error('Remotive fetch failed:', error.message);
+      return [];
+    }
+  }
+
+  /**
+   * Fetch jobs from JSearch API (via RapidAPI)
+   * Aggregates from Indeed, LinkedIn, Glassdoor, etc.
+   * @param {Object} searchParams - Search parameters
+   * @returns {Array} Jobs with ATS detection
+   */
+  async fetchFromJSearch(searchParams = {}) {
+    if (!process.env.RAPIDAPI_KEY) {
+      console.log('⚠️ JSearch: No RapidAPI key configured, skipping');
+      return [];
+    }
+
+    const allJobs = [];
+    const numPages = searchParams.pages || 5; // Fetch 5 pages (50 jobs)
+
+    console.log(`📥 Fetching jobs from JSearch (${numPages} pages)...`);
+
+    for (let page = 1; page <= numPages; page++) {
+      try {
+        const params = new URLSearchParams({
+          query: searchParams.keywords || 'software engineer',
+          page: page.toString(),
+          num_pages: '1',
+          date_posted: 'week' // Jobs from last week
+        });
+
+        const response = await fetch(`${this.sources.jsearch.baseUrl}?${params}`, {
+          method: 'GET',
+          headers: {
+            'X-RapidAPI-Key': process.env.RAPIDAPI_KEY,
+            'X-RapidAPI-Host': 'jsearch.p.rapidapi.com'
+          }
+        });
+
+        if (!response.ok) {
+          console.error(`JSearch API error (page ${page}):`, response.status);
+          break;
+        }
+
+        const data = await response.json();
+
+        if (!data.data || data.data.length === 0) {
+          console.log(`No more results at page ${page}`);
+          break;
+        }
+
+        // Process each job and detect ATS
+        const pageJobs = data.data.map(job => {
+          const atsInfo = atsDetector.detectFromURL(job.job_apply_link || job.job_google_link);
+          const companyId = atsDetector.extractCompanyIdentifier(
+            job.job_apply_link || job.job_google_link,
+            atsInfo.atsType
+          );
+
+          return {
+            // Job details
+            externalId: `jsearch_${job.job_id}`,
+            source: 'jsearch',
+            title: job.job_title,
+            company: job.employer_name || 'Unknown Company',
+            location: job.job_city && job.job_state
+              ? `${job.job_city}, ${job.job_state}`
+              : job.job_country || 'Unknown Location',
+            salary: this.formatSalary(job.job_min_salary, job.job_max_salary),
+            description: job.job_description || '',
+            applyUrl: job.job_apply_link || job.job_google_link,
+            postedDate: new Date(job.job_posted_at_timestamp * 1000),
+
+            // ATS detection
+            atsType: atsInfo.atsType,
+            atsCompany: companyId,
+            atsComplexity: atsInfo.complexity,
+            atsConfidence: atsInfo.confidence,
+            atsDescription: atsInfo.description,
+            aiApplyable: atsInfo.aiApplyable,
+
+            // Metadata
+            detectionMethod: atsInfo.detectionMethod,
+            publicAPI: false
+          };
+        });
+
+        allJobs.push(...pageJobs);
+        console.log(`✅ Page ${page}: ${pageJobs.length} jobs (total: ${allJobs.length})`);
+
+        // Delay to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 200));
+
+      } catch (error) {
+        console.error(`JSearch fetch failed (page ${page}):`, error.message);
+        break;
+      }
+    }
+
+    console.log(`✅ Total fetched from JSearch: ${allJobs.length} jobs`);
+    return allJobs;
+  }
+
+  /**
+   * Fetch jobs from Reed.co.uk API (UK jobs)
+   * @param {Object} searchParams - Search parameters
+   * @returns {Array} Jobs with ATS detection
+   */
+  async fetchFromReed(searchParams = {}) {
+    if (!process.env.REED_API_KEY) {
+      console.log('⚠️ Reed: No API key configured, skipping');
+      return [];
+    }
+
+    try {
+      const params = new URLSearchParams({
+        keywords: searchParams.keywords || '',
+        location: searchParams.location || '',
+        resultsToTake: 100  // Max 100 per request
+      });
+
+      const response = await fetch(`${this.sources.reed.baseUrl}?${params}`, {
+        headers: {
+          'Authorization': `Basic ${Buffer.from(process.env.REED_API_KEY + ':').toString('base64')}`
+        }
+      });
+
+      if (!response.ok) {
+        console.error('Reed API error:', response.status);
+        return [];
+      }
+
+      const data = await response.json();
+      const jobs = (data.results || []).map(job => {
+        const atsInfo = atsDetector.detectFromURL(job.jobUrl);
+        const companyId = atsDetector.extractCompanyIdentifier(job.jobUrl, atsInfo.atsType);
+
+        return {
+          externalId: `reed_${job.jobId}`,
+          source: 'reed',
+          title: job.jobTitle,
+          company: job.employerName,
+          location: job.locationName,
+          salary: `£${job.minimumSalary}-${job.maximumSalary}`,
+          description: job.jobDescription,
+          applyUrl: job.jobUrl,
+          postedDate: new Date(job.date),
+          atsType: atsInfo.atsType,
+          atsCompany: companyId,
+          atsComplexity: atsInfo.complexity,
+          atsConfidence: atsInfo.confidence,
+          atsDescription: atsInfo.description,
+          aiApplyable: atsInfo.aiApplyable,
+          detectionMethod: atsInfo.detectionMethod,
+          publicAPI: atsInfo.publicAPI || false
+        };
+      });
+
+      console.log(`✅ Fetched ${jobs.length} jobs from Reed.co.uk`);
+      return jobs;
+
+    } catch (error) {
+      console.error('Reed fetch failed:', error.message);
+      return [];
+    }
+  }
+
+  /**
+   * Fetch jobs from Jooble API (global jobs)
+   * @param {Object} searchParams - Search parameters
+   * @returns {Array} Jobs with ATS detection
+   */
+  async fetchFromJooble(searchParams = {}) {
+    if (!process.env.JOOBLE_API_KEY) {
+      console.log('⚠️ Jooble: No API key configured, skipping');
+      return [];
+    }
+
+    try {
+      const requestBody = {
+        keywords: searchParams.keywords || '',
+        location: searchParams.location || '',
+        page: 1
+      };
+
+      const response = await fetch(`${this.sources.jooble.baseUrl}/${process.env.JOOBLE_API_KEY}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      if (!response.ok) {
+        console.error('Jooble API error:', response.status);
+        return [];
+      }
+
+      const data = await response.json();
+      const jobs = (data.jobs || []).map(job => {
+        const atsInfo = atsDetector.detectFromURL(job.link);
+        const companyId = atsDetector.extractCompanyIdentifier(job.link, atsInfo.atsType);
+
+        return {
+          externalId: `jooble_${job.id || job.link}`,
+          source: 'jooble',
+          title: job.title,
+          company: job.company,
+          location: job.location,
+          salary: job.salary || null,
+          description: job.snippet,
+          applyUrl: job.link,
+          postedDate: new Date(job.updated),
+          atsType: atsInfo.atsType,
+          atsCompany: companyId,
+          atsComplexity: atsInfo.complexity,
+          atsConfidence: atsInfo.confidence,
+          atsDescription: atsInfo.description,
+          aiApplyable: atsInfo.aiApplyable,
+          detectionMethod: atsInfo.detectionMethod,
+          publicAPI: atsInfo.publicAPI || false
+        };
+      });
+
+      console.log(`✅ Fetched ${jobs.length} jobs from Jooble`);
+      return jobs;
+
+    } catch (error) {
+      console.error('Jooble fetch failed:', error.message);
+      return [];
+    }
+  }
+
+  /**
+   * Fetch jobs directly from Greenhouse companies
+   * These are GUARANTEED to be AI-applyable
+   * @param {Array<string>} companies - List of company slugs
+   * @returns {Array} Jobs
+   */
+  async fetchFromGreenhouse(companies = []) {
+    if (companies.length === 0) {
+      // Default top companies using Greenhouse
+      companies = [
+        'stripe', 'airbnb', 'coinbase', 'robinhood', 'plaid',
+        'databricks', 'figma', 'notion', 'lattice', 'airtable',
+        'webflow', 'amplitude', 'faire', 'retool', 'segment'
+      ];
+    }
+
+    const allJobs = [];
+
+    for (const company of companies) {
+      try {
+        const response = await fetch(
+          `https://boards-api.greenhouse.io/v1/boards/${company}/jobs`
+        );
+
+        if (!response.ok) {
+          console.log(`⚠️ ${company} (Greenhouse): No jobs found`);
+          continue;
+        }
+
+        const data = await response.json();
+
+        for (const job of data.jobs) {
+          allJobs.push({
+            externalId: `greenhouse_${job.id}`,
+            source: 'greenhouse',
+            title: job.title,
+            company: company,
+            location: job.location?.name || 'Unknown',
+            salary: null, // Greenhouse doesn't expose salary in API
+            description: job.content || '',
+            applyUrl: job.absolute_url,
+            postedDate: new Date(job.updated_at),
+
+            // ATS detection (we know it's Greenhouse!)
+            atsType: 'GREENHOUSE',
+            atsCompany: company,
+            atsComplexity: 'SIMPLE',
+            atsConfidence: 1.0,
+            atsDescription: 'Greenhouse - standardized forms, easy to automate',
+            aiApplyable: true,
+
+            detectionMethod: 'DIRECT_API',
+            publicAPI: true
+          });
+        }
+
+        console.log(`✅ ${company}: ${data.jobs.length} jobs`);
+
+      } catch (error) {
+        console.error(`❌ ${company} fetch failed:`, error.message);
+      }
+    }
+
+    console.log(`✅ Total from Greenhouse: ${allJobs.length} jobs`);
+    return allJobs;
+  }
+
+  /**
+   * Fetch jobs directly from Lever companies
+   * @param {Array<string>} companies - List of company slugs
+   * @returns {Array} Jobs
+   */
+  async fetchFromLever(companies = []) {
+    if (companies.length === 0) {
+      companies = [
+        'netflix', 'openai', 'anthropic', 'scale', 'superhuman',
+        'vercel', 'linear', 'loom', 'deel', 'remote'
+      ];
+    }
+
+    const allJobs = [];
+
+    for (const company of companies) {
+      try {
+        const response = await fetch(
+          `https://api.lever.co/v0/postings/${company}?mode=json`
+        );
+
+        if (!response.ok) {
+          console.log(`⚠️ ${company} (Lever): No jobs found`);
+          continue;
+        }
+
+        const jobs = await response.json();
+
+        for (const job of jobs) {
+          allJobs.push({
+            externalId: `lever_${job.id}`,
+            source: 'lever',
+            title: job.text,
+            company: company,
+            location: job.categories?.location || 'Unknown',
+            salary: null,
+            description: job.description,
+            applyUrl: job.hostedUrl,
+            postedDate: new Date(job.createdAt),
+
+            // ATS detection
+            atsType: 'LEVER',
+            atsCompany: company,
+            atsComplexity: 'SIMPLE',
+            atsConfidence: 1.0,
+            atsDescription: 'Lever - simple forms, highly automatable',
+            aiApplyable: true,
+
+            detectionMethod: 'DIRECT_API',
+            publicAPI: true
+          });
+        }
+
+        console.log(`✅ ${company}: ${jobs.length} jobs`);
+
+      } catch (error) {
+        console.error(`❌ ${company} fetch failed:`, error.message);
+      }
+    }
+
+    console.log(`✅ Total from Lever: ${allJobs.length} jobs`);
+    return allJobs;
+  }
+
+  /**
+   * Aggregate jobs from all sources
+   * @param {Object} options - Aggregation options
+   * @returns {Object} Aggregated jobs with stats
+   */
+  async aggregateAll(options = {}) {
+    console.log('🔄 Starting job aggregation...\n');
+
+    const results = await Promise.all([
+      // Job boards - fetch ALL jobs from ALL companies
+      options.useAdzuna !== false ? this.fetchFromAdzuna(options.search) : [],
+      options.useRemotive !== false ? this.fetchFromRemotive() : [],
+      options.useJSearch !== false ? this.fetchFromJSearch(options.search) : [],
+      options.useReed !== false ? this.fetchFromReed(options.search) : [],
+      options.useJooble !== false ? this.fetchFromJooble(options.search) : [],
+
+      // Direct ATS APIs (specific high-value companies)
+      options.useGreenhouse !== false ? this.fetchFromGreenhouse(options.greenhouseCompanies) : [],
+      options.useLever !== false ? this.fetchFromLever(options.leverCompanies) : []
+    ]);
+
+    const allJobs = results.flat();
+
+    // Generate statistics
+    const stats = this.generateStats(allJobs);
+
+    console.log('\n📊 Aggregation Summary:');
+    console.log(`Total Jobs: ${allJobs.length}`);
+    console.log(`AI Applyable: ${stats.aiApplyable} (${stats.aiApplyablePercent}%)`);
+    console.log(`Manual Only: ${stats.manualOnly} (${stats.manualOnlyPercent}%)`);
+    console.log(`Unknown: ${stats.unknown}`);
+
+    return {
+      jobs: allJobs,
+      stats: stats,
+      timestamp: new Date()
+    };
+  }
+
+  /**
+   * Generate statistics from aggregated jobs
+   * @param {Array} jobs - Aggregated jobs
+   * @returns {Object} Statistics
+   */
+  generateStats(jobs) {
+    const total = jobs.length;
+    const aiApplyable = jobs.filter(j => j.aiApplyable).length;
+    const manualOnly = jobs.filter(j => !j.aiApplyable && j.atsComplexity === 'COMPLEX').length;
+    const unknown = jobs.filter(j => j.atsComplexity === 'UNKNOWN').length;
+
+    // Count by ATS type
+    const byATS = {};
+    jobs.forEach(job => {
+      byATS[job.atsType] = (byATS[job.atsType] || 0) + 1;
+    });
+
+    // Count by complexity
+    const byComplexity = {
+      SIMPLE: jobs.filter(j => j.atsComplexity === 'SIMPLE').length,
+      MODERATE: jobs.filter(j => j.atsComplexity === 'MODERATE').length,
+      COMPLEX: jobs.filter(j => j.atsComplexity === 'COMPLEX').length,
+      UNKNOWN: unknown
+    };
+
+    return {
+      total,
+      aiApplyable,
+      aiApplyablePercent: ((aiApplyable / total) * 100).toFixed(1),
+      manualOnly,
+      manualOnlyPercent: ((manualOnly / total) * 100).toFixed(1),
+      unknown,
+      byATS,
+      byComplexity
+    };
+  }
+
+  /**
+   * Filter jobs by criteria
+   * @param {Array} jobs - Jobs to filter
+   * @param {Object} filters - Filter criteria
+   * @returns {Array} Filtered jobs
+   */
+  filterJobs(jobs, filters = {}) {
+    let filtered = jobs;
+
+    if (filters.aiApplyableOnly) {
+      filtered = filtered.filter(j => j.aiApplyable);
+    }
+
+    if (filters.excludeComplex) {
+      filtered = filtered.filter(j => j.atsComplexity !== 'COMPLEX');
+    }
+
+    if (filters.atsTypes) {
+      filtered = filtered.filter(j => filters.atsTypes.includes(j.atsType));
+    }
+
+    if (filters.minConfidence) {
+      filtered = filtered.filter(j => j.atsConfidence >= filters.minConfidence);
+    }
+
+    return filtered;
+  }
+
+  /**
+   * Format salary range
+   * @param {number} min - Minimum salary
+   * @param {number} max - Maximum salary
+   * @returns {string|null}
+   */
+  formatSalary(min, max) {
+    if (!min && !max) return null;
+    if (min && max) return `$${min.toLocaleString()}-${max.toLocaleString()}`;
+    if (min) return `$${min.toLocaleString()}+`;
+    if (max) return `Up to $${max.toLocaleString()}`;
+    return null;
+  }
+}
+
+export default new JobAggregatorWithATS();

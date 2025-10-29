@@ -51,7 +51,9 @@ export default function JobDetailPanel({ job, isOpen, onClose, onGenerateResume,
 
   // Format date
   const formatDate = (dateString: string) => {
+    if (!dateString) return 'Recently posted';
     const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) return 'Recently posted';
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
@@ -98,14 +100,14 @@ export default function JobDetailPanel({ job, isOpen, onClose, onGenerateResume,
 
               <div className="flex-1 min-w-0">
                 <h2 className="text-xl font-bold mb-1 line-clamp-2" style={{ color: 'var(--text)' }}>
-                  {job.title}
+                  {job.title || 'Untitled role'}
                 </h2>
                 <div className="flex items-center gap-2 flex-wrap text-sm">
                   <span className="font-semibold" style={{ color: 'var(--primary)' }}>
-                    {job.company}
+                    {job.company || 'Unknown Company'}
                   </span>
                   <span className="text-gray-400">•</span>
-                  <span className="text-gray-600">{job.location}</span>
+                  <span className="text-gray-600">{job.location || 'Location not specified'}</span>
                   <span className="text-gray-400">•</span>
                   <span className="text-gray-500 text-xs">{formatDate(job.postedDate)}</span>
                 </div>
