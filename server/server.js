@@ -2681,11 +2681,23 @@ app.use((err, req, res, next) => {
 import { generateResumeEndpoint, checkCompilersEndpoint } from './lib/simplified-api.js';
 import { extractJobHandler } from './routes/extract-job.js';
 
+// Import new route modules
+import jobsRouter from './routes/jobs.js';
+import aiSearchRouter from './routes/ai-search.js';
+import autoApplyRouter from './routes/auto-apply.js';
+import diagnosticsRouter from './routes/diagnostics.js';
+
 app.post('/api/generate-ai', authenticateToken, generateResumeEndpoint);
 app.get('/api/check-compilers', authenticateToken, checkCompilersEndpoint);
 
 // Job extraction endpoint for Chrome extension
 app.post('/api/extract-job', authenticateToken, extractJobHandler);
+
+// Mount new routers
+app.use('/api', authenticateToken, jobsRouter);
+app.use('/api', authenticateToken, aiSearchRouter);
+app.use('/api', authenticateToken, autoApplyRouter);
+app.use('/api', authenticateToken, diagnosticsRouter);
 
 // Start server
 const PORT = config.server.port;

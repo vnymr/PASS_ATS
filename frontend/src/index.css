@@ -1,0 +1,399 @@
+@import url('https://fonts.cdnfonts.com/css/proxima-nova-2');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Theme System */
+:root[data-theme="light"] {
+  --text: #0c1310;
+  --background: #f5f7f7;
+  --background-elevated: #ffffff;
+  --primary: #3eaca7;
+  --secondary: #409677;
+  --accent: #1c3f40;
+}
+
+:root[data-theme="dark"] {
+  --text: #ecf3f0;
+  --background: #0a0f0e;
+  --background-elevated: #1a1f1e;
+  --primary: #53c1bb;
+  --secondary: #69bf9f;
+  --accent: #bfe2e3;
+}
+
+/* Default to light theme */
+:root {
+  --text: #0c1310;
+  --background: #f5f7f7;
+  --background-elevated: #ffffff;
+  --primary: #3eaca7;
+  --secondary: #409677;
+  --accent: #1c3f40;
+
+  /* Shades for Primary (Teal) */
+  --primary-50: #e6f7f6;
+  --primary-100: #ccefed;
+  --primary-200: #99dfdb;
+  --primary-300: #66cfc9;
+  --primary-400: #3eaca7;
+  --primary-500: #359691;
+  --primary-600: #2c7b77;
+  --primary-700: #23615d;
+  --primary-800: #1a4643;
+  --primary-900: #112b29;
+
+  /* Shades for Secondary (Green) */
+  --secondary-50: #e7f4ef;
+  --secondary-100: #cfe9df;
+  --secondary-200: #9fd3bf;
+  --secondary-300: #6fbd9f;
+  --secondary-400: #409677;
+  --secondary-500: #367b62;
+  --secondary-600: #2c604d;
+  --secondary-700: #224638;
+  --secondary-800: #182b23;
+  --secondary-900: #0e110e;
+
+  /* Shades for Accent (Dark Teal) */
+  --accent-50: #e6ebeb;
+  --accent-100: #ccd7d7;
+  --accent-200: #99afaf;
+  --accent-300: #668787;
+  --accent-400: #335f5f;
+  --accent-500: #1c3f40;
+  --accent-600: #163233;
+  --accent-700: #112626;
+  --accent-800: #0b1919;
+  --accent-900: #060d0d;
+
+  /* Grays for UI elements */
+  --gray-50: #fafafa;
+  --gray-100: #f5f5f5;
+  --gray-200: #e5e5e5;
+  --gray-300: #d4d4d4;
+  --gray-400: #a3a3a3;
+  --gray-500: #737373;
+  --gray-600: #525252;
+  --gray-700: #404040;
+  --gray-800: #262626;
+  --gray-900: #171717;
+
+  /* Semantic Colors */
+  --success: #22c55e;
+  --success-100: #dcfce7;
+  --error: #ef4444;
+  --error-100: #fee2e2;
+  --warning: #f59e0b;
+  --warning-100: #fef3c7;
+  --info: #3b82f6;
+  --info-100: #dbeafe;
+
+  /* Component-specific Variables */
+  --radius: 0.65rem;
+  --foreground: var(--text);
+  --muted-foreground: var(--gray-600);
+  --popover: var(--background);
+  --popover-foreground: var(--text);
+  --card: var(--background);
+  --ring: var(--primary);
+  --border: var(--accent);
+}
+
+@layer base {
+  * {
+    font-family: 'Proxima Nova', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  }
+
+  body {
+    font-family: 'Proxima Nova', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background-color: var(--background);
+    color: var(--text);
+    @apply antialiased;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+@layer components {
+  /* Custom Scrollbar */
+  .custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: var(--gray-400) transparent;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: var(--gray-400);
+    border-radius: 3px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: var(--gray-500);
+  }
+
+  /* PromptBox Enhancements */
+  .custom-scrollbar::placeholder {
+    color: var(--muted-foreground);
+    opacity: 0.6;
+  }
+
+  .custom-scrollbar:focus::placeholder {
+    opacity: 0.4;
+  }
+
+  /* Modern Layout Styles */
+  .modern-app {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .modern-nav {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: var(--background);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  }
+
+  .modern-nav-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 72px;
+  }
+
+  .modern-nav-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    cursor: pointer;
+    transition: opacity 0.2s;
+  }
+
+  .modern-nav-brand:hover {
+    opacity: 0.8;
+  }
+
+  .modern-nav-logo-img {
+    height: 40px;
+    width: auto;
+  }
+
+  .modern-nav-menu {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .modern-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1.25rem;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--text);
+    background: transparent;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-decoration: none;
+  }
+
+  .modern-nav-item:hover {
+    background: rgba(62, 172, 167, 0.08);
+  }
+
+  .modern-nav-item.active {
+    background: var(--primary);
+    color: var(--background);
+  }
+
+  .modern-nav-item svg {
+    flex-shrink: 0;
+  }
+
+  .modern-nav-user {
+    margin-left: 1rem;
+  }
+
+  /* Button Styles */
+  .btn-primary {
+    background: var(--primary);
+    color: var(--background);
+    padding: 0.75rem 1.5rem;
+    font-weight: 600;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+  }
+
+  .btn-primary:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+  }
+
+  .btn-secondary {
+    background: var(--background);
+    color: var(--text);
+    padding: 0.75rem 1.5rem;
+    font-weight: 600;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08);
+    border: none;
+  }
+
+  .btn-secondary:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+  }
+
+  .btn-accent {
+    background: var(--secondary);
+    color: var(--background);
+    padding: 0.75rem 1.5rem;
+    font-weight: 600;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+  }
+
+  .btn-accent:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+  }
+
+  /* Card Styles */
+  .card {
+    background: var(--background);
+    border-radius: 16px;
+    padding: 1.5rem;
+    transition: all 0.2s;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  }
+
+  .card:hover {
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07), 0 2px 4px rgba(0, 0, 0, 0.05);
+    transform: translateY(-2px);
+  }
+
+  .card-subtle {
+    background: var(--background);
+    border-radius: 16px;
+    padding: 1.5rem;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  }
+
+  /* Input Styles */
+  .input-field {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    font-size: 1rem;
+    color: var(--text);
+    background: var(--background);
+    border: none;
+    border-radius: 12px;
+    outline: none;
+    transition: all 0.2s;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08);
+  }
+
+  .input-field:focus {
+    box-shadow: 0 0 0 2px var(--primary);
+  }
+
+  .input-field::placeholder {
+    color: var(--gray-400);
+  }
+
+  /* Badge Styles */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    border-radius: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .badge-primary {
+    background: var(--primary);
+    color: var(--background);
+  }
+
+  .badge-secondary {
+    background: var(--secondary);
+    color: var(--background);
+  }
+
+  .badge-accent {
+    background: var(--accent);
+    color: var(--background);
+  }
+
+  .badge-outline {
+    background: transparent;
+    border: 2px solid var(--accent);
+    color: var(--accent);
+  }
+
+  /* Utility Classes */
+  .text-primary {
+    color: var(--primary);
+  }
+
+  .bg-primary {
+    background-color: var(--primary);
+  }
+
+  .border-primary {
+    border-color: var(--primary);
+  }
+
+  .shadow-brutal {
+    box-shadow: 4px 4px 0 var(--accent);
+  }
+
+  .shadow-brutal-lg {
+    box-shadow: 8px 8px 0 var(--accent);
+  }
+
+  /* Additional helper classes */
+  .text-accent {
+    color: var(--accent);
+  }
+
+  .text-secondary {
+    color: var(--secondary);
+  }
+
+  .bg-accent {
+    background-color: var(--accent);
+  }
+
+  .bg-secondary {
+    background-color: var(--secondary);
+  }
+}
