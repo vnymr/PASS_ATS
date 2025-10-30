@@ -22,8 +22,21 @@ RUN npm run build
 # Production stage
 FROM node:18-alpine
 
-# Install runtime dependencies
-RUN apk add --no-cache ca-certificates openssl curl
+# Install Chromium and dependencies for Puppeteer
+RUN apk add --no-cache \
+    ca-certificates \
+    openssl \
+    curl \
+    chromium \
+    nss \
+    freetype \
+    harfbuzz \
+    ttf-freefont \
+    font-noto-emoji
+
+# Tell Puppeteer to use installed Chromium
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
 # Copy tectonic from builder
 COPY --from=builder /usr/local/bin/tectonic /usr/local/bin/tectonic
@@ -36,6 +49,7 @@ COPY --from=builder /app/frontend/dist ./frontend/dist
 # Copy only necessary files for server
 COPY server/package*.json ./server/
 COPY server/prisma ./server/prisma/
+COPY server/scripts ./server/scripts/
 
 # Install dependencies and generate Prisma client
 WORKDIR /app/server
@@ -43,7 +57,7 @@ RUN npm install --production && \
     npx prisma generate && \
     npm cache clean --force
 
-# Copy server code
+# Copy rest of server code
 COPY server/ ./
 
 # Create required directories
