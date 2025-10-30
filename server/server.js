@@ -1,4 +1,3 @@
-import logger, { requestLogger, authLogger } from './lib/logger.js';
 import express from 'express';
 import cors from 'cors';
 import jwt from 'jsonwebtoken';
