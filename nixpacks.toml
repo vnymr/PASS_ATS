@@ -30,4 +30,4 @@ cmd = "cd server && node server.js"
 
 [variables]
 PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = "true"
-PUPPETEER_EXECUTABLE_PATH = "/nix/store/*-chromium-*/bin/chromium"
+PUPPETEER_EXECUTABLE_PATH = "*"

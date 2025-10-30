@@ -81,18 +81,9 @@ async function applyWithAI(jobUrl, user, jobData, resumePath = null) {
   try {
     logger.info('🚀 Launching browser for AI application (stealth mode)...');
 
-    browser = await puppeteer.launch({
-      headless: process.env.PUPPETEER_HEADLESS !== 'false',
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--disable-blink-features=AutomationControlled',
-        '--disable-features=IsolateOrigins,site-per-process',
-        '--window-size=1920,1080'
-      ]
-    });
+    // Use centralized browser launcher with stealth mode
+    const { launchStealthBrowser } = await import('./browser-launcher.js');
+    browser = await launchStealthBrowser();
 
     const page = await browser.newPage();
 
