@@ -1,10 +1,9 @@
 # Nixpacks configuration for Railway deployment with Puppeteer support
-# This installs Chromium and required dependencies for headless browser automation
+# Uses Puppeteer's bundled Chromium for reliability across services
 
 [phases.setup]
 nixPkgs = [
   "nodejs_20",
-  "chromium",
   "nss",
   "freetype",
   "harfbuzz",
@@ -12,12 +11,30 @@ nixPkgs = [
   "fontconfig",
   "libdrm",
   "mesa",
-  "expat"
+  "expat",
+  "libX11",
+  "libxcb",
+  "libXcomposite",
+  "libXcursor",
+  "libXdamage",
+  "libXext",
+  "libXi",
+  "libXrandr",
+  "libXrender",
+  "libXtst",
+  "libxshmfence",
+  "alsa-lib",
+  "cups",
+  "dbus",
+  "gdk-pixbuf",
+  "libdrm",
+  "gtk3"
 ]
 
 [phases.install]
 cmds = [
-  "cd server && npm ci --prefer-offline --no-audit"
+  "cd server && npm ci --prefer-offline --no-audit",
+  "cd server/node_modules/puppeteer && node install.mjs || true"
 ]
 
 [phases.build]
@@ -27,7 +44,3 @@ cmds = [
 
 [start]
 cmd = "cd server && node server.js"
-
-[variables]
-PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = "true"
-PUPPETEER_EXECUTABLE_PATH = "*"

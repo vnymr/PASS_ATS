@@ -12,25 +12,53 @@ import { execSync } from 'child_process';
  * Handles Railway/Nixpacks environment with dynamic path resolution
  */
 function findChromiumPath() {
-  // If PUPPETEER_EXECUTABLE_PATH is set and not a wildcard, use it
+  // If PUPPETEER_EXECUTABLE_PATH is explicitly set (not wildcard), use it
   if (process.env.PUPPETEER_EXECUTABLE_PATH &&
-      !process.env.PUPPETEER_EXECUTABLE_PATH.includes('*')) {
+      process.env.PUPPETEER_EXECUTABLE_PATH !== '*') {
     logger.info(`Using PUPPETEER_EXECUTABLE_PATH: ${process.env.PUPPETEER_EXECUTABLE_PATH}`);
     return process.env.PUPPETEER_EXECUTABLE_PATH;
   }
 
-  // Try to find chromium using which command
+  // Try to find Puppeteer's bundled Chromium (most reliable)
+  try {
+    // Look for Puppeteer's cache directory
+    const homeDir = process.env.HOME || '/root';
+    const puppeteerCachePaths = [
+      `${homeDir}/.cache/puppeteer`,
+      `${process.cwd()}/node_modules/puppeteer/.local-chromium`,
+      '/app/server/node_modules/puppeteer/.local-chromium'
+    ];
+
+    for (const cachePath of puppeteerCachePaths) {
+      try {
+        const chromiumPath = execSync(`find ${cachePath} -name chrome -type f 2>/dev/null | head -1`,
+          { encoding: 'utf8' }
+        ).trim();
+
+        if (chromiumPath) {
+          logger.info(`Found Puppeteer bundled Chromium: ${chromiumPath}`);
+          return chromiumPath;
+        }
+      } catch (e) {
+        // Continue to next path
+      }
+    }
+  } catch (error) {
+    logger.debug('Could not find Puppeteer bundled Chromium');
+  }
+
+  // Try to find system chromium using which command
   try {
     const path = execSync('which chromium || which chromium-browser || which google-chrome',
       { encoding: 'utf8' }
     ).trim();
 
     if (path) {
-      logger.info(`Found Chromium at: ${path}`);
+      logger.info(`Found system Chromium: ${path}`);
       return path;
     }
   } catch (error) {
-    logger.debug('Could not find Chromium using which command');
+    logger.debug('Could not find system Chromium');
   }
 
   // Try Nix store path (Railway with Nixpacks)
@@ -47,7 +75,7 @@ function findChromiumPath() {
     logger.debug('Could not find Chromium in Nix store');
   }
 
-  logger.warn('Could not find Chromium executable, using Puppeteer default');
+  logger.info('Using Puppeteer default bundled Chromium');
   return undefined;
 }
 
