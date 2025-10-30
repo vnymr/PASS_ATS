@@ -5,7 +5,7 @@ import logger from './logger.js';
 const globalForPrisma = global;
 
 // Prisma Client configuration
-// Note: For Supabase, use the connection pooler URL (ends with pooler.supabase.com)
+// Note: Using Railway PostgreSQL database
 // Prisma manages its own connection pool internally
 export const prisma =
   globalForPrisma.prisma ||
@@ -13,7 +13,7 @@ export const prisma =
     log: process.env.NODE_ENV === 'production' ? ['error'] : ['error', 'warn'],
     errorFormat: 'minimal',
     // Connection pool is managed by Prisma internally
-    // For Supabase, ensure DATABASE_URL uses the pooler: aws-X-us-east-Y.pooler.supabase.com
+    // DATABASE_URL is provided by Railway environment variables
   });
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
