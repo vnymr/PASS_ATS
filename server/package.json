@@ -8,7 +8,7 @@
     "start": "node server.js",
     "worker": "node worker.js",
     "auto-apply-worker": "node auto-apply-worker.js",
-    "postinstall": "node -e \"try { require('puppeteer').executablePath(); console.log('✅ Chromium already installed'); } catch(e) { console.log('📥 Installing Chromium...'); }\"",
+    "postinstall": "node scripts/ensure-chromium.js",
     "dev": "nodemon server.js",
     "dev:worker": "nodemon worker.js",
     "dev:auto-apply-worker": "nodemon auto-apply-worker.js",
