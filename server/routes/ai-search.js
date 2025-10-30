@@ -32,26 +32,43 @@ router.post('/ai-search', async (req, res) => {
       });
     }
 
-    logger.info({ query }, 'AI job search requested');
+    logger.info({ query, limit, offset }, 'AI job search requested');
+
+    // Verify OpenAI API key is configured
+    if (!process.env.OPENAI_API_KEY) {
+      logger.error('OPENAI_API_KEY not configured');
+      return res.status(500).json({
+        error: 'AI search is not configured',
+        message: 'OpenAI API key is missing'
+      });
+    }
 
     // Step 1: Use AI to parse the natural language query into structured filters
-    const parsedQuery = await parseJobQuery(query);
-
-    logger.info({ parsedQuery }, 'Query parsed by AI');
+    let parsedQuery;
+    try {
+      parsedQuery = await parseJobQuery(query);
+      logger.info({ parsedQuery }, 'Query parsed by AI');
+    } catch (error) {
+      logger.error({ error: error.message, stack: error.stack }, 'AI query parsing failed');
+      throw new Error(`AI parsing failed: ${error.message}`);
+    }
 
     // Step 2: Build Prisma where clause from parsed query
     const where = buildWhereClause(parsedQuery);
+    logger.info({ where }, 'Built WHERE clause for database query');
 
     // Step 3: Get matching jobs
-    const [jobs, total] = await Promise.all([
-      prisma.aggregatedJob.findMany({
-        where,
-        orderBy: [
-          { postedDate: 'desc' },
-          { aiApplyable: 'desc' }
-        ],
-        take: parseInt(limit),
-        skip: parseInt(offset),
+    let jobs, total;
+    try {
+      [jobs, total] = await Promise.all([
+        prisma.aggregatedJob.findMany({
+          where,
+          orderBy: [
+            { postedDate: 'desc' },
+            { aiApplyable: 'desc' }
+          ],
+          take: parseInt(limit),
+          skip: parseInt(offset),
         select: {
           id: true,
           title: true,
@@ -78,9 +95,14 @@ router.post('/ai-search', async (req, res) => {
             select: { applications: true }
           }
         }
-      }),
-      prisma.aggregatedJob.count({ where })
-    ]);
+        }),
+        prisma.aggregatedJob.count({ where })
+      ]);
+      logger.info({ total, jobCount: jobs.length }, 'Database query completed');
+    } catch (error) {
+      logger.error({ error: error.message, stack: error.stack, where }, 'Database query failed');
+      throw new Error(`Database query failed: ${error.message}`);
+    }
 
     // Step 4: Generate AI explanation of search results
     const explanation = generateSearchExplanation(query, parsedQuery, total);
@@ -98,10 +120,15 @@ router.post('/ai-search', async (req, res) => {
     });
 
   } catch (error) {
-    logger.error({ error: error.message }, 'AI search failed');
+    logger.error({
+      error: error.message,
+      stack: error.stack,
+      query: req.body.query
+    }, 'AI search failed');
     res.status(500).json({
       error: 'Failed to search jobs',
-      message: error.message
+      message: error.message,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 });

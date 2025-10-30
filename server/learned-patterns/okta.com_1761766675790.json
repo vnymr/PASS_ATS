@@ -1,0 +1,135 @@
+{
+  "metadata": {
+    "url": "https://www.okta.com/company/careers/sales/senior-manager-professional-services-operations-7343873/",
+    "domain": "okta.com",
+    "timestamp": "2025-10-29T19:37:55.790Z",
+    "success": true
+  },
+  "formStructure": {
+    "totalFields": 25,
+    "fieldTypes": {
+      "text": 7,
+      "email": 1,
+      "radio": 4,
+      "file": 2,
+      "select-one": 9,
+      "checkbox": 2
+    },
+    "requiredFields": [
+      {
+        "name": "first_name",
+        "type": "text",
+        "label": "First Name"
+      },
+      {
+        "name": "last_name",
+        "type": "text",
+        "label": "Last Name"
+      },
+      {
+        "name": "email",
+        "type": "email",
+        "label": "Email"
+      },
+      {
+        "name": "question_60992122",
+        "type": "select-one",
+        "label": "Are you legally authorized to work in the country you reside?"
+      },
+      {
+        "name": "question_60992123",
+        "type": "select-one",
+        "label": "Will you now or in the future require Visa Sponsorship?"
+      },
+      {
+        "name": "question_60992124",
+        "type": "select-one",
+        "label": "To the best of your knowledge, do you have any family members / relatives or personal relationships at Okta or at any suppliers, partners, or vendors that have a business relationship with Okta?\n\n(For purposes of this question, a “family member / relative or personal relationship” is defined as close personal friends (including sexual and/or romantic relationships), close relatives (spouse, partner, children, cousins, aunts, uncles, nieces, nephews, grandparents or grandchildren), someone who lives in your household, or anyone else with whom you have a close enough personal relationship or connection that it could improperly bias your conduct or decision making or be perceived to be capable of impacting your conduct or decision making."
+      },
+      {
+        "name": "question_60992126",
+        "type": "select-one",
+        "label": "Do you have any outside business activity(ies) (advisory, consulting, or board roles, or side businesses) that you would continue engaging in or plan to engage in if you joined Okta in this role?"
+      },
+      {
+        "name": "question_60992128",
+        "type": "select-one",
+        "label": "Have you worked for Okta in the past?"
+      },
+      {
+        "name": "question_60992129[595167129]",
+        "type": "checkbox",
+        "label": "I acknowledge"
+      }
+    ]
+  },
+  "aiResponses": {
+    "first_name": "John",
+    "last_name": "Doe",
+    "email": "john@example.com",
+    "phone": "+1-555-123-4567",
+    "resume_format": "upload_pdf",
+    "files[resume]": "resume.pdf",
+    "cover_format": "upload_pdf",
+    "files[cover_letter]": "cover_letter.pdf",
+    "question_60992120": "linkedin.com/in/johndoe",
+    "question_60992121": "",
+    "question_60992122": "Yes",
+    "question_60992123": "No",
+    "question_60992124": "No",
+    "question_60992125": "",
+    "question_60992126": "No",
+    "question_60992127": "",
+    "question_60992128": "No",
+    "question_60992129[595167129]": true,
+    "question_60992130[595167130]": true,
+    "compliance_section[disability_status][0]": "I do not want to answer",
+    "compliance_section[veteran_status][0]": "I don't wish to answer",
+    "compliance_section[race][0]": "Decline To Self Identify",
+    "compliance_section[gender][0]": "Decline To Self Identify"
+  },
+  "problemsSolved": [
+    {
+      "problem": "Failed to fill files[resume]: InvalidStateError: Failed to set the 'value' property on 'HTMLInputElement': This input element accepts a filename, which may only be programmatically set to the empty string.",
+      "solution": {
+        "issue": "Failed to set the value property on file input elements for 'files[resume]' and 'files[cover_letter]'.",
+        "solution": "File inputs must be set by user interaction. Prompt the user to manually upload the files for 'files[resume]' and 'files[cover_letter]'.",
+        "fieldToRetry": null,
+        "newValue": null,
+        "needsManualIntervention": true,
+        "learnedPattern": "File inputs cannot be programmatically set; user must manually upload files."
+      },
+      "timestamp": "2025-10-29T19:37:55.791Z"
+    },
+    {
+      "problem": "Failed to fill files[cover_letter]: InvalidStateError: Failed to set the 'value' property on 'HTMLInputElement': This input element accepts a filename, which may only be programmatically set to the empty string.",
+      "timestamp": "2025-10-29T19:37:55.791Z"
+    }
+  ],
+  "patterns": {
+    "commonQuestions": [
+      {
+        "label": "If yes, please identify name of person / vendor and describe relationship / association:",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "If yes, please describe:",
+        "type": "text",
+        "category": "other"
+      }
+    ],
+    "fieldNamingConventions": {
+      "camelCase": 0,
+      "snake_case": 22,
+      "kebabCase": 0,
+      "standard": 3
+    },
+    "formLayout": {
+      "totalFields": 25,
+      "visibleFields": 25,
+      "requiredFields": 9,
+      "optionalFields": 16
+    }
+  }
+}

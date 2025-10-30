@@ -3,6 +3,7 @@
  * Records successful application patterns for future reference
  */
 
+import logger from './logger.js';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -21,7 +22,7 @@ class AILearningSystem {
     try {
       await fs.mkdir(this.learningDir, { recursive: true });
     } catch (error) {
-      console.error('Failed to create learning directory:', error.message);
+      logger.error('Failed to create learning directory:', error.message);
     }
   }
 
@@ -80,14 +81,14 @@ class AILearningSystem {
 
     try {
       await fs.writeFile(filepath, JSON.stringify(learningEntry, null, 2));
-      console.log(`📚 Recorded learning pattern: ${filename}`);
+      logger.info(`📚 Recorded learning pattern: ${filename}`);
 
       // Also update domain-specific knowledge base
       await this.updateDomainKnowledge(domain, learningEntry);
 
       return filepath;
     } catch (error) {
-      console.error('❌ Failed to record learning pattern:', error.message);
+      logger.error('❌ Failed to record learning pattern:', error.message);
       return null;
     }
   }
@@ -104,7 +105,7 @@ class AILearningSystem {
     try {
       const data = await fs.readFile(knowledgeFile, 'utf-8');
       const knowledge = JSON.parse(data);
-      console.log(`📖 Found learned patterns for ${domain}: ${knowledge.applications.length} applications`);
+      logger.info(`📖 Found learned patterns for ${domain}: ${knowledge.applications.length} applications`);
       return knowledge;
     } catch (error) {
       // No learned patterns yet
@@ -153,7 +154,7 @@ class AILearningSystem {
 
     // Save updated knowledge
     await fs.writeFile(knowledgeFile, JSON.stringify(knowledge, null, 2));
-    console.log(`📘 Updated domain knowledge for ${domain}`);
+    logger.info(`📘 Updated domain knowledge for ${domain}`);
   }
 
   /**
@@ -315,10 +316,10 @@ class AILearningSystem {
       const exportFile = path.join(this.learningDir, `training_export_${Date.now()}.json`);
       await fs.writeFile(exportFile, JSON.stringify(allPatterns, null, 2));
 
-      console.log(`📤 Exported ${allPatterns.length} patterns to ${exportFile}`);
+      logger.info(`📤 Exported ${allPatterns.length} patterns to ${exportFile}`);
       return exportFile;
     } catch (error) {
-      console.error('❌ Failed to export training data:', error.message);
+      logger.error('❌ Failed to export training data:', error.message);
       return null;
     }
   }

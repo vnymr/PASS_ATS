@@ -9,6 +9,35 @@ export type ResumeEntry = {
   jobUrl?: string; 
   createdAt?: string; 
 };
+export type ApplicationQuestions = {
+  // Legal & Authorization
+  legallyAuthorized?: string; // "Yes", "No"
+  requiresVisaSponsorship?: string; // "Yes", "No"
+
+  // Work Preferences
+  willingToRelocate?: string; // "Yes", "No", "Depends on location"
+  hasDriversLicense?: string; // "Yes", "No"
+  availableStartDate?: string; // e.g., "Immediately", "2 weeks notice"
+  noticePeriod?: string; // e.g., "2 weeks", "1 month"
+  workArrangement?: string; // "Remote", "Hybrid", "Onsite", "Flexible"
+  willingToTravel?: string; // "Yes", "No", "Yes, up to X%"
+  salaryExpectation?: string; // e.g., "$120,000 - $150,000"
+
+  // Additional Info
+  howDidYouHear?: string; // e.g., "LinkedIn", "Referral", "Company website"
+  hasRelativesAtCompany?: string; // "Yes", "No"
+  comfortableWithBackgroundCheck?: string; // "Yes", "No"
+
+  // EEO Questions (Optional - for compliance)
+  gender?: string; // "Male", "Female", "Non-binary", "Decline to answer"
+  race?: string; // "Decline to answer", various options
+  veteranStatus?: string; // "Not a veteran", "Veteran", "Decline to answer"
+  disabilityStatus?: string; // "No disability", "Has disability", "Decline to answer"
+
+  // Custom additional questions (user can add their own)
+  customQuestions?: Record<string, string>; // key-value pairs
+};
+
 export type Profile = {
   name?: string;
   email?: string;
@@ -28,6 +57,13 @@ export type Profile = {
   isComplete?: boolean;
   updatedAt?: string;
   savedResumeUrl?: string;
+  applicationQuestions?: ApplicationQuestions; // NEW: Auto-apply question answers
+  uploadedResume?: { // User-uploaded resume for auto-apply
+    content: string; // Base64 encoded PDF
+    filename: string;
+    uploadedAt: string;
+    size: number;
+  };
 };
 
 // Use relative paths in development to leverage Vite proxy

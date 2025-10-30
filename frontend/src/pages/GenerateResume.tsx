@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api-adapter';
 import Icons from '../components/ui/icons';
+import logger from '../utils/logger';
 
 export default function GenerateResume() {
   const navigate = useNavigate();
@@ -23,7 +24,7 @@ export default function GenerateResume() {
         setResumeText(profile.resumeText);
       }
     } catch (err) {
-      console.error('Failed to load profile:', err);
+      logger.error('Failed to load profile', err);
     }
   };
 
@@ -68,7 +69,8 @@ export default function GenerateResume() {
   };
 
   return (
-    <div className="w-full bg-background text-text px-4 pt-[88px] pb-8 lg:px-6">
+    <div className="w-full bg-background text-text px-4 pt-[104px] pb-10 lg:px-8 min-h-[calc(100vh-64px)]">
+      <div className="max-w-[1160px] mx-auto">
       {/* Header Section */}
       <div className="max-w-[960px] mx-auto mb-6">
         <div className="flex items-start gap-3">
@@ -180,6 +182,7 @@ export default function GenerateResume() {
             </div>
           )}
         </div>
+      </div>
       </div>
     </div>
   );

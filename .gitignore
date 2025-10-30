@@ -34,7 +34,14 @@ test-*.json
 test-*.sh
 monitor-*.sh
 
-# Temporary documentation (keep main docs)
+# Temporary documentation (keep README.md, ARCHITECTURE.md, docs/)
+*_SUMMARY.md
+*_STATUS.md
+*_COMPLETE.md
+*_GUIDE.md
+*_FIX.md
+*_CHECKLIST.md
+*_REPORT.md
 CACHING_IMPLEMENTATION.md
 PERFORMANCE_FIXES_SUMMARY.md
 SPEED_OPTIMIZATIONS_FINAL.md
@@ -44,6 +51,19 @@ QUICK_START.md
 
 # Extension (if not needed in repo)
 extension/
+
+# Test output
+test-output/
+**/test-output/
+*.png
+*.jpg
+*.jpeg
+debug-*.png
+
+# Old/backup files
+*.OLD
+*.backup
+*.bak
 
 # Temp files
 *.tmp

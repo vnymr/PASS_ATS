@@ -4,16 +4,16 @@ import logger from './logger.js';
 // Create a single instance of PrismaClient to be shared across the application
 const globalForPrisma = global;
 
+// Prisma Client configuration
+// Note: For Supabase, use the connection pooler URL (ends with pooler.supabase.com)
+// Prisma manages its own connection pool internally
 export const prisma =
   globalForPrisma.prisma ||
   new PrismaClient({
     log: process.env.NODE_ENV === 'production' ? ['error'] : ['error', 'warn'],
     errorFormat: 'minimal',
-    datasources: {
-      db: {
-        url: process.env.DATABASE_URL,
-      },
-    },
+    // Connection pool is managed by Prisma internally
+    // For Supabase, ensure DATABASE_URL uses the pooler: aws-X-us-east-Y.pooler.supabase.com
   });
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;

@@ -3,6 +3,7 @@
  * Uses OpenAI GPT-4 to intelligently fill form fields and solve problems via screenshots
  */
 
+import logger, { aiLogger } from './logger.js';
 import OpenAI from 'openai';
 
 class AIFormIntelligence {
@@ -25,37 +26,39 @@ class AIFormIntelligence {
    * @returns {Object} AI-generated field responses
    */
   async generateFieldResponses(fields, userProfile, jobData) {
-    console.log('🤖 Asking AI to generate field responses...');
+    logger.info('🤖 Asking AI to generate field responses...');
 
     const prompt = this.buildFormFillingPrompt(fields, userProfile, jobData);
 
     try {
       const response = await this.openai.chat.completions.create({
-        model: 'gpt-4o-mini',
+        model: 'gpt-5-mini',
         messages: [
           {
             role: 'system',
-            content: `You are an expert job application assistant. Your job is to intelligently fill out job application forms based on the user's profile and the job requirements.
+            content: `You are an EXPERT job application assistant with COMPLETE ACCESS to user information. Your job is to intelligently fill out EVERY field in job application forms.
 
 CRITICAL RULES:
 1. Return ONLY valid JSON, no markdown, no explanation
-2. Every field must have a response
-3. Answers must be truthful based on user profile
-4. Match the expected format (date format, number format, etc.)
-5. For essay questions, write compelling 2-3 paragraph responses
-6. For "why" questions, relate user's experience to the specific job
-7. Keep text field responses concise unless it's a textarea
+2. EVERY field MUST have a response - use ALL available user data
+3. Make INTELLIGENT INFERENCES for missing data based on profile
+4. Answers must be truthful but persuasive
+5. Match the expected format exactly (date format, number format, exact option values)
+6. For essay questions, write compelling 2-4 paragraph responses with SPECIFIC examples
+7. For "why" questions, relate user's SPECIFIC experience to the job
 8. For select/dropdown fields, choose the EXACT value from options
-9. For checkboxes/radios, return true/false or the value
-10. Be professional and enthusiastic`
+9. For radio buttons, return the exact value to select
+10. For checkbox groups, return an array of values to check
+11. For yes/no questions, make intelligent defaults based on user profile
+12. Be professional, enthusiastic, and comprehensive
+13. AT ANY COST, provide ALL information needed to fill the form completely`
           },
           {
             role: 'user',
             content: prompt
           }
         ],
-        temperature: 0.7,
-        max_tokens: 2000
+        max_completion_tokens: 4000
       });
 
       const content = response.choices[0].message.content.trim();
@@ -70,22 +73,39 @@ CRITICAL RULES:
         const jsonContent = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
         fieldResponses = JSON.parse(jsonContent);
       } catch (parseError) {
-        console.error('❌ Failed to parse AI response as JSON:', content);
+        logger.error('❌ Failed to parse AI response as JSON:', content);
         throw new Error('AI returned invalid JSON');
       }
 
-      console.log(`✅ AI generated responses for ${Object.keys(fieldResponses).length} fields`);
-      console.log(`💰 Cost: $${this.costTracker.totalCost.toFixed(4)} (${this.costTracker.totalTokens} tokens)`);
+      logger.info(`✅ AI generated responses for ${Object.keys(fieldResponses).length} fields`);
+      logger.info(`💰 Cost: $${this.costTracker.totalCost.toFixed(4)} (${this.costTracker.totalTokens} tokens)`);
+
+      // Log AI decisions for transparency
+      logger.info('\n🧠 AI DECISIONS:');
+      Object.entries(fieldResponses).slice(0, 10).forEach(([field, value]) => {
+        const fieldInfo = fields.find(f => f.name === field);
+        if (fieldInfo) {
+          let displayValue = String(value);
+          if (displayValue.length > 60) {
+            displayValue = displayValue.substring(0, 60) + '...';
+          }
+          logger.info(`   ${field} (${fieldInfo.type}): ${displayValue}`);
+        }
+      });
+      if (Object.keys(fieldResponses).length > 10) {
+        logger.info(`   ... and ${Object.keys(fieldResponses).length - 10} more fields`);
+      }
+      logger.info('');
 
       return fieldResponses;
     } catch (error) {
-      console.error('❌ AI form filling failed:', error.message);
+      logger.error('❌ AI form filling failed:', error.message);
       throw error;
     }
   }
 
   /**
-   * Build prompt for form filling
+   * Build prompt for form filling with COMPLETE user profile data
    */
   buildFormFillingPrompt(fields, userProfile, jobData) {
     const fieldsDescription = fields.map(field => {
@@ -99,56 +119,151 @@ CRITICAL RULES:
       return desc;
     }).join('\n');
 
+    // Format work experience with ALL details
+    const experienceDetails = userProfile.experience && userProfile.experience.length > 0
+      ? userProfile.experience.map(exp => {
+          let details = `- ${exp.title || exp.position || 'Position'} at ${exp.company || 'Company'}`;
+          if (exp.duration) details += ` (${exp.duration})`;
+          if (exp.startDate || exp.endDate) {
+            details += ` [${exp.startDate || 'Start'} - ${exp.endDate || 'Present'}]`;
+          }
+          if (exp.description) details += `\n  Description: ${exp.description}`;
+          if (exp.achievements) details += `\n  Achievements: ${Array.isArray(exp.achievements) ? exp.achievements.join('; ') : exp.achievements}`;
+          if (exp.technologies) details += `\n  Technologies: ${Array.isArray(exp.technologies) ? exp.technologies.join(', ') : exp.technologies}`;
+          return details;
+        }).join('\n\n')
+      : 'Not provided';
+
+    // Format education with ALL details
+    const educationDetails = userProfile.education && userProfile.education.length > 0
+      ? userProfile.education.map(edu => {
+          let details = `- ${edu.degree || 'Degree'} in ${edu.field || edu.major || 'Field'}`;
+          details += ` from ${edu.school || edu.institution || 'Institution'}`;
+          if (edu.year || edu.graduationDate) details += ` (${edu.year || edu.graduationDate})`;
+          if (edu.gpa) details += `\n  GPA: ${edu.gpa}`;
+          if (edu.honors) details += `\n  Honors: ${edu.honors}`;
+          if (edu.courses) details += `\n  Relevant Courses: ${Array.isArray(edu.courses) ? edu.courses.join(', ') : edu.courses}`;
+          return details;
+        }).join('\n\n')
+      : 'Not provided';
+
+    // Format pre-answered application questions
+    const appQuestions = userProfile.applicationQuestions || {};
+    const hasPreAnswers = Object.keys(appQuestions).length > 0;
+    const preAnswersSection = hasPreAnswers ? `
+
+=== PRE-ANSWERED APPLICATION QUESTIONS ===
+The user has pre-answered the following common questions. USE THESE ANSWERS EXACTLY when you encounter matching fields:
+
+${Object.entries(appQuestions).filter(([_, value]) => value).map(([key, value]) => {
+      // Convert camelCase to readable format
+      const readableKey = key.replace(/([A-Z])/g, ' $1').toLowerCase().trim();
+      return `- ${readableKey}: ${value}`;
+    }).join('\n')}
+
+IMPORTANT: When a form field matches any of these pre-answered questions (by name, label, or meaning), use the pre-answered value EXACTLY. Do NOT generate a new answer.
+` : '';
+
     return `Job Application Form Filling Task
 
-JOB DETAILS:
+You are an expert form-filling AI with COMPLETE ACCESS to the user's profile. Your job is to provide accurate, comprehensive, and intelligent responses to ALL form fields.
+
+=== JOB DETAILS ===
 Title: ${jobData.title || 'Not specified'}
 Company: ${jobData.company || 'Not specified'}
-Description: ${jobData.description ? jobData.description.substring(0, 500) : 'Not provided'}
+Description: ${jobData.description || 'Not provided'}
+${preAnswersSection}
+=== COMPLETE USER PROFILE ===
 
-USER PROFILE:
-Name: ${userProfile.fullName || userProfile.firstName + ' ' + userProfile.lastName || 'Not provided'}
-Email: ${userProfile.email || 'Not provided'}
-Phone: ${userProfile.phone || 'Not provided'}
-Location: ${userProfile.location || 'Not provided'}
-LinkedIn: ${userProfile.linkedIn || 'Not provided'}
-Portfolio: ${userProfile.portfolio || 'Not provided'}
+PERSONAL INFORMATION:
+- Full Name: ${userProfile.fullName || (userProfile.firstName && userProfile.lastName ? `${userProfile.firstName} ${userProfile.lastName}` : 'Not provided')}
+- First Name: ${userProfile.firstName || userProfile.fullName?.split(' ')[0] || 'Not provided'}
+- Last Name: ${userProfile.lastName || userProfile.fullName?.split(' ').slice(1).join(' ') || 'Not provided'}
+- Email: ${userProfile.email || 'Not provided'}
+- Phone: ${userProfile.phone || 'Not provided'}
+- Location: ${userProfile.location || userProfile.address || 'Not provided'}
+- LinkedIn: ${userProfile.linkedIn || userProfile.linkedin || 'Not provided'}
+- Portfolio/Website: ${userProfile.portfolio || userProfile.website || 'Not provided'}
+- GitHub: ${userProfile.github || 'Not provided'}
 
-Work Experience:
-${userProfile.experience ? userProfile.experience.map(exp =>
-  `- ${exp.title} at ${exp.company} (${exp.duration || ''})`
-).join('\n') : 'Not provided'}
+WORK EXPERIENCE (with full details):
+${experienceDetails}
 
-Education:
-${userProfile.education ? userProfile.education.map(edu =>
-  `- ${edu.degree} in ${edu.field} from ${edu.school}`
-).join('\n') : 'Not provided'}
+EDUCATION (with full details):
+${educationDetails}
 
-Skills: ${userProfile.skills ? userProfile.skills.join(', ') : 'Not provided'}
+SKILLS & EXPERTISE:
+${userProfile.skills && userProfile.skills.length > 0
+  ? '- ' + userProfile.skills.join('\n- ')
+  : 'Not provided'}
 
-FORM FIELDS TO FILL:
+CERTIFICATIONS:
+${userProfile.certifications && userProfile.certifications.length > 0
+  ? userProfile.certifications.map(c => `- ${c.name || c} (${c.issuer || ''} ${c.year || ''})`).join('\n')
+  : 'Not provided'}
+
+ADDITIONAL INFO:
+- Summary/Bio: ${userProfile.summary || userProfile.bio || 'Not provided'}
+- Years of Experience: ${userProfile.yearsOfExperience || 'Calculate from work history'}
+- Current Title: ${userProfile.currentTitle || userProfile.experience?.[0]?.title || 'Not provided'}
+
+=== FORM FIELDS TO FILL ===
 ${fieldsDescription}
 
-TASK:
-Generate intelligent, truthful responses for ALL fields above. Return as JSON object with field names as keys.
+=== YOUR TASK ===
+Generate intelligent, truthful, and compelling responses for EVERY field above.
 
-For essay/textarea questions (like "Why do you want this job?"):
-- Write 2-3 compelling paragraphs
-- Connect user's experience to the specific job
-- Show enthusiasm and cultural fit
-- Be specific, not generic
+CRITICAL INSTRUCTIONS:
+1. **PRIORITY #1**: If the user has a pre-answered question that matches a form field, use that answer EXACTLY
+2. Use ALL available user data - don't leave any information unused
+3. For missing data, make INTELLIGENT INFERENCES based on available information
+4. Be truthful but persuasive - show the user in the best light
+5. Match the exact format and value expected by each field
+6. For essay/textarea questions:
+   - Write 2-4 compelling paragraphs
+   - Connect user's SPECIFIC experience to the job requirements
+   - Use concrete examples from user's work history
+   - Show enthusiasm, cultural fit, and unique value
+   - Be specific, NOT generic
 
-For select/dropdown fields:
-- Choose the EXACT value from the options list
-- Pick the most appropriate match
+7. For select/dropdown fields:
+   - Choose the EXACT value from options list
+   - Match user's qualifications to the best option
 
-RETURN FORMAT (JSON only, no markdown):
+8. For yes/no questions:
+   - Check pre-answered questions FIRST
+   - If no pre-answer: Consider legal authorization: default to "Yes" if user is in US/has work history in US
+   - If no pre-answer: Consider visa sponsorship: default to "No" if user appears to be citizen
+   - If no pre-answer: Consider conflicts of interest: default to "No" unless specified
+   - Use intelligent defaults based on profile
+
+8b. For consent/agreement checkboxes (IMPORTANT):
+   - ANY checkbox about "agree", "consent", "acknowledge", "terms", "privacy", "data retention", "GDPR", or "future opportunities" should ALWAYS be set to true
+   - These are typically required for application processing
+   - Return true (boolean) for these checkboxes
+
+9. For date fields: Use ISO format (YYYY-MM-DD) or format specified in field
+
+10. For phone fields: Use user's phone number exactly as provided
+
+11. For work authorization questions:
+    - Check pre-answered questions FIRST
+    - Legally authorized: Infer from location/work history
+    - Visa sponsorship: Infer from citizenship/location
+    - Be realistic and truthful
+
+RETURN FORMAT (JSON only, NO markdown, NO explanations):
 {
   "fieldName1": "response1",
   "fieldName2": "response2",
-  "essayField": "Multi-paragraph response here...",
-  "selectField": "Exact option value"
-}`;
+  "essayField": "Multi-paragraph compelling response with specific examples from user's experience...",
+  "selectField": "exact_option_value_from_list",
+  "radioField": "selected_value",
+  "checkboxField": ["value1", "value2", "value3"],
+  "yesNoField": "Yes" or "No"
+}
+
+REMEMBER: You have COMPLETE user data. Provide ALL information needed. Be comprehensive and intelligent.`;
   }
 
   /**
@@ -159,7 +274,7 @@ RETURN FORMAT (JSON only, no markdown):
    * @returns {Object} AI's solution
    */
   async analyzeScreenshotAndSolve(screenshotBase64, problem, context = {}) {
-    console.log('👁️ Asking AI to analyze screenshot and solve problem...');
+    logger.info('👁️ Asking AI to analyze screenshot and solve problem...');
 
     try {
       const response = await this.openai.chat.completions.create({
@@ -205,8 +320,7 @@ Analyze the screenshot and provide a solution.`
             ]
           }
         ],
-        max_tokens: 1000,
-        temperature: 0.5
+        max_completion_tokens: 1000
       });
 
       const content = response.choices[0].message.content.trim();
@@ -216,12 +330,12 @@ Analyze the screenshot and provide a solution.`
       const jsonContent = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
       const solution = JSON.parse(jsonContent);
 
-      console.log('✅ AI analyzed screenshot and provided solution');
-      console.log('💡 Solution:', solution.solution);
+      logger.info('✅ AI analyzed screenshot and provided solution');
+      logger.info('💡 Solution:', solution.solution);
 
       return solution;
     } catch (error) {
-      console.error('❌ Screenshot analysis failed:', error.message);
+      logger.error('❌ Screenshot analysis failed:', error.message);
       return {
         issue: 'Failed to analyze screenshot',
         solution: 'Manual intervention required',
@@ -338,9 +452,9 @@ Analyze the screenshot and provide a solution.`
     this.costTracker.requests++;
     this.costTracker.totalTokens += usage.total_tokens;
 
-    // GPT-4o-mini pricing: $0.150/1M input, $0.600/1M output
-    const inputCost = (usage.prompt_tokens / 1_000_000) * 0.15;
-    const outputCost = (usage.completion_tokens / 1_000_000) * 0.60;
+    // GPT-5-mini pricing: $0.25/1M input, $2.00/1M output (as of Aug 2025)
+    const inputCost = (usage.prompt_tokens / 1_000_000) * 0.25;
+    const outputCost = (usage.completion_tokens / 1_000_000) * 2.00;
     this.costTracker.totalCost += inputCost + outputCost;
   }
 

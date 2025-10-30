@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@clerk/clerk-react';
 import { api, type Profile } from '../api-clerk';
 import Icons from './ui/icons';
+import logger from '../utils/logger';
 
 interface ProfileModalProps {
   onClose: () => void;
@@ -42,7 +43,7 @@ export default function ProfileModal({ onClose }: ProfileModalProps) {
         }
       }
     } catch (err) {
-      console.error('Failed to load profile:', err);
+      logger.error('Failed to load profile', err);
     } finally {
       setLoading(false);
     }
@@ -82,7 +83,7 @@ export default function ProfileModal({ onClose }: ProfileModalProps) {
 
       onClose();
     } catch (err) {
-      console.error('Failed to save profile:', err);
+      logger.error('Failed to save profile', err);
       alert('Failed to save profile. Please try again.');
     } finally {
       setSaving(false);
@@ -158,7 +159,7 @@ export default function ProfileModal({ onClose }: ProfileModalProps) {
 
       alert('Resume parsed successfully! Review and update the auto-filled information.');
     } catch (err) {
-      console.error('Failed to parse resume:', err);
+      logger.error('Failed to parse resume', err);
       alert('Failed to parse resume. You can still fill in the information manually.');
     } finally {
       setParsing(false);

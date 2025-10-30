@@ -103,14 +103,14 @@ router.get('/jobs', async (req, res) => {
           aiApplyable: true,
           postedDate: true,
           source: true,
-          // Include extracted metadata (temporarily disabled until schema sync)
-          // extractedSkills: true,
-          // extractedExperience: true,
-          // extractedEducation: true,
-          // extractedJobLevel: true,
-          // extractedKeywords: true,
-          // extractedBenefits: true,
-          // extractionConfidence: true,
+          // Include extracted metadata
+          extractedSkills: true,
+          extractedExperience: true,
+          extractedEducation: true,
+          extractedJobLevel: true,
+          extractedKeywords: true,
+          extractedBenefits: true,
+          extractionConfidence: true,
           _count: {
             select: { applications: true }
           }
@@ -118,6 +118,11 @@ router.get('/jobs', async (req, res) => {
       }),
       prisma.aggregatedJob.count({ where })
     ]);
+
+    // Prevent caching issues
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
 
     res.json({
       jobs,

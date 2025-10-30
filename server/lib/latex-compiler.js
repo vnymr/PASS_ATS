@@ -2,6 +2,7 @@
  * Simple LaTeX to PDF compiler
  */
 
+import logger, { compileLogger } from './logger.js';
 import { exec } from 'child_process';
 import fs from 'fs/promises';
 import path from 'path';
@@ -69,16 +70,16 @@ async function compileLatex(latexCode) {
         }
 
         compiled = true;
-        console.log(`✅ Successfully compiled PDF with ${compiler.name || compiler.cmd}`);
+        logger.info(`✅ Successfully compiled PDF with ${compiler.name || compiler.cmd}`);
         break;
       } catch (error) {
         lastError = error;
         // Only log errors that aren't about missing binaries
         if (error.message && !error.message.includes('not found') && !error.message.includes('ENOENT')) {
           if (compiler.name.includes('tectonic')) {
-            console.log(`⚠️ ${compiler.name} compilation failed: ${error.message.substring(0, 200)}`);
+            logger.info(`⚠️ ${compiler.name} compilation failed: ${error.message.substring(0, 200)}`);
             if (error.stderr && error.stderr.length > 0) {
-              console.log(`📋 Stderr: ${error.stderr.substring(0, 300)}`);
+              logger.info(`📋 Stderr: ${error.stderr.substring(0, 300)}`);
             }
           }
         }
@@ -99,7 +100,7 @@ async function compileLatex(latexCode) {
   } catch (error) {
     // Only log critical errors, not expected fallbacks
     if (!error.message.includes('not available')) {
-      console.error('LaTeX compilation error:', error.message);
+      logger.error('LaTeX compilation error:', error.message);
     }
 
     // Try to read log file for detailed error context
@@ -179,7 +180,7 @@ async function compileLatex(latexCode) {
     try {
       await fs.rm(tempDir, { recursive: true, force: true });
     } catch (cleanupError) {
-      console.warn('Failed to clean up temp directory:', cleanupError);
+      logger.warn('Failed to clean up temp directory:', cleanupError);
     }
   }
 }
@@ -206,7 +207,7 @@ function validateLatex(latexCode) {
   const closeBraces = (latexCode.match(/}/g) || []).length;
 
   if (openBraces !== closeBraces) {
-    console.warn(`Warning: Unbalanced braces (open: ${openBraces}, close: ${closeBraces})`);
+    logger.warn(`Warning: Unbalanced braces (open: ${openBraces}, close: ${closeBraces})`);
   }
 
   return true;

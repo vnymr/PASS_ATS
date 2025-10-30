@@ -3,6 +3,7 @@ import Icons from './ui/icons';
 import { htmlToPlainText } from '../utils/htmlCleaner';
 import { calculateSkillMatch, getMatchCategory, extractUserSkills } from '../utils/skillMatcher';
 import { useState, useEffect } from 'react';
+import logger from '../utils/logger';
 
 interface JobDetailPanelProps {
   job: Job | null;
@@ -11,9 +12,10 @@ interface JobDetailPanelProps {
   onGenerateResume: (job: Job) => void;
   onApply: (url: string) => void;
   onAutoApply?: (job: Job) => void;
+  isSidePanel?: boolean;
 }
 
-export default function JobDetailPanel({ job, isOpen, onClose, onGenerateResume, onApply, onAutoApply }: JobDetailPanelProps) {
+export default function JobDetailPanel({ job, isOpen, onClose, onGenerateResume, onApply, onAutoApply, isSidePanel = false }: JobDetailPanelProps) {
   if (!job) return null;
 
   const [userProfile, setUserProfile] = useState<any>(null);
@@ -29,7 +31,7 @@ export default function JobDetailPanel({ job, isOpen, onClose, onGenerateResume,
         setUserProfile(profile);
       }
     } catch (error) {
-      console.error('Failed to load user profile:', error);
+      logger.error('Failed to load user profile', error);
     }
   }, []);
 
@@ -72,12 +74,14 @@ export default function JobDetailPanel({ job, isOpen, onClose, onGenerateResume,
     ? job.extractedBenefits
     : [];
 
-  return (
-    <div
-      className={`fixed top-0 right-0 h-full w-full md:w-[600px] lg:w-[700px] transform transition-transform duration-300 ease-in-out z-50 bg-elevated shadow-[-4px_0_20px_rgba(0,0,0,0.15)] ${
+  const containerClass = isSidePanel
+    ? 'relative w-full md:w-[600px] lg:w-[700px] bg-elevated rounded-2xl border border-[rgba(28,63,64,0.12)] shadow-md h-[calc(100vh-220px)] overflow-hidden'
+    : `fixed top-0 right-0 h-full w-full md:w-[600px] lg:w-[700px] transform transition-transform duration-300 ease-in-out z-50 bg-elevated shadow-[-4px_0_20px_rgba(0,0,0,0.15)] ${
         isOpen ? 'translate-x-0' : 'translate-x-full'
-      }`}
-    >
+      }`;
+
+  return (
+    <div className={containerClass}>
       {/* Header - Sticky */}
       <div className="sticky top-0 z-10 border-b border-gray-200 bg-elevated">
         <div className="p-6">

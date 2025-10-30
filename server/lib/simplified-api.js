@@ -2,6 +2,7 @@
  * Simplified API endpoints using the AI Resume Generator
  */
 
+import logger from './logger.js';
 import AIResumeGenerator from './ai-resume-generator.js';
 
 /**
@@ -60,7 +61,7 @@ async function generateResumeEndpoint(req, res) {
       });
     }
   } catch (error) {
-    console.error('Resume generation error:', error);
+    logger.error('Resume generation error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 }

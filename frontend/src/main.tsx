@@ -5,12 +5,13 @@ import { ClerkProvider } from '@clerk/clerk-react';
 import { ThemeProvider } from 'next-themes';
 import App from './App';
 import './index.css';
+import logger from './utils/logger';
 
 const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY || 'pk_test_placeholder';
 
 // Only throw error if we're in production and still using placeholder
 if (PUBLISHABLE_KEY === 'pk_test_placeholder' && import.meta.env.PROD) {
-  console.warn('Warning: Using placeholder Clerk key. Authentication may not work properly.');
+  logger.warn('Using placeholder Clerk key. Authentication may not work properly.');
 }
 
 // Error boundary for Clerk loading issues
@@ -20,7 +21,7 @@ function ClerkErrorBoundary({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     const handleError = (event: ErrorEvent) => {
       if (event.message?.includes('Clerk') || event.message?.includes('clerk')) {
-        console.error('Clerk loading error:', event);
+        logger.error('Clerk loading error', { message: event.message });
         setHasError(true);
       }
     };

@@ -3,6 +3,7 @@ import { useAuth } from '@clerk/clerk-react';
 import { useNavigate } from 'react-router-dom';
 import Icons from './ui/icons';
 import { api } from '../api-clerk';
+import logger from '../utils/logger';
 
 interface Subscription {
   tier: string;
@@ -41,7 +42,7 @@ export default function BillingSection() {
       setSubscription(subData);
       setUsage(usageData);
     } catch (err) {
-      console.error('Failed to load billing data:', err);
+      logger.error('Failed to load billing data', err);
       setError('Failed to load billing information');
     } finally {
       setLoading(false);

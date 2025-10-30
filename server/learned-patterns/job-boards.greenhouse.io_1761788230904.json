@@ -1,0 +1,93 @@
+{
+  "metadata": {
+    "url": "https://job-boards.greenhouse.io/adyen/jobs/7334629",
+    "domain": "job-boards.greenhouse.io",
+    "timestamp": "2025-10-30T01:37:10.904Z",
+    "success": true
+  },
+  "formStructure": {
+    "totalFields": 14,
+    "fieldTypes": {
+      "text": 9,
+      "tel": 1,
+      "file": 2,
+      "checkbox": 1,
+      "textarea": 1
+    },
+    "requiredFields": [
+      {
+        "name": "unnamed_4",
+        "type": "text",
+        "label": ""
+      },
+      {
+        "name": "question_60921384[]",
+        "type": "checkbox",
+        "label": "Acknowledge/Confirm"
+      },
+      {
+        "name": "unnamed_13",
+        "type": "text",
+        "label": "Select..."
+      }
+    ]
+  },
+  "aiResponses": {
+    "first_name": "Vinay",
+    "last_name": "Muthareddy",
+    "email": "ivinaymr@gmail.com",
+    "country": "United States",
+    "unnamed_4": "Dallas, TX",
+    "phone": "9452447733",
+    "resume": "path/to/resume.pdf",
+    "cover_letter": "path/to/cover_letter.pdf",
+    "question_60921384": [
+      "I confirm that I have read and understood the application process."
+    ],
+    "question_60921385": "I appreciate the commitment Adyen has towards creating an inclusive environment. As someone who values diversity and accessibility, I would like to request that any communication regarding the recruitment process be available in formats that accommodate my specific needs. Please let me know if there are materials or support available to assist me in fully engaging with the application process.",
+    "question_61030394": "No",
+    "question_61004671": "3",
+    "unnamed_13": "Select...",
+    "question_61004672": "I am excited about the opportunity to work at Adyen because of its reputation as a leader in payment solutions that prioritize innovation and customer-centricity. My experience at SYNYCS Technologies, where I contributed to optimizing business processes through data analysis and project management, aligns perfectly with Adyen's mission to enhance the payment experience for businesses globally. I admire how Adyen leverages technology to solve complex problems and create seamless transactions for users. \n\nFurthermore, my skills in data analytics and visualization tools such as Tableau and Power BI equip me to contribute to Adyen’s data-driven decision-making processes. I am enthusiastic about the prospect of collaborating with a diverse team to drive impactful results and further develop my expertise in financial risk management. I believe that my proactive approach and commitment to continuous learning would make me a valuable addition to the Adyen team."
+  },
+  "problemsSolved": [
+    {
+      "problem": "No response for required field: question_60921384[]",
+      "solution": {
+        "issue": "No response for required field: question_60921384[]",
+        "solution": "Ensure that the checkbox for 'Acknowledge/Confirm' is checked.",
+        "fieldToRetry": "question_60921384[]",
+        "newValue": "594858223",
+        "needsManualIntervention": false,
+        "learnedPattern": "Ensure all required checkbox fields are checked before submission."
+      },
+      "timestamp": "2025-10-30T01:37:10.904Z"
+    }
+  ],
+  "patterns": {
+    "commonQuestions": [
+      {
+        "label": "How many years of experience do you you possess in analyzing corporate business models and assessing financial health within the context of financial risk management?*",
+        "type": "text",
+        "category": "experience"
+      },
+      {
+        "label": "Why would you like to work at Adyen?",
+        "type": "text",
+        "category": "other"
+      }
+    ],
+    "fieldNamingConventions": {
+      "camelCase": 0,
+      "snake_case": 10,
+      "kebabCase": 0,
+      "standard": 4
+    },
+    "formLayout": {
+      "totalFields": 14,
+      "visibleFields": 14,
+      "requiredFields": 3,
+      "optionalFields": 11
+    }
+  }
+}

@@ -4,6 +4,7 @@ import { UserButton, useAuth } from '@clerk/clerk-react';
 import Icons from '../components/ui/icons';
 import { api, type Quota } from '../api-clerk';
 import logoImg from '../logo.svg';
+import logger from '../utils/logger';
 
 interface ModernLayoutProps {
   children: React.ReactNode;
@@ -26,7 +27,7 @@ function UsageBadge() {
       const data = await api.getQuota(token || undefined);
       setQuota(data);
     } catch (error) {
-      console.error('Failed to load quota:', error);
+      logger.error('Failed to load quota', error);
     }
   }
 
@@ -84,14 +85,7 @@ export default function ModernLayout({ children }: ModernLayoutProps) {
               <span>Generate</span>
             </button>
 
-            <button
-              className={`modern-nav-item ${location.pathname === '/history' ? 'active' : ''}`}
-              onClick={() => (location.pathname === '/dashboard' ? scrollToHistory() : navigate('/history'))}
-              aria-label="History"
-            >
-              <Icons.clock size={16} />
-              <span>History</span>
-            </button>
+            
 
             <button
               className={`modern-nav-item ${location.pathname === '/find-jobs' ? 'active' : ''}`}
@@ -109,6 +103,15 @@ export default function ModernLayout({ children }: ModernLayoutProps) {
             >
               <Icons.user size={16} />
               <span>Profile</span>
+            </button>
+
+            <button
+              className={`modern-nav-item ${location.pathname === '/application-questions' ? 'active' : ''}`}
+              onClick={() => navigate('/application-questions')}
+              aria-label="Application Questions"
+            >
+              <Icons.fileText size={16} />
+              <span>Auto-Apply</span>
             </button>
 
             <button
@@ -134,7 +137,15 @@ export default function ModernLayout({ children }: ModernLayoutProps) {
       </nav>
 
       {/* Main Content */}
-      {children}
+      {['/dashboard', '/generate'].includes(location.pathname) ? (
+        <main className="w-full px-4 lg:px-8 pt-[88px] pb-8">
+          <div className="max-w-[1160px] mx-auto">
+            {children}
+          </div>
+        </main>
+      ) : (
+        children
+      )}
     </div>
   );
 }

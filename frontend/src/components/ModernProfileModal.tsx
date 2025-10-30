@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '@clerk/clerk-react';
 import { api, type Profile } from '../api-clerk';
 import Icons from './ui/icons';
+import logger from '../utils/logger';
 
 interface ModernProfileModalProps {
   onClose: () => void;
@@ -34,7 +35,7 @@ export default function ModernProfileModal({ onClose }: ModernProfileModalProps)
         setProfile(data);
       }
     } catch (err) {
-      console.error('Failed to load profile:', err);
+      logger.error('Failed to load profile', err);
     } finally {
       setLoading(false);
     }
@@ -47,7 +48,7 @@ export default function ModernProfileModal({ onClose }: ModernProfileModalProps)
       await api.postProfile(profile, token || undefined);
       onClose();
     } catch (err) {
-      console.error('Failed to save profile:', err);
+      logger.error('Failed to save profile', err);
     } finally {
       setSaving(false);
     }
@@ -173,12 +174,11 @@ export default function ModernProfileModal({ onClose }: ModernProfileModalProps)
               Professional Summary
             </label>
             <textarea
-              className="modern-form-input"
+              className="modern-form-input resize-y"
               rows={4}
               value={profile.summary || ''}
               onChange={(e) => setProfile({...profile, summary: e.target.value})}
               placeholder="A brief overview of your professional background and expertise..."
-              className="modern-form-input resize-y"
             />
           </div>
 

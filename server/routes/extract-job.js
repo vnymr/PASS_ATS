@@ -1,3 +1,4 @@
+import logger from '../lib/logger.js';
 import OpenAI from 'openai';
 import crypto from 'crypto';
 
@@ -19,10 +20,10 @@ export async function extractJobHandler(req, res) {
 
     // No length limit - accept job descriptions of any size
 
-    console.log('\n📋 Job extraction request:');
-    console.log(`   - URL: ${url}`);
-    console.log(`   - Page title: ${pageTitle}`);
-    console.log(`   - Content length: ${textContent.length} chars`);
+    logger.info('\n📋 Job extraction request:');
+    logger.info(`   - URL: ${url}`);
+    logger.info(`   - Page title: ${pageTitle}`);
+    logger.info(`   - Content length: ${textContent.length} chars`);
 
     // Check cache (using URL as key)
     const cacheKey = `job:${crypto.createHash('md5').update(url || textContent).digest('hex')}`;
@@ -31,7 +32,7 @@ export async function extractJobHandler(req, res) {
     if (global.jobExtractionCache) {
       const cached = global.jobExtractionCache.get(cacheKey);
       if (cached && Date.now() - cached.timestamp < 86400000) { // 24 hours
-        console.log('✅ Cache hit for job extraction');
+        logger.info('✅ Cache hit for job extraction');
         return res.json(cached.data);
       }
     } else {
@@ -39,10 +40,10 @@ export async function extractJobHandler(req, res) {
     }
 
     // Extract using LLM
-    console.log('🤖 Extracting job details with LLM...');
+    logger.info('🤖 Extracting job details with LLM...');
     const extracted = await extractJobWithLLM(textContent, pageTitle);
 
-    console.log('✅ Extraction complete:', {
+    logger.info('✅ Extraction complete:', {
       jobTitle: extracted.jobTitle,
       company: extracted.company,
       skillsCount: extracted.skills?.length || 0
@@ -63,7 +64,7 @@ export async function extractJobHandler(req, res) {
     res.json(extracted);
 
   } catch (error) {
-    console.error('❌ Job extraction error:', error);
+    logger.error('❌ Job extraction error:', error);
     res.status(500).json({
       error: 'Failed to extract job details',
       message: error.message,
@@ -119,7 +120,7 @@ Return JSON with exact structure:
     };
 
   } catch (error) {
-    console.error('LLM extraction failed:', error);
+    logger.error('LLM extraction failed:', error);
 
     // Fallback: basic extraction
     return {

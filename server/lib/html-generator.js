@@ -1,4 +1,5 @@
 // HTML-based resume generation (simpler, more reliable than LaTeX)
+import logger from './logger.js';
 import OpenAI from 'openai';
 import fs from 'fs/promises';
 import path from 'path';
@@ -14,7 +15,7 @@ const openai = new OpenAI({
 
 export async function generateResumeHTML(profile, jobDescription, aiMode = 'gpt-5-mini') {
   try {
-    console.log('Starting HTML resume generation...');
+    logger.info('Starting HTML resume generation...');
 
     // Step 1: Tailor resume with AI (same prompting logic, but for HTML)
     const prompt = `Given this profile and job description, create a tailored resume.
@@ -126,18 +127,18 @@ IMPORTANT: Return ONLY valid JSON matching the structure provided. No markdown f
     const response = await openai.chat.completions.create(requestParams);
 
     if (!response.choices || !response.choices[0] || !response.choices[0].message || !response.choices[0].message.content) {
-      console.error('Invalid OpenAI response structure:', response);
+      logger.error('Invalid OpenAI response structure:', response);
       throw new Error('Invalid response from OpenAI API');
     }
 
     const content = response.choices[0].message.content;
-    console.log('AI response received, length:', content.length);
+    logger.info('AI response received, length:', content.length);
 
     let resumeJson;
     try {
       resumeJson = JSON.parse(content);
     } catch (e) {
-      console.log('Raw AI response:', content);
+      logger.info('Raw AI response:', content);
       // Try to extract JSON from the response
       const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/) || content.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
@@ -145,24 +146,24 @@ IMPORTANT: Return ONLY valid JSON matching the structure provided. No markdown f
         try {
           resumeJson = JSON.parse(jsonStr);
         } catch (e2) {
-          console.error('Failed to parse extracted JSON:', jsonStr);
+          logger.error('Failed to parse extracted JSON:', jsonStr);
           throw new Error('Failed to parse AI response as JSON: ' + e2.message);
         }
       } else {
-        console.error('No JSON found in response');
+        logger.error('No JSON found in response');
         throw new Error('Failed to parse AI response as JSON - no JSON found');
       }
     }
 
-    console.log('AI tailoring complete');
+    logger.info('AI tailoring complete');
 
     // Step 2: Generate HTML
     const html = generateHTMLFromJSON(resumeJson);
-    console.log('HTML generated');
+    logger.info('HTML generated');
 
     // Currently returning HTML and JSON only (PDF generation disabled due to system constraints)
     // To enable PDF: install puppeteer when disk space is available
-    console.log('Returning HTML and JSON response');
+    logger.info('Returning HTML and JSON response');
 
     return {
       success: true,
@@ -172,7 +173,7 @@ IMPORTANT: Return ONLY valid JSON matching the structure provided. No markdown f
     };
 
   } catch (error) {
-    console.error('HTML generation error:', error);
+    logger.error('HTML generation error:', error);
     return {
       success: false,
       error: error.message

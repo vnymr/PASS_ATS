@@ -1,3 +1,4 @@
+import logger from './logger.js';
 import OpenAI from 'openai';
 import { prisma } from './prisma-client.js';
 import { config } from './config.js';
@@ -40,7 +41,7 @@ export async function createEmbeddings(jobId, resumeText, jobDescription) {
         });
       });
     } catch (error) {
-      console.error('Failed to create embeddings for batch:', error);
+      logger.error('Failed to create embeddings for batch:', error);
       // Fall back to individual processing if batch fails
       for (const item of batch) {
         try {
@@ -55,7 +56,7 @@ export async function createEmbeddings(jobId, resumeText, jobDescription) {
             embedding: response.data[0].embedding,
           });
         } catch (itemError) {
-          console.error(`Failed to create embedding for: ${item.content.substring(0, 50)}`, itemError);
+          logger.error(`Failed to create embedding for: ${item.content.substring(0, 50)}`, itemError);
         }
       }
     }

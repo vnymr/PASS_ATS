@@ -37,7 +37,7 @@ export default function JobCard({ job, onGenerateResume, onViewJob, onAutoApply,
   return (
     <div
       onClick={() => onClick?.(job)}
-      className={`group relative rounded-2xl transition-all hover:scale-[1.01] cursor-pointer bg-elevated shadow ${
+      className={`group relative rounded-2xl transition-all hover:scale-[1.01] cursor-pointer bg-elevated shadow border border-[rgba(28,63,64,0.12)] hover:border-primary ${
         compact ? 'p-4' : 'p-6'
       }`}
     >

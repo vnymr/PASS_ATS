@@ -3,6 +3,8 @@
  * Extracts ALL form fields from any web page for AI-powered filling
  */
 
+import logger from './logger.js';
+
 class AIFormExtractor {
   constructor() {
     this.fieldTypes = [
@@ -26,7 +28,7 @@ class AIFormExtractor {
    * @returns {Object} Extracted form data with fields and context
    */
   async extractFormFields(page) {
-    console.log('🔍 Extracting form fields from page...');
+    logger.info('🔍 Extracting form fields from page...');
 
     const extraction = await page.evaluate(() => {
       const fields = [];
@@ -161,7 +163,7 @@ class AIFormExtractor {
       return { fields, context };
     });
 
-    console.log(`✅ Extracted ${extraction.fields.length} form fields`);
+    logger.info(`✅ Extracted ${extraction.fields.length} form fields`);
     return extraction;
   }
 
@@ -179,7 +181,7 @@ class AIFormExtractor {
       });
       return screenshot;
     } catch (error) {
-      console.error('Failed to capture screenshot:', error.message);
+      logger.error('Failed to capture screenshot:', error.message);
       return null;
     }
   }

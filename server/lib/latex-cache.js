@@ -1,3 +1,4 @@
+import logger from './logger.js';
 import crypto from 'crypto';
 
 /**
@@ -40,7 +41,7 @@ class LatexCache {
       return null;
     }
 
-    console.log(`💾 Cache HIT for job (saved ~80s generation time)`);
+    logger.info(`💾 Cache HIT for job (saved ~80s generation time)`);
     return cached.latex;
   }
 
@@ -61,7 +62,7 @@ class LatexCache {
       timestamp: Date.now()
     });
 
-    console.log(`💾 Cached LaTeX for future requests (${this.cache.size}/${this.maxSize} entries)`);
+    logger.info(`💾 Cached LaTeX for future requests (${this.cache.size}/${this.maxSize} entries)`);
   }
 
   /**

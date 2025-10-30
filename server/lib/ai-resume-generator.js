@@ -3,6 +3,7 @@
  * Strict factual constraints and ATS optimization
  */
 
+import logger, { aiLogger } from './logger.js';
 import OpenAI from 'openai';
 import { compileLatex } from './latex-compiler.js';
 import {
@@ -183,7 +184,7 @@ class AIResumeGenerator {
    */
   async generateResume(userData, jobDescription, options = {}) {
     try {
-      console.log('🎯 Starting enhanced resume generation...');
+      logger.info('🎯 Starting enhanced resume generation...');
 
       // Preprocess user data for consistency
       const processedData = this.preprocessUserData(userData);
@@ -191,7 +192,7 @@ class AIResumeGenerator {
       // Build complete context with validation
       const context = buildResumeContext(processedData, jobDescription, options);
 
-      console.log('📊 Extracted user data:', {
+      logger.info('📊 Extracted user data:', {
         hasExperience: context.extractedData.experience.length > 0,
         hasEducation: context.extractedData.education.length > 0,
         skillsCount: context.extractedData.skills.length,
@@ -219,7 +220,7 @@ class AIResumeGenerator {
         if (!context.extractedData.rawText || context.extractedData.rawText.trim().length < 50) {
           throw new Error('Resume text too short or empty. Please provide more information.');
         }
-        console.log('📄 Using text-based extraction from resume text');
+        logger.info('📄 Using text-based extraction from resume text');
       }
 
       // Generate LaTeX with enhanced prompts
@@ -241,17 +242,17 @@ class AIResumeGenerator {
 
       let latexCode = response.choices[0].message.content.trim();
 
-      console.log('🔍 Raw LaTeX response length:', latexCode.length);
-      // console.log('🔍 Raw LaTeX response (first 500 chars):', latexCode.substring(0, 500));
-      // console.log('🔍 Raw LaTeX response (last 500 chars):', latexCode.substring(Math.max(0, latexCode.length - 500)));
+      logger.info('🔍 Raw LaTeX response length:', latexCode.length);
+      // logger.info('🔍 Raw LaTeX response (first 500 chars):', latexCode.substring(0, 500));
+      // logger.info('🔍 Raw LaTeX response (last 500 chars):', latexCode.substring(Math.max(0, latexCode.length - 500)));
 
       // Check if begin{document} is missing and try to find where it should be
       if (!latexCode.includes('\\begin{document}')) {
-        console.warn('⚠️ Missing \\begin{document}, checking LaTeX structure...');
+        logger.warn('⚠️ Missing \\begin{document}, checking LaTeX structure...');
         const hasDocClass = latexCode.includes('\\documentclass');
         const hasEndDoc = latexCode.includes('\\end{document}');
-        console.log('Has documentclass?', hasDocClass);
-        console.log('Has end{document}?', hasEndDoc);
+        logger.info('Has documentclass?', hasDocClass);
+        logger.info('Has end{document}?', hasEndDoc);
 
         // Try to fix by finding where document content starts
         if (hasDocClass && hasEndDoc) {
@@ -262,7 +263,7 @@ class AIResumeGenerator {
             const fixedLatex = latexCode.substring(0, insertPosition) +
                              '\\begin{document}\n' +
                              latexCode.substring(insertPosition);
-            console.log('✅ Auto-fixed missing \\begin{document}');
+            logger.info('✅ Auto-fixed missing \\begin{document}');
             latexCode = fixedLatex;
           }
         }
@@ -291,7 +292,7 @@ class AIResumeGenerator {
         }
       };
     } catch (error) {
-      console.error('AI generation error:', error);
+      logger.error('AI generation error:', error);
       throw new Error(`Failed to generate resume: ${error.message}`);
     }
   }
@@ -304,14 +305,14 @@ class AIResumeGenerator {
    */
   async generateResumeSimple(rawUserData, jobDescription, options = {}) {
     try {
-      console.log('🎯 Starting SIMPLE resume generation (raw data approach)...');
+      logger.info('🎯 Starting SIMPLE resume generation (raw data approach)...');
 
       // Build simple context - just pass raw data
       const context = buildSimpleResumeContext(rawUserData, jobDescription, options);
 
-      console.log('📊 Sending raw user data to LLM for extraction');
-      console.log('Data type:', typeof rawUserData);
-      console.log('Has data:', !!rawUserData);
+      logger.info('📊 Sending raw user data to LLM for extraction');
+      logger.info('Data type:', typeof rawUserData);
+      logger.info('Has data:', !!rawUserData);
 
       // Generate LaTeX with simple prompts
       const response = await this.openai.chat.completions.create({
@@ -332,11 +333,11 @@ class AIResumeGenerator {
 
       let latexCode = response.choices[0].message.content.trim();
 
-      console.log('🔍 Raw LaTeX response length:', latexCode.length);
+      logger.info('🔍 Raw LaTeX response length:', latexCode.length);
 
       // Auto-fix missing \begin{document} if needed
       if (!latexCode.includes('\\begin{document}')) {
-        console.warn('⚠️ Missing \\begin{document}, auto-fixing...');
+        logger.warn('⚠️ Missing \\begin{document}, auto-fixing...');
         const beginCenterMatch = latexCode.match(/(%\s*===BEGIN:HEADER===|\\begin{center})/);
         if (beginCenterMatch) {
           const insertPosition = beginCenterMatch.index;
@@ -359,7 +360,7 @@ class AIResumeGenerator {
         }
       };
     } catch (error) {
-      console.error('Simple generation error:', error);
+      logger.error('Simple generation error:', error);
       throw new Error(`Failed to generate resume (simple): ${error.message}`);
     }
   }
@@ -377,7 +378,7 @@ class AIResumeGenerator {
 
     // Check for user name
     if (extractedData.personalInfo.name && !latex.includes(extractedData.personalInfo.name)) {
-      console.warn('Warning: User name might not be properly included in resume');
+      logger.warn('Warning: User name might not be properly included in resume');
     }
 
     // Check for begin/end document
@@ -395,7 +396,7 @@ class AIResumeGenerator {
     }
 
     // Log successful validation
-    console.log('✅ Resume validation passed');
+    logger.info('✅ Resume validation passed');
   }
 
   /**
@@ -415,10 +416,10 @@ class AIResumeGenerator {
     let pdf = null;
     try {
       pdf = await this.compileResume(result.latex);
-      console.log('✅ PDF compilation successful');
+      logger.info('✅ PDF compilation successful');
     } catch (compilationError) {
-      console.log('⚠️ LaTeX compilation failed, generating fallback PDF...');
-      console.error('PDF generation failed:', compilationError.message);
+      logger.info('⚠️ LaTeX compilation failed, generating fallback PDF...');
+      logger.error('PDF generation failed:', compilationError.message);
 
       // Throw error if PDF compilation fails - no fallback
       throw compilationError;
@@ -559,21 +560,21 @@ Generate the complete LaTeX code for this resume. Output only the LaTeX code, no
     cleaned = cleaned.replace(/^```.*$/gm, '');
 
     // Log what we're checking for debugging
-    console.log('Checking LaTeX validity...');
-    console.log('Has documentclass?', cleaned.includes('\\documentclass'));
-    console.log('Has begin document?', cleaned.includes('\\begin{document}'));
-    console.log('Has end document?', cleaned.includes('\\end{document}'));
+    logger.info('Checking LaTeX validity...');
+    logger.info('Has documentclass?', cleaned.includes('\\documentclass'));
+    logger.info('Has begin document?', cleaned.includes('\\begin{document}'));
+    logger.info('Has end document?', cleaned.includes('\\end{document}'));
 
     // Ensure it starts with documentclass
     if (!cleaned.includes('\\documentclass')) {
-      console.error('LaTeX validation failed: missing documentclass');
-      console.error('First 200 chars of cleaned LaTeX:', cleaned.substring(0, 200));
+      logger.error('LaTeX validation failed: missing documentclass');
+      logger.error('First 200 chars of cleaned LaTeX:', cleaned.substring(0, 200));
       throw new Error('Invalid LaTeX: missing documentclass');
     }
 
     // Ensure it has begin and end document
     if (!cleaned.includes('\\begin{document}') || !cleaned.includes('\\end{document}')) {
-      console.error('LaTeX validation failed: missing document environment');
+      logger.error('LaTeX validation failed: missing document environment');
       throw new Error('Invalid LaTeX: missing document environment');
     }
 
@@ -581,7 +582,7 @@ Generate the complete LaTeX code for this resume. Output only the LaTeX code, no
     const openBraces = (cleaned.match(/{/g) || []).length;
     const closeBraces = (cleaned.match(/}/g) || []).length;
     if (Math.abs(openBraces - closeBraces) > 2) {
-      console.warn('Warning: Potential brace mismatch in LaTeX');
+      logger.warn('Warning: Potential brace mismatch in LaTeX');
     }
 
     return cleaned.trim();

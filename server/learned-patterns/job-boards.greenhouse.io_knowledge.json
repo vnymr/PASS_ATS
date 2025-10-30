@@ -1,0 +1,114 @@
+{
+  "domain": "job-boards.greenhouse.io",
+  "firstSeen": "2025-10-30T01:35:58.308Z",
+  "lastUpdated": "2025-10-30T01:37:10.906Z",
+  "applications": [
+    {
+      "timestamp": "2025-10-30T01:35:58.303Z",
+      "fieldsCount": 14,
+      "problemsSolved": 1
+    },
+    {
+      "timestamp": "2025-10-30T01:36:31.575Z",
+      "fieldsCount": 14,
+      "problemsSolved": 1
+    },
+    {
+      "timestamp": "2025-10-30T01:37:10.904Z",
+      "fieldsCount": 14,
+      "problemsSolved": 1
+    }
+  ],
+  "commonPatterns": {
+    "fieldNames": {
+      "unnamed_4": {
+        "name": "unnamed_4",
+        "type": "text",
+        "label": "",
+        "count": 3
+      },
+      "question_60921384[]": {
+        "name": "question_60921384[]",
+        "type": "checkbox",
+        "label": "Acknowledge/Confirm",
+        "count": 3
+      },
+      "unnamed_13": {
+        "name": "unnamed_13",
+        "type": "text",
+        "label": "Select...",
+        "count": 3
+      }
+    },
+    "questionTypes": [
+      {
+        "label": "How many years of experience do you you possess in analyzing corporate business models and assessing financial health within the context of financial risk management?*",
+        "type": "text",
+        "category": "experience"
+      },
+      {
+        "label": "Why would you like to work at Adyen?",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "How many years of experience do you you possess in analyzing corporate business models and assessing financial health within the context of financial risk management?*",
+        "type": "text",
+        "category": "experience"
+      },
+      {
+        "label": "Why would you like to work at Adyen?",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "How many years of experience do you you possess in analyzing corporate business models and assessing financial health within the context of financial risk management?*",
+        "type": "text",
+        "category": "experience"
+      },
+      {
+        "label": "Why would you like to work at Adyen?",
+        "type": "text",
+        "category": "other"
+      }
+    ],
+    "successStrategies": [
+      {
+        "problem": "No response for required field: question_60921384[]",
+        "solution": {
+          "issue": "No response provided for required field 'question_60921384[]'.",
+          "solution": "Ensure that the 'Acknowledge/Confirm' checkbox is checked.",
+          "fieldToRetry": "question_60921384[]",
+          "newValue": null,
+          "needsManualIntervention": true,
+          "learnedPattern": "Required checkbox fields must be checked to submit the form successfully."
+        },
+        "timestamp": "2025-10-30T01:35:58.303Z"
+      },
+      {
+        "problem": "No response for required field: question_60921384[]",
+        "solution": {
+          "issue": "No response for required field: unnamed_13",
+          "solution": "Provide a valid selection for the required field 'unnamed_13'.",
+          "fieldToRetry": "unnamed_13",
+          "newValue": null,
+          "needsManualIntervention": true,
+          "learnedPattern": "Ensure all required fields have valid responses before submission."
+        },
+        "timestamp": "2025-10-30T01:36:31.575Z"
+      },
+      {
+        "problem": "No response for required field: question_60921384[]",
+        "solution": {
+          "issue": "No response for required field: question_60921384[]",
+          "solution": "Ensure that the checkbox for 'Acknowledge/Confirm' is checked.",
+          "fieldToRetry": "question_60921384[]",
+          "newValue": "594858223",
+          "needsManualIntervention": false,
+          "learnedPattern": "Ensure all required checkbox fields are checked before submission."
+        },
+        "timestamp": "2025-10-30T01:37:10.904Z"
+      }
+    ]
+  }
+}

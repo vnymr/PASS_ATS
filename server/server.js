@@ -1,3 +1,4 @@
+import logger, { requestLogger, authLogger } from './lib/logger.js';
 import express from 'express';
 import cors from 'cors';
 import jwt from 'jsonwebtoken';
@@ -126,19 +127,21 @@ const jobProcessingLimiter = rateLimit({
 
 // Environment validation
 function validateEnvironment() {
-  const required = ['JWT_SECRET', 'OPENAI_API_KEY', 'DATABASE_URL'];
+  const required = ['JWT_SECRET', 'OPENAI_API_KEY', 'DATABASE_URL', 'REDIS_URL', 'STRIPE_SECRET_KEY'];
   const missing = required.filter(key => !process.env[key]);
 
   if (missing.length > 0) {
-    console.error('❌ Missing required environment variables:', missing);
+    logger.error('❌ Missing required environment variables:', missing);
     process.exit(1);
   }
 
-  console.log('🚀 Environment validated successfully');
-  console.log('   - Node Environment:', process.env.NODE_ENV || 'development');
-  console.log('   - Port:', process.env.PORT || '3000');
-  console.log('   - OpenAI API Key:', '✅ Present');
-  console.log('   - Database URL:', '✅ Present');
+  logger.info('🚀 Environment validated successfully');
+  logger.info('   - Node Environment:', process.env.NODE_ENV || 'development');
+  logger.info('   - Port:', process.env.PORT || '3000');
+  logger.info('   - OpenAI API Key:', '✅ Present');
+  logger.info('   - Database URL:', '✅ Present');
+  logger.info('   - Redis URL:', '✅ Present');
+  logger.info('   - Stripe Secret:', '✅ Present');
 }
 
 validateEnvironment();
@@ -318,19 +321,41 @@ const authenticateToken = async (req, res, next) => {
         clockSkewInMs: 300000
       });
 
-      // Get or create user in our database
-      let user = await prisma.user.findUnique({
-        where: { clerkId: sessionClaims.sub }
-      });
+      // Get or create user in our database with error handling
+      let user;
+      try {
+        user = await prisma.user.findUnique({
+          where: { clerkId: sessionClaims.sub }
+        });
 
-      if (!user) {
-        // Create user if doesn't exist
-        user = await prisma.user.create({
-          data: {
-            clerkId: sessionClaims.sub,
-            email: sessionClaims.email || `${sessionClaims.sub}@clerk.user`,
-            password: 'clerk-managed' // Placeholder since Clerk manages auth
+        if (!user) {
+          // Create user if doesn't exist
+          try {
+            user = await prisma.user.create({
+              data: {
+                clerkId: sessionClaims.sub,
+                email: sessionClaims.email || `${sessionClaims.sub}@clerk.user`,
+                password: 'clerk-managed' // Placeholder since Clerk manages auth
+              }
+            });
+          } catch (createError) {
+            // If create fails (maybe concurrent request created user), try to fetch again
+            if (createError.code === 'P2002') { // Unique constraint violation
+              user = await prisma.user.findUnique({
+                where: { clerkId: sessionClaims.sub }
+              });
+            } else {
+              throw createError;
+            }
           }
+        }
+      } catch (dbError) {
+        // Don't fall through to JWT if database error - return 503 to prevent cascade
+        authLogger.failure(`Database error: ${dbError.message}`, 'clerk');
+        return res.status(503).json({
+          error: 'Database temporarily unavailable',
+          code: 'DATABASE_ERROR',
+          message: 'Please try again in a moment.'
         });
       }
 
@@ -349,8 +374,18 @@ const authenticateToken = async (req, res, next) => {
         });
       }
 
+      // If it's a database error, don't fall through - return error directly
+      if (clerkError.code && (clerkError.code.startsWith('P') || clerkError.message?.includes('database') || clerkError.message?.includes('Can\'t reach database'))) {
+        authLogger.failure(`Database error: ${clerkError.message}`, 'clerk');
+        return res.status(503).json({
+          error: 'Database temporarily unavailable',
+          code: 'DATABASE_ERROR',
+          message: 'Please try again in a moment.'
+        });
+      }
+
       authLogger.failure(clerkError.message, 'clerk');
-      // For other Clerk errors, fall through to legacy JWT auth
+      // For other Clerk errors (not database), fall through to legacy JWT auth
     }
   }
 
@@ -361,20 +396,30 @@ const authenticateToken = async (req, res, next) => {
       return res.status(403).json({ error: 'Invalid or expired token' });
     }
 
-    // For legacy tokens, ensure user exists
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.id }
-    });
+    // For legacy tokens, ensure user exists with error handling
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: decoded.id }
+      });
 
-    if (!user) {
-      authLogger.failure('User not found', 'jwt');
-      return res.status(403).json({ error: 'User not found' });
+      if (!user) {
+        authLogger.failure('User not found', 'jwt');
+        return res.status(403).json({ error: 'User not found' });
+      }
+
+      req.user = decoded;
+      req.userId = decoded.id;
+      authLogger.success(decoded.id, 'jwt');
+      next();
+    } catch (dbError) {
+      // Handle database errors in JWT path too
+      authLogger.failure(`Database error: ${dbError.message}`, 'jwt');
+      return res.status(503).json({
+        error: 'Database temporarily unavailable',
+        code: 'DATABASE_ERROR',
+        message: 'Please try again in a moment.'
+      });
     }
-
-    req.user = decoded;
-    req.userId = decoded.id;
-    authLogger.success(decoded.id, 'jwt');
-    next();
   });
 };
 
@@ -606,7 +651,7 @@ app.get('/api/profile', authenticateToken, async (req, res) => {
     logger.debug({ userId, profileSize: JSON.stringify(profileData).length, isComplete: profileData.isComplete }, 'Returning profile data');
     res.json(profileData);
   } catch (error) {
-    console.error('Profile fetch error:', error);
+    logger.error('Profile fetch error:', error);
     res.status(500).json({ error: 'Failed to fetch profile' });
   }
 });
@@ -614,7 +659,7 @@ app.get('/api/profile', authenticateToken, async (req, res) => {
 app.put('/api/profile', authenticateToken, async (req, res) => {
   try {
     const userId = req.userId;
-    console.log('📝 Profile update request for user:', req.user.email);
+    logger.info('📝 Profile update request for user:', req.user.email);
 
     // Clean and sanitize the data - remove null characters and undefined values
     const cleanData = (obj) => {
@@ -643,20 +688,20 @@ app.put('/api/profile', authenticateToken, async (req, res) => {
     let processedData = cleanedBody;
     if (cleanedBody.additionalInfo && typeof cleanedBody.additionalInfo === 'string' && cleanedBody.additionalInfo.trim().length > 0) {
       try {
-        console.log('🤖 Processing additional information...');
-        console.log(`   - Additional info length: ${cleanedBody.additionalInfo.length} characters`);
+        logger.info('🤖 Processing additional information...');
+        logger.info(`   - Additional info length: ${cleanedBody.additionalInfo.length} characters`);
         // processedData = await processAdditionalInformation(cleanedBody);
         // For now, just pass through the data as-is
         processedData = cleanedBody;
-        console.log('✅ Additional information stored');
+        logger.info('✅ Additional information stored');
 
         // Log what was extracted
         if (processedData.processedAdditionalInfo) {
           const { newSkills, newExperiences, newProjects, newCertifications } = processedData.processedAdditionalInfo;
-          console.log(`   - Extracted: ${newSkills?.length || 0} skills, ${newExperiences?.length || 0} experiences, ${newProjects?.length || 0} projects, ${newCertifications?.length || 0} certifications`);
+          logger.info(`   - Extracted: ${newSkills?.length || 0} skills, ${newExperiences?.length || 0} experiences, ${newProjects?.length || 0} projects, ${newCertifications?.length || 0} certifications`);
         }
       } catch (aiError) {
-        console.error('⚠️ Failed to process additional information:', aiError.message);
+        logger.error('⚠️ Failed to process additional information:', aiError.message);
         // Keep the cleaned data even if AI processing fails
         processedData = cleanedBody;
         processedData._processingError = aiError.message;
@@ -682,11 +727,74 @@ app.put('/api/profile', authenticateToken, async (req, res) => {
       }
     });
 
-    console.log('✅ Profile updated successfully with processed data');
+    logger.info('✅ Profile updated successfully with processed data');
     res.json(profile);
   } catch (error) {
-    console.error('Profile update error:', error);
+    logger.error('Profile update error:', error);
     res.status(500).json({ error: 'Failed to update profile' });
+  }
+});
+
+// Upload resume PDF for auto-apply
+app.post('/api/profile/upload-resume', authenticateToken, upload.single('resume'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    // Validate file type
+    if (req.file.mimetype !== 'application/pdf') {
+      return res.status(400).json({ error: 'Only PDF files are supported for auto-apply' });
+    }
+
+    const userId = req.userId;
+    const filename = req.file.originalname;
+    const fileSize = req.file.size;
+
+    // Convert buffer to base64 for storage
+    const base64Content = req.file.buffer.toString('base64');
+
+    logger.info({ userId, filename, fileSize }, '📄 Saving uploaded resume to profile');
+
+    // Get existing profile
+    const existingProfile = await prisma.profile.findUnique({
+      where: { userId }
+    });
+
+    if (!existingProfile) {
+      return res.status(404).json({ error: 'Profile not found. Please create a profile first.' });
+    }
+
+    // Add uploaded resume to profile data
+    const profileData = existingProfile.data;
+    profileData.uploadedResume = {
+      content: base64Content,
+      filename,
+      uploadedAt: new Date().toISOString(),
+      size: fileSize
+    };
+
+    // Update profile with uploaded resume
+    await prisma.profile.update({
+      where: { userId },
+      data: {
+        data: profileData,
+        updatedAt: new Date()
+      }
+    });
+
+    logger.info({ userId, filename }, '✅ Resume uploaded and saved to profile');
+
+    res.json({
+      success: true,
+      message: 'Resume uploaded successfully',
+      filename,
+      size: fileSize
+    });
+
+  } catch (error) {
+    logger.error({ error: error.message }, 'Resume upload error');
+    res.status(500).json({ error: 'Failed to upload resume' });
   }
 });
 
@@ -700,7 +808,7 @@ app.post('/api/parse-resume', authenticateToken, upload.single('resume'), async 
 
     const useQueue = req.query.async === 'true' || req.body.async === 'true';
 
-    console.log('📄 Parsing resume:', req.file.originalname, useQueue ? '(queued)' : '(immediate)');
+    logger.info('📄 Parsing resume:', req.file.originalname, useQueue ? '(queued)' : '(immediate)');
 
     if (useQueue) {
       // Queue for async processing (recommended for high concurrency)
@@ -712,7 +820,7 @@ app.post('/api/parse-resume', authenticateToken, upload.single('resume'), async 
         false // Don't merge with profile, just parse
       );
 
-      console.log('✅ Resume queued for parsing:', jobId);
+      logger.info('✅ Resume queued for parsing:', jobId);
       res.json({
         jobId,
         status,
@@ -723,14 +831,14 @@ app.post('/api/parse-resume', authenticateToken, upload.single('resume'), async 
       const parser = new ResumeParser();
       const { text, extractedData } = await parser.parseResume(req.file.buffer, req.file.mimetype);
 
-      console.log('✅ Resume parsed successfully');
+      logger.info('✅ Resume parsed successfully');
       res.json({
         resumeText: text,
         extractedData
       });
     }
   } catch (error) {
-    console.error('Resume parse error:', error);
+    logger.error('Resume parse error:', error);
     res.status(500).json({ error: 'Failed to parse resume' });
   }
 });
@@ -743,7 +851,7 @@ app.get('/api/resume-status/:jobId', authenticateToken, async (req, res) => {
 
     res.json(status);
   } catch (error) {
-    console.error('Job status error:', error);
+    logger.error('Job status error:', error);
     res.status(500).json({ error: 'Failed to get job status' });
   }
 });
@@ -757,7 +865,7 @@ app.post('/api/profile/with-resume', authenticateToken, upload.single('resume'),
     let resumeBuffer = null;
 
     if (req.file) {
-      console.log('📎 Saving resume file:', req.file.originalname);
+      logger.info('📎 Saving resume file:', req.file.originalname);
       resumeBuffer = req.file.buffer;
 
       if (useQueue) {
@@ -770,7 +878,7 @@ app.post('/api/profile/with-resume', authenticateToken, upload.single('resume'),
           true // Merge with existing profile
         );
 
-        console.log('✅ Resume queued for parsing and profile merge:', jobId);
+        logger.info('✅ Resume queued for parsing and profile merge:', jobId);
 
         // Return job ID for status tracking
         return res.json({
@@ -810,10 +918,10 @@ app.post('/api/profile/with-resume', authenticateToken, upload.single('resume'),
       }
     });
 
-    console.log('✅ Profile saved with resume');
+    logger.info('✅ Profile saved with resume');
     res.json(profile);
   } catch (error) {
-    console.error('Profile save error:', error);
+    logger.error('Profile save error:', error);
     res.status(500).json({ error: 'Failed to save profile' });
   }
 });
@@ -837,7 +945,7 @@ app.get('/api/profile/resume-download', authenticateToken, async (req, res) => {
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(resumeBuffer);
   } catch (error) {
-    console.error('Resume download error:', error);
+    logger.error('Resume download error:', error);
     res.status(500).json({ error: 'Failed to download resume' });
   }
 });
@@ -894,9 +1002,9 @@ app.post('/api/upload/resume', authenticateToken, resumeUpload.single('resume'),
       // Parse PDF
       try {
         extractedText = await extractPdfText(req.file.buffer);
-        console.log('✅ PDF parsed, extracted', extractedText.length, 'characters');
+        logger.info('✅ PDF parsed, extracted', extractedText.length, 'characters');
       } catch (err) {
-        console.error('PDF parse error:', err);
+        logger.error('PDF parse error:', err);
         return res.status(400).json({
           error: 'Failed to parse PDF. Please try uploading as TXT or DOCX.'
         });
@@ -905,20 +1013,20 @@ app.post('/api/upload/resume', authenticateToken, resumeUpload.single('resume'),
     else if (req.file.mimetype === 'text/plain') {
       // Plain text
       extractedText = req.file.buffer.toString('utf-8');
-      console.log('✅ Text file read, extracted', extractedText.length, 'characters');
+      logger.info('✅ Text file read, extracted', extractedText.length, 'characters');
     }
     else if (req.file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
       // Parse DOCX
       const result = await mammoth.extractRawText({ buffer: req.file.buffer });
       extractedText = result.value;
-      console.log('✅ DOCX parsed, extracted', extractedText.length, 'characters');
+      logger.info('✅ DOCX parsed, extracted', extractedText.length, 'characters');
     }
     else if (req.file.mimetype === 'application/msword') {
       // For old .doc files, try mammoth (it might work) or return error
       try {
         const result = await mammoth.extractRawText({ buffer: req.file.buffer });
         extractedText = result.value;
-        console.log('✅ DOC parsed, extracted', extractedText.length, 'characters');
+        logger.info('✅ DOC parsed, extracted', extractedText.length, 'characters');
       } catch (e) {
         return res.status(400).json({
           error: 'Cannot parse old .doc format. Please save as .docx or .pdf'
@@ -946,7 +1054,7 @@ app.post('/api/upload/resume', authenticateToken, resumeUpload.single('resume'),
     });
 
   } catch (error) {
-    console.error('File upload error:', error);
+    logger.error('File upload error:', error);
     res.status(500).json({
       error: error.message || 'Failed to process file'
     });
@@ -962,7 +1070,7 @@ app.post('/api/analyze/public', async (req, res) => {
       return res.status(400).json({ error: 'Resume text is required' });
     }
 
-    console.log('🔍 Analyzing resume text (public)...');
+    logger.info('🔍 Analyzing resume text (public)...');
 
     // Import candidateDigestPrompt for structured extraction
     const { candidateDigestPrompt } = await import('./lib/prompts/candidateDigestPrompt.js');
@@ -971,11 +1079,11 @@ app.post('/api/analyze/public', async (req, res) => {
       // Get structured data using the same prompt used in pipeline
       const structuredData = await candidateDigestPrompt(resumeText);
 
-      console.log('✅ Resume analysis complete with structured data');
-      console.log(`   - Extracted ${structuredData.skills?.length || 0} skills`);
-      console.log(`   - Extracted ${structuredData.experiences?.length || 0} experiences`);
-      console.log(`   - Extracted ${structuredData.education?.length || 0} education entries`);
-      console.log(`   - Extracted ${structuredData.projects?.length || 0} projects`);
+      logger.info('✅ Resume analysis complete with structured data');
+      logger.info(`   - Extracted ${structuredData.skills?.length || 0} skills`);
+      logger.info(`   - Extracted ${structuredData.experiences?.length || 0} experiences`);
+      logger.info(`   - Extracted ${structuredData.education?.length || 0} education entries`);
+      logger.info(`   - Extracted ${structuredData.projects?.length || 0} projects`);
 
       // Create a summary from the structured data
       let summary = '';
@@ -1026,7 +1134,7 @@ app.post('/api/analyze/public', async (req, res) => {
       return;
 
     } catch (parseError) {
-      console.error('Structured parsing failed, falling back to OpenAI basic extraction:', parseError);
+      logger.error('Structured parsing failed, falling back to OpenAI basic extraction:', parseError);
     }
 
     // Fallback to existing OpenAI parsing
@@ -1099,7 +1207,7 @@ Return ONLY a valid JSON object, no other text.`
       };
     }
 
-    console.log('✅ Resume analysis complete');
+    logger.info('✅ Resume analysis complete');
 
     // Clean up AI responses - remove any placeholder or generic text
     const cleanValue = (value) => {
@@ -1162,7 +1270,7 @@ Return ONLY a valid JSON object, no other text.`
       }
     });
   } catch (error) {
-    console.error('Resume analysis error:', error);
+    logger.error('Resume analysis error:', error);
 
     // Fallback to basic extraction if AI fails
     const lines = req.body.resumeText?.split('\n') || [];
@@ -1240,7 +1348,7 @@ app.post('/api/generate', authenticateToken, async (req, res) => {
       downloadUrl: `/api/job/${jobId}/download/pdf`
     });
   } catch (error) {
-    console.error('Generate error:', error);
+    logger.error('Generate error:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -1266,7 +1374,7 @@ app.get('/api/job/:jobId', authenticateToken, async (req, res) => {
 
     res.json(job);
   } catch (error) {
-    console.error('Job status error:', error);
+    logger.error('Job status error:', error);
     res.status(500).json({ error: 'Failed to fetch job status' });
   }
 });
@@ -1333,7 +1441,7 @@ app.get('/api/job/:jobId/download/:type', authenticateToken, async (req, res) =>
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(artifact.content);
   } catch (error) {
-    console.error('Download error:', error);
+    logger.error('Download error:', error);
     res.status(500).json({ error: 'Failed to download artifact' });
   }
 });
@@ -1398,7 +1506,7 @@ app.get('/api/job/:jobId/status', authenticateToken, async (req, res) => {
 
     res.json(response);
   } catch (error) {
-    console.error('Status error:', error);
+    logger.error('Status error:', error);
     res.status(500).json({ error: 'Failed to fetch status' });
   }
 });
@@ -1448,7 +1556,7 @@ app.get('/api/my-jobs', authenticateToken, async (req, res) => {
       offset: parseInt(offset)
     });
   } catch (error) {
-    console.error('Jobs list error:', error);
+    logger.error('Jobs list error:', error);
     res.status(500).json({ error: 'Failed to fetch jobs' });
   }
 });
@@ -1460,7 +1568,7 @@ app.get('/api/metrics/queue', authenticateToken, async (req, res) => {
     const metrics = await getQueueMetrics();
     res.json(metrics);
   } catch (error) {
-    console.error('Queue metrics error:', error);
+    logger.error('Queue metrics error:', error);
     res.status(500).json({ error: 'Failed to fetch queue metrics' });
   }
 });
@@ -1501,7 +1609,7 @@ app.post('/api/generate-html', authenticateToken, async (req, res) => {
       res.status(500).json({ error: result.error });
     }
   } catch (error) {
-    console.error('HTML generation error:', error);
+    logger.error('HTML generation error:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -1646,10 +1754,10 @@ app.get('/api/resumes', authenticateToken, async (req, res) => {
       };
     });
 
-    console.log(`📄 Returning ${resumes.length} resumes for user ${req.userId}`);
+    logger.info(`📄 Returning ${resumes.length} resumes for user ${req.userId}`);
     res.json(resumes);
   } catch (error) {
-    console.error('❌ Error fetching resumes:', error);
+    logger.error('❌ Error fetching resumes:', error);
     res.status(500).json({ error: 'Failed to fetch resumes' });
   }
 });
@@ -1687,10 +1795,10 @@ app.get('/api/quota', authenticateToken, async (req, res) => {
       limit: MONTHLY_LIMIT
     };
 
-    console.log(`📊 User ${req.userId} quota: ${quota.used}/${quota.limit}`);
+    logger.info(`📊 User ${req.userId} quota: ${quota.used}/${quota.limit}`);
     res.json(quota);
   } catch (error) {
-    console.error('❌ Error fetching quota:', error);
+    logger.error('❌ Error fetching quota:', error);
     res.status(500).json({ error: 'Failed to fetch quota' });
   }
 });
@@ -1726,7 +1834,7 @@ app.post('/api/process-job', authenticateToken, jobProcessingLimiter, async (req
 
     // Robust validation
     if (!profile) {
-      console.error(`❌ No profile record found for user ${req.userId}`);
+      logger.error(`❌ No profile record found for user ${req.userId}`);
       return res.status(400).json({
         error: 'Profile not found. Please complete your profile first.',
         action: 'REDIRECT_TO_ONBOARDING'
@@ -1734,7 +1842,7 @@ app.post('/api/process-job', authenticateToken, jobProcessingLimiter, async (req
     }
 
     if (!profile.data || typeof profile.data !== 'object') {
-      console.error(`❌ Invalid profile data structure for user ${req.userId}`);
+      logger.error(`❌ Invalid profile data structure for user ${req.userId}`);
       return res.status(400).json({
         error: 'Invalid profile data. Please update your profile.',
         action: 'REDIRECT_TO_PROFILE'
@@ -1761,7 +1869,7 @@ app.post('/api/process-job', authenticateToken, jobProcessingLimiter, async (req
     const hasMinimumData = hasExperience || hasEducation || hasResumeText;
 
     if (!hasMinimumData) {
-      console.error(`❌ Insufficient profile data for user ${req.userId}`);
+      logger.error(`❌ Insufficient profile data for user ${req.userId}`);
       return res.status(400).json({
         error: 'Insufficient profile data. Please add your work experience or upload a resume.',
         action: 'ADD_MORE_DATA'
@@ -1816,8 +1924,8 @@ app.post('/api/process-job', authenticateToken, jobProcessingLimiter, async (req
     // Return immediately with job ID
     res.json({ jobId: job.id });
   } catch (error) {
-    console.error(`\n❌ CRITICAL ERROR in /api/process-job:`, error);
-    console.error(`Stack trace:`, error.stack);
+    logger.error(`\n❌ CRITICAL ERROR in /api/process-job:`, error);
+    logger.error(`Stack trace:`, error.stack);
     res.status(500).json({ error: 'Internal server error. Please try again.' });
   }
 });
@@ -2116,7 +2224,7 @@ async function generateLatexWithLLM(openai, userDataJSON, jobDescription, onProg
       }
     }
 
-    console.log(`📝 Streamed LaTeX (${latex.length} chars)`);
+    logger.info(`📝 Streamed LaTeX (${latex.length} chars)`);
 
     // Clean markdown code blocks
     latex = latex.replace(/^```latex?\n?/gm, '').replace(/\n?```$/gm, '').replace(/^```.*$/gm, '');
@@ -2277,8 +2385,8 @@ Fix the error and return the corrected LaTeX code.`
  */
 async function processJobAsync(jobId, userId, jobDescription, aiMode, matchMode, profileData) {
   try {
-    console.log(`🔄 Starting async processing for job ${jobId} (updated)`);
-    console.log(`📊 Processing with: aiMode=${aiMode}, matchMode=${matchMode}`);
+    logger.info(`🔄 Starting async processing for job ${jobId} (updated)`);
+    logger.info(`📊 Processing with: aiMode=${aiMode}, matchMode=${matchMode}`);
 
     // Extract company and role from job description if not in job record
     const job = await prisma.job.findUnique({ where: { id: jobId } });
@@ -2321,14 +2429,14 @@ async function processJobAsync(jobId, userId, jobDescription, aiMode, matchMode,
             role: role || job?.role
           }
         });
-        console.log(`📝 Extracted: Company="${company || 'N/A'}", Role="${role || 'N/A'}"`);
+        logger.info(`📝 Extracted: Company="${company || 'N/A'}", Role="${role || 'N/A'}"`);
       }
     }
 
     // Initialize AI Resume Generator - using the same pattern as /api/generate endpoint
     const generator = new AIResumeGenerator(process.env.OPENAI_API_KEY);
 
-    console.log(`🤖 Starting AI generation...`);
+    logger.info(`🤖 Starting AI generation...`);
 
     // Process profile data the same way as /api/generate endpoint
     let processedProfileData = profileData;
@@ -2346,7 +2454,7 @@ async function processJobAsync(jobId, userId, jobDescription, aiMode, matchMode,
         processedProfileData = structuredProfile;
       }
 
-      console.log(`📊 Profile data structure:`, {
+      logger.info(`📊 Profile data structure:`, {
         hasName: !!processedProfileData.name,
         hasEmail: !!processedProfileData.email,
         hasExperiences: !!(processedProfileData.experiences || processedProfileData.experience),
@@ -2400,7 +2508,7 @@ async function processJobAsync(jobId, userId, jobDescription, aiMode, matchMode,
       }
     };
 
-    console.log(`📝 Transformed user data:`, {
+    logger.info(`📝 Transformed user data:`, {
       hasName: !!transformedUserData.personalInfo.name,
       hasEmail: !!transformedUserData.personalInfo.email,
       experienceCount: transformedUserData.experience ? transformedUserData.experience.length : 0,
@@ -2411,7 +2519,7 @@ async function processJobAsync(jobId, userId, jobDescription, aiMode, matchMode,
     });
 
     // Use SIMPLE generation - just pass raw profile data
-    console.log(`📦 Using SIMPLE generation with raw profile data`);
+    logger.info(`📦 Using SIMPLE generation with raw profile data`);
     const { latex } = await generator.generateResumeSimple(
       processedProfileData,  // Pass RAW profile data, let LLM extract everything
       jobDescription,
@@ -2425,13 +2533,13 @@ async function processJobAsync(jobId, userId, jobDescription, aiMode, matchMode,
     let pdf = null;
     try {
       pdf = await generator.compileResume(latex);
-      console.log('✅ PDF compilation successful');
+      logger.info('✅ PDF compilation successful');
     } catch (compileError) {
-      console.error('❌ PDF compilation failed:', compileError.message);
+      logger.error('❌ PDF compilation failed:', compileError.message);
       throw compileError;
     }
 
-    console.log(`📄 PDF generated, size: ${pdf ? pdf.length : 0} bytes`);
+    logger.info(`📄 PDF generated, size: ${pdf ? pdf.length : 0} bytes`);
 
     // Wrap the result in the expected format
     const result = {
@@ -2451,7 +2559,7 @@ async function processJobAsync(jobId, userId, jobDescription, aiMode, matchMode,
     };
 
     if (result.success && pdf) {
-      console.log(`💾 Saving artifacts for job ${jobId}...`);
+      logger.info(`💾 Saving artifacts for job ${jobId}...`);
 
       // Save PDF artifact
       const pdfArtifact = await prisma.artifact.create({
@@ -2466,7 +2574,7 @@ async function processJobAsync(jobId, userId, jobDescription, aiMode, matchMode,
           }
         }
       });
-      console.log(`✅ PDF artifact saved with ID: ${pdfArtifact.id}`);
+      logger.info(`✅ PDF artifact saved with ID: ${pdfArtifact.id}`);
 
       // Save LaTeX source if available
       if (latex) {
@@ -2480,7 +2588,7 @@ async function processJobAsync(jobId, userId, jobDescription, aiMode, matchMode,
             }
           }
         });
-        console.log(`✅ LaTeX artifact saved with ID: ${latexArtifact.id}`);
+        logger.info(`✅ LaTeX artifact saved with ID: ${latexArtifact.id}`);
       }
 
       // Update job status to completed
@@ -2497,10 +2605,10 @@ async function processJobAsync(jobId, userId, jobDescription, aiMode, matchMode,
         }
       });
 
-      console.log(`✅ Job ${jobId} marked as COMPLETED`);
-      console.log(`📊 Job details: Company="${updatedJob.company}", Role="${updatedJob.role}"`);
+      logger.info(`✅ Job ${jobId} marked as COMPLETED`);
+      logger.info(`📊 Job details: Company="${updatedJob.company}", Role="${updatedJob.role}"`);
     } else {
-      console.error(`❌ Generation failed or no PDF produced for job ${jobId}`);
+      logger.error(`❌ Generation failed or no PDF produced for job ${jobId}`);
       await prisma.job.update({
         where: { id: jobId },
         data: {
@@ -2513,7 +2621,7 @@ async function processJobAsync(jobId, userId, jobDescription, aiMode, matchMode,
       });
     }
   } catch (error) {
-    console.error(`❌ Error processing job ${jobId}:`, error);
+    logger.error(`❌ Error processing job ${jobId}:`, error);
 
     // Update job status to failed
     try {
@@ -2526,7 +2634,7 @@ async function processJobAsync(jobId, userId, jobDescription, aiMode, matchMode,
         }
       });
     } catch (updateError) {
-      console.error(`❌ Failed to update job status:`, updateError);
+      logger.error(`❌ Failed to update job status:`, updateError);
     }
   }
 }
@@ -2693,7 +2801,7 @@ if (process.env.NODE_ENV === 'production') {
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error('Unhandled error:', err);
+  logger.error('Unhandled error:', err);
   res.status(500).json({
     error: 'Internal server error',
     message: process.env.NODE_ENV === 'development' ? err.message : undefined
@@ -2703,15 +2811,15 @@ app.use((err, req, res, next) => {
 // Start server
 const PORT = config.server.port;
 const server = app.listen(PORT, () => {
-  console.log(`✅ Server running on port ${PORT}`);
-  console.log(`   - Health check: http://localhost:${PORT}/health`);
-  console.log(`   - Auth endpoints: http://localhost:${PORT}/api/register, /api/login`);
-  console.log(`   - Environment: ${process.env.NODE_ENV || 'development'}`);
+  logger.info(`✅ Server running on port ${PORT}`);
+  logger.info(`   - Health check: http://localhost:${PORT}/health`);
+  logger.info(`   - Auth endpoints: http://localhost:${PORT}/api/register, /api/login`);
+  logger.info(`   - Environment: ${process.env.NODE_ENV || 'development'}`);
 });
 
 // Graceful shutdown
 process.on('SIGTERM', async () => {
-  console.log('SIGTERM received, shutting down gracefully...');
+  logger.info('SIGTERM received, shutting down gracefully...');
 
   // Close server
   server.close(async () => {
@@ -2721,7 +2829,7 @@ process.on('SIGTERM', async () => {
 });
 
 process.on('SIGINT', async () => {
-  console.log('SIGINT received, shutting down gracefully...');
+  logger.info('SIGINT received, shutting down gracefully...');
 
   server.close(async () => {
     await prisma.$disconnect();

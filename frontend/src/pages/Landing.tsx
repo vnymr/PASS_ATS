@@ -6,6 +6,7 @@ import logoImg from '../logo.svg';
 import { DottedSurface } from '@/components/ui/dotted-surface';
 import ExtensionComingSoonModal from '../components/ExtensionComingSoonModal';
 import { trackCTAClick, trackExtensionClick } from '../utils/analytics';
+import logger from '../utils/logger';
 import './Landing.css';
 
 export default function Landing() {
@@ -29,7 +30,7 @@ export default function Landing() {
         const data = await response.json();
         setResumeCount(data.totalResumes);
       } catch (error) {
-        console.error('Failed to fetch resume count:', error);
+        logger.error('Failed to fetch resume count', error);
       }
     }
     fetchResumeCount();
@@ -60,7 +61,7 @@ export default function Landing() {
           setHasProfile(false);
         } else {
           // Other error - assume profile exists
-          console.error('Profile check error:', err);
+          logger.error('Profile check error', err);
           setHasProfile(true);
         }
       } finally {

@@ -4,6 +4,7 @@ import { Navigate } from 'react-router-dom';
 import { useAuth } from '@clerk/clerk-react';
 // import { api } from '../api-clerk'; // ONBOARDING DISABLED: API not needed without profile checks
 import Icons from '../components/ui/icons';
+import logger from '../utils/logger';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -61,7 +62,7 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
           setHasProfile(false);
         } else {
           // Other error - assume profile exists to avoid redirect loop
-          console.error('Profile check error:', err);
+          logger.error('Profile check error', err);
           setHasProfile(true);
         }
       } finally {
@@ -91,7 +92,7 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   // To re-enable: Uncomment the block below and set ONBOARDING_ENABLED to true above
   /*
   if (hasProfile === false && location.pathname !== '/onboarding') {
-    console.log('User has no profile, redirecting to onboarding from:', location.pathname);
+    logger.info('User has no profile, redirecting to onboarding from:', { pathname: location.pathname });
     // Store the intended destination so we can redirect back after onboarding
     sessionStorage.setItem('intendedDestination', location.pathname);
     return <Navigate to="/onboarding" replace />;

@@ -11,6 +11,7 @@ import { Input } from '../ui/Input';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import { PromptBox } from '../components/ui/chatgpt-prompt-input';
+import logger from '../utils/logger';
 
 // Simple in-memory cache
 const dashboardCache = {
@@ -47,7 +48,7 @@ export default function DashboardModern() {
   }, []);
 
   useEffect(() => {
-    console.debug('[RUNTIME] Mounted: DashboardModern');
+    logger.debug('[RUNTIME] Mounted: DashboardModern');
   }, []);
 
   useEffect(() => {
@@ -61,14 +62,14 @@ export default function DashboardModern() {
       const cacheValid = dashboardCache.timestamp > 0 && (now - dashboardCache.timestamp) < dashboardCache.maxAge;
 
       if (cacheValid) {
-        console.log('📦 Using cached dashboard data');
+        logger.info('Using cached dashboard data');
         setResumes(dashboardCache.resumes || []);
         setProfile(dashboardCache.profile);
         setLoading(false);
         return;
       }
 
-      console.log('🔄 Fetching fresh dashboard data');
+      logger.info('Fetching fresh dashboard data');
       const token = await getToken();
       const [resumesData, profileData] = await Promise.all([
         api.getResumes(token || undefined),
@@ -91,7 +92,7 @@ export default function DashboardModern() {
       dashboardCache.profile = profileData;
       dashboardCache.timestamp = Date.now();
     } catch (err) {
-      console.error('Failed to load dashboard:', err);
+      logger.error('Failed to load dashboard', err);
       setResumes([]);
     } finally {
       setLoading(false);
@@ -115,7 +116,7 @@ export default function DashboardModern() {
 
       // Start job processing
       const { jobId } = await api.processJob(trimmedJD, 'claude', 'Standard', token || undefined);
-      console.log(`🚀 Job started with ID: ${jobId}`);
+      logger.info('Job started', { jobId });
 
       // Poll for job completion
       let jobCompleted = false;
@@ -127,7 +128,7 @@ export default function DashboardModern() {
 
         try {
           const jobStatus = await api.getJobStatus(jobId, token || undefined);
-          console.log(`📊 Job status: ${jobStatus.status}`);
+          logger.debug('Job status', { jobId, status: jobStatus.status });
 
           if (jobStatus.status === 'COMPLETED') {
             jobCompleted = true;
@@ -135,7 +136,7 @@ export default function DashboardModern() {
             throw new Error(jobStatus.error || 'Resume generation failed');
           }
         } catch (pollErr) {
-          console.error('Error polling job status:', pollErr);
+          logger.error('Error polling job status', pollErr);
         }
 
         pollCount++;
@@ -146,7 +147,7 @@ export default function DashboardModern() {
       }
 
       // Job completed - now fetch the resumes
-      console.log('✅ Job completed, fetching resumes...');
+      logger.info('Job completed, fetching resumes');
       const resumesData = await api.getResumes(token || undefined);
 
       let resumesList: ResumeEntry[] = [];
@@ -155,14 +156,14 @@ export default function DashboardModern() {
         setResumes(resumesData);
         if (resumesData.length > 0) {
           setLastGenerated(resumesData[0]);
-          console.log(`📄 Found ${resumesData.length} resumes`);
+          logger.info('Found resumes', { count: resumesData.length });
         }
       } else if (resumesData && typeof resumesData === 'object' && 'resumes' in resumesData) {
         resumesList = (resumesData as any).resumes || [];
         setResumes(resumesList);
         if (resumesList.length > 0) {
           setLastGenerated(resumesList[0]);
-          console.log(`📄 Found ${resumesList.length} resumes`);
+          logger.info('Found resumes', { count: resumesList.length });
         }
       }
 
@@ -207,7 +208,7 @@ export default function DashboardModern() {
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
     } catch (err) {
-      console.error('Failed to download resume:', err);
+      logger.error('Failed to download resume', err);
     }
   };
 

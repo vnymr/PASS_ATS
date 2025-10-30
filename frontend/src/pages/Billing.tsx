@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { api, type Quota } from '../api-clerk';
 import Card, { CardHeader, CardTitle, CardDescription, CardContent } from '../ui/Card';
 import { Button } from '../ui/Button';
+import logger from '../utils/logger';
 
 interface BillingData {
   subscription: {
@@ -24,7 +25,7 @@ export default function Billing() {
   }, []);
 
   useEffect(() => {
-    console.debug('[RUNTIME] Mounted: Billing');
+    logger.debug('[RUNTIME] Mounted: Billing');
   }, []);
 
   async function loadBillingData() {
@@ -38,7 +39,7 @@ export default function Billing() {
 
       setData({ subscription, usage });
     } catch (error) {
-      console.error('Failed to load billing data:', error);
+      logger.error('Failed to load billing data', error);
     }
   }
 
@@ -70,7 +71,7 @@ export default function Billing() {
         setLoading(false);
       }
     } catch (error) {
-      console.error('Upgrade error:', error);
+      logger.error('Upgrade error', error);
       alert('Failed to start upgrade process');
       setLoading(false);
     }
@@ -94,7 +95,7 @@ export default function Billing() {
         setLoading(false);
       }
     } catch (error) {
-      console.error('Portal error:', error);
+      logger.error('Portal error', error);
       alert('Failed to open billing portal');
       setLoading(false);
     }

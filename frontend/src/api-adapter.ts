@@ -1,3 +1,5 @@
+import logger from './utils/logger';
+
 // Adapter to bridge the frontend with the new production backend
 export type Quota = { month: string; used: number; remaining: number; limit: number };
 export type ResumeEntry = { 
@@ -154,7 +156,7 @@ export const api = {
     try {
       profileData = await this.getProfile();
     } catch (error) {
-      console.warn('Could not load profile data, using local storage:', error);
+      logger.warn('Could not load profile data, using local storage');
     }
 
     // Combine resume text with additional info

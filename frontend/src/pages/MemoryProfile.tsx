@@ -8,6 +8,7 @@ import { Label } from '../ui/Label';
 import { Input } from '../ui/Input';
 import { Textarea } from '../ui/Textarea';
 import { Button } from '../ui/Button';
+import logger from '../utils/logger';
 
 // Define the profile type with all fields
 type Profile = {
@@ -72,7 +73,7 @@ export default function MemoryProfile() {
   }, [isLoaded, isSignedIn]);
 
   useEffect(() => {
-    console.debug('[RUNTIME] Mounted: MemoryProfile');
+    logger.debug('[RUNTIME] Mounted: MemoryProfile');
   }, []);
 
   // Auto-dismiss error and success messages after 3 seconds
@@ -164,7 +165,7 @@ export default function MemoryProfile() {
 
       if (response.status === 404) {
         // Profile doesn't exist yet, that's okay
-        console.log('No profile found, user can create one');
+        logger.info('No profile found, user can create one');
         setLoading(false);
         return;
       }
@@ -174,7 +175,7 @@ export default function MemoryProfile() {
       }
 
       const data = await response.json();
-      console.log('🔍 Loaded profile data:', data);
+      logger.info('Loaded profile data', { hasProfile: !!data });
 
       if (data) {
         setProfile(data);
@@ -211,7 +212,7 @@ export default function MemoryProfile() {
           education: Array.isArray(data.education) ? data.education : []
         };
 
-        console.log('📝 Setting form data:', formDataToSet);
+        logger.debug('Setting form data', { skillsCount: formDataToSet.skills.length, experiencesCount: formDataToSet.experiences.length });
         setFormData(formDataToSet);
 
         // Set additional info if it exists
@@ -225,7 +226,7 @@ export default function MemoryProfile() {
         }
       }
     } catch (err) {
-      console.error('Failed to load profile:', err);
+      logger.error('Failed to load profile', err);
       setError('Failed to load profile');
     } finally {
       setLoading(false);
@@ -310,7 +311,7 @@ export default function MemoryProfile() {
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
-      console.error('Failed to parse resume:', err);
+      logger.error('Failed to parse resume', err);
       setError('Failed to parse resume. You can still fill in the information manually.');
     } finally {
       setUploadingResume(false);
@@ -346,14 +347,14 @@ export default function MemoryProfile() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        console.error('Profile save error:', response.status, errorData);
+        logger.error('Profile save error', { status: response.status, error: errorData });
         throw new Error(errorData.error || 'Failed to update profile');
       }
 
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
-      console.error('Failed to save profile:', err);
+      logger.error('Failed to save profile', err);
       setError('Failed to save profile');
     } finally {
       setSaving(false);

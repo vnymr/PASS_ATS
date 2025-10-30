@@ -88,11 +88,44 @@ router.post('/auto-apply', async (req, res) => {
 
     const profileData = user.profile.data;
 
-    if (!profileData.applicationData) {
+    // Transform profile data to applicationData format if needed (backwards compatibility)
+    let applicationData = profileData.applicationData;
+
+    if (!applicationData) {
+      // Check if we have the old profile structure
+      if (profileData.name || profileData.email || profileData.experiences) {
+        // Transform old structure to new applicationData format
+        applicationData = {
+          personalInfo: {
+            fullName: profileData.name || `${profileData.firstName || ''} ${profileData.lastName || ''}`.trim(),
+            email: profileData.email || user.email,
+            phone: profileData.phone || '',
+            location: profileData.location || '',
+            linkedin: profileData.linkedin || '',
+            website: profileData.website || ''
+          },
+          experience: profileData.experiences || [],
+          education: profileData.education || [],
+          skills: profileData.skills || []
+        };
+
+        logger.info({ userId: user.id }, 'Transformed legacy profile structure to applicationData format');
+      } else {
+        // No profile data at all
+        return res.status(400).json({
+          error: 'Application data not configured',
+          message: 'Please complete your profile first',
+          setupUrl: '/profile'
+        });
+      }
+    }
+
+    // Validate essential fields
+    if (!applicationData.personalInfo || !applicationData.personalInfo.fullName || !applicationData.personalInfo.email) {
       return res.status(400).json({
-        error: 'Application data not configured',
-        message: 'Please complete your application settings first',
-        setupUrl: '/setup/application-data'
+        error: 'Incomplete application data',
+        message: 'Please add your name and email to your profile',
+        setupUrl: '/profile'
       });
     }
 

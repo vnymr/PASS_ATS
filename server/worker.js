@@ -118,9 +118,9 @@ logger.info({
   queue: 'resume-generation'
 }, 'Resume generation worker started');
 
-console.log('🚀 Resume Generation Worker Started');
-console.log('📊 Concurrency: 50 jobs at once (scaled for 1000+ users)');
-console.log('⏱️  Timeout: 2 minutes per job');
-console.log('🔄 Auto-retry: Up to 3 attempts');
-console.log('🚀 Throughput: Up to 100 jobs/second');
-console.log('\n✅ Ready to process jobs...\n');
+logger.info('🚀 Resume Generation Worker Started');
+logger.info('📊 Concurrency: 50 jobs at once (scaled for 1000+ users)');
+logger.info('⏱️  Timeout: 2 minutes per job');
+logger.info('🔄 Auto-retry: Up to 3 attempts');
+logger.info('🚀 Throughput: Up to 100 jobs/second');
+logger.info('\n✅ Ready to process jobs...\n');

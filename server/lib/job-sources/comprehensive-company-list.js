@@ -12,6 +12,8 @@
  * Total companies: 500+
  */
 
+import logger from '../logger.js';
+
 // ============================================================================
 // GREENHOUSE COMPANIES (300+)
 // ============================================================================
@@ -234,9 +236,9 @@ export const COMPANY_METADATA = {
   ]
 };
 
-console.log(`📊 Total companies tracked: ${TOTAL_COMPANIES}`);
-console.log(`   - Greenhouse: ${GREENHOUSE_COMPANIES.length}`);
-console.log(`   - Lever: ${LEVER_COMPANIES.length}`);
-console.log(`   - Ashby: ${ASHBY_COMPANIES.length}`);
-console.log(`   - Workable: ${WORKABLE_COMPANIES.length}`);
-console.log(`   - SmartRecruiters: ${SMARTRECRUITERS_COMPANIES.length}`);
+logger.info(`📊 Total companies tracked: ${TOTAL_COMPANIES}`);
+logger.info(`   - Greenhouse: ${GREENHOUSE_COMPANIES.length}`);
+logger.info(`   - Lever: ${LEVER_COMPANIES.length}`);
+logger.info(`   - Ashby: ${ASHBY_COMPANIES.length}`);
+logger.info(`   - Workable: ${WORKABLE_COMPANIES.length}`);
+logger.info(`   - SmartRecruiters: ${SMARTRECRUITERS_COMPANIES.length}`);

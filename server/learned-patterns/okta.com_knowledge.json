@@ -1,0 +1,162 @@
+{
+  "domain": "okta.com",
+  "firstSeen": "2025-10-29T19:37:12.215Z",
+  "lastUpdated": "2025-10-29T19:42:47.317Z",
+  "applications": [
+    {
+      "timestamp": "2025-10-29T19:37:12.213Z",
+      "fieldsCount": 25,
+      "problemsSolved": 2
+    },
+    {
+      "timestamp": "2025-10-29T19:37:55.790Z",
+      "fieldsCount": 25,
+      "problemsSolved": 2
+    },
+    {
+      "timestamp": "2025-10-29T19:42:47.314Z",
+      "fieldsCount": 25,
+      "problemsSolved": 2
+    }
+  ],
+  "commonPatterns": {
+    "fieldNames": {
+      "first_name": {
+        "name": "first_name",
+        "type": "text",
+        "label": "First Name",
+        "count": 3
+      },
+      "last_name": {
+        "name": "last_name",
+        "type": "text",
+        "label": "Last Name",
+        "count": 3
+      },
+      "email": {
+        "name": "email",
+        "type": "email",
+        "label": "Email",
+        "count": 3
+      },
+      "question_60992122": {
+        "name": "question_60992122",
+        "type": "select-one",
+        "label": "Are you legally authorized to work in the country you reside?",
+        "count": 3
+      },
+      "question_60992123": {
+        "name": "question_60992123",
+        "type": "select-one",
+        "label": "Will you now or in the future require Visa Sponsorship?",
+        "count": 3
+      },
+      "question_60992124": {
+        "name": "question_60992124",
+        "type": "select-one",
+        "label": "To the best of your knowledge, do you have any family members / relatives or personal relationships at Okta or at any suppliers, partners, or vendors that have a business relationship with Okta?\n\n(For purposes of this question, a “family member / relative or personal relationship” is defined as close personal friends (including sexual and/or romantic relationships), close relatives (spouse, partner, children, cousins, aunts, uncles, nieces, nephews, grandparents or grandchildren), someone who lives in your household, or anyone else with whom you have a close enough personal relationship or connection that it could improperly bias your conduct or decision making or be perceived to be capable of impacting your conduct or decision making.",
+        "count": 3
+      },
+      "question_60992126": {
+        "name": "question_60992126",
+        "type": "select-one",
+        "label": "Do you have any outside business activity(ies) (advisory, consulting, or board roles, or side businesses) that you would continue engaging in or plan to engage in if you joined Okta in this role?",
+        "count": 3
+      },
+      "question_60992128": {
+        "name": "question_60992128",
+        "type": "select-one",
+        "label": "Have you worked for Okta in the past?",
+        "count": 3
+      },
+      "question_60992129[595167129]": {
+        "name": "question_60992129[595167129]",
+        "type": "checkbox",
+        "label": "I acknowledge",
+        "count": 3
+      }
+    },
+    "questionTypes": [
+      {
+        "label": "If yes, please identify name of person / vendor and describe relationship / association:",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "If yes, please describe:",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "If yes, please identify name of person / vendor and describe relationship / association:",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "If yes, please describe:",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "If yes, please identify name of person / vendor and describe relationship / association:",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "If yes, please describe:",
+        "type": "text",
+        "category": "other"
+      }
+    ],
+    "successStrategies": [
+      {
+        "problem": "Failed to fill files[resume]: InvalidStateError: Failed to set the 'value' property on 'HTMLInputElement': This input element accepts a filename, which may only be programmatically set to the empty string.",
+        "solution": {
+          "issue": "Failed to programmatically set the value of file input fields 'files[resume]' and 'files[cover_letter]'.",
+          "solution": "Manually select the files using the file input fields.",
+          "fieldToRetry": null,
+          "newValue": null,
+          "needsManualIntervention": true,
+          "learnedPattern": "File inputs cannot be set programmatically; they must be handled manually."
+        },
+        "timestamp": "2025-10-29T19:37:12.213Z"
+      },
+      {
+        "problem": "Failed to fill files[cover_letter]: InvalidStateError: Failed to set the 'value' property on 'HTMLInputElement': This input element accepts a filename, which may only be programmatically set to the empty string.",
+        "timestamp": "2025-10-29T19:37:12.213Z"
+      },
+      {
+        "problem": "Failed to fill files[resume]: InvalidStateError: Failed to set the 'value' property on 'HTMLInputElement': This input element accepts a filename, which may only be programmatically set to the empty string.",
+        "solution": {
+          "issue": "Failed to set the value property on file input elements for 'files[resume]' and 'files[cover_letter]'.",
+          "solution": "File inputs must be set by user interaction. Prompt the user to manually upload the files for 'files[resume]' and 'files[cover_letter]'.",
+          "fieldToRetry": null,
+          "newValue": null,
+          "needsManualIntervention": true,
+          "learnedPattern": "File inputs cannot be programmatically set; user must manually upload files."
+        },
+        "timestamp": "2025-10-29T19:37:55.791Z"
+      },
+      {
+        "problem": "Failed to fill files[cover_letter]: InvalidStateError: Failed to set the 'value' property on 'HTMLInputElement': This input element accepts a filename, which may only be programmatically set to the empty string.",
+        "timestamp": "2025-10-29T19:37:55.791Z"
+      },
+      {
+        "problem": "Failed to fill files[resume]: InvalidStateError: Failed to set the 'value' property on 'HTMLInputElement': This input element accepts a filename, which may only be programmatically set to the empty string.",
+        "solution": {
+          "issue": "Cannot programmatically set file input values due to browser security restrictions.",
+          "solution": "Manually upload the files by clicking the file input fields for 'Resume/CV' and 'Cover Letter'.",
+          "fieldToRetry": null,
+          "newValue": null,
+          "needsManualIntervention": true,
+          "learnedPattern": "File inputs require user interaction for file selection."
+        },
+        "timestamp": "2025-10-29T19:42:47.314Z"
+      },
+      {
+        "problem": "Failed to fill files[cover_letter]: InvalidStateError: Failed to set the 'value' property on 'HTMLInputElement': This input element accepts a filename, which may only be programmatically set to the empty string.",
+        "timestamp": "2025-10-29T19:42:47.314Z"
+      }
+    ]
+  }
+}

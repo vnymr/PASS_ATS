@@ -3,6 +3,7 @@ import { useAuth } from '@clerk/clerk-react';
 import { useNavigate } from 'react-router-dom';
 import Icons from './ui/icons';
 import { api } from '../api-clerk';
+import logger from '../utils/logger';
 
 interface UsageData {
   used: number;
@@ -34,7 +35,7 @@ export default function UsageCard() {
         tier: subData.tier || 'FREE'
       });
     } catch (err) {
-      console.error('Failed to load usage:', err);
+      logger.error('Failed to load usage', err);
     } finally {
       setLoading(false);
     }

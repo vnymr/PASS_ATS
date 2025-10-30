@@ -4,12 +4,13 @@ import { Input } from '../ui/Input';
 import { Button } from '../ui/Button';
 import Card from '../ui/Card';
 import { useAuth } from '@clerk/clerk-react';
-import type { Job as JobType, GetJobsResponse, JobSearchResult } from '../services/api';
+import type { Job as JobType, GetJobsResponse } from '../services/api';
 import JobCard from '../components/JobCard';
 import JobDetailPanel from '../components/JobDetailPanel';
+import logger from '../utils/logger';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '';
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 50;
 
 type JobWithExtras = JobType & {
   logoUrl?: string | null;
@@ -205,7 +206,7 @@ export default function FindJob() {
         }
 
         const data = (await response.json()) as GetJobsResponse;
-        console.log('📊 API Response:', { total: data.total, jobCount: data.jobs?.length, firstJob: data.jobs?.[0] });
+        logger.debug('API Response', { total: data.total, jobCount: data.jobs?.length });
         if (requestId !== requestIdRef.current) {
           return;
         }
@@ -284,28 +285,42 @@ export default function FindJob() {
         }
 
         const headers: Record<string, string> = {
-          'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         };
 
-        const response = await fetch(buildUrl('/api/ai-search'), {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({ query: trimmedQuery, limit: PAGE_SIZE, offset }),
-        });
+        // Use simple search with query parameter instead of AI search
+        const searchUrl = buildUrl(`/api/jobs?search=${encodeURIComponent(trimmedQuery)}&limit=${PAGE_SIZE}&offset=${offset}`);
+        logger.debug('Making API call to /api/jobs with search', { query: trimmedQuery, limit: PAGE_SIZE, offset });
+
+        const response = await fetch(searchUrl, { headers });
 
         if (!response.ok) {
           throw new Error('Failed to search jobs');
         }
 
-        const data = (await response.json()) as JobSearchResult;
+        const data = (await response.json()) as GetJobsResponse;
+        logger.debug('Search API Response', {
+          totalResults: data.total,
+          jobsCount: data.jobs?.length,
+          hasMore: data.hasMore,
+          isAppend: append
+        });
+
         if (requestId !== requestIdRef.current) {
           return;
         }
 
         const normalized = (data.jobs || []).map(job => normalizeJob(job as JobWithExtras));
 
-        setExplanation(data.explanation || '');
+        // Simple explanation for search results
+        setExplanation(`Found ${data.total} job${data.total === 1 ? '' : 's'} matching "${trimmedQuery}"`);
+
+        logger.debug('Updating jobs state', {
+          append,
+          previousCount: jobs.length,
+          newJobsCount: normalized.length,
+          willResultIn: append ? jobs.length + normalized.length : normalized.length
+        });
         setJobs(prev => (append ? [...prev, ...normalized] : normalized));
 
         if (!append) {
@@ -336,7 +351,7 @@ export default function FindJob() {
         }
       }
     },
-    [getToken, setSearchParams]
+    [getToken, setSearchParams, jobs.length]
   );
 
   useEffect(() => {
@@ -348,7 +363,7 @@ export default function FindJob() {
   }, [fetchJobs, runSearch]);
 
   useEffect(() => {
-    console.debug('[RUNTIME] Mounted: FindJob');
+    logger.debug('[RUNTIME] Mounted: FindJob');
   }, []);
 
   useEffect(() => {
@@ -494,11 +509,11 @@ export default function FindJob() {
       }
     } catch (err) {
       if (err instanceof Error) {
-        if (err.message.includes('Profile not found') || err.message.includes('Application data not configured')) {
+        if (err.message.includes('No resume found') || err.message.includes('upload a resume') || err.message.includes('Profile not found') || err.message.includes('Application data not configured')) {
           window.alert(
-            '⚠️ Profile setup required. Please complete your profile (Profile → Application Settings) before using auto-apply.'
+            '⚠️ Auto-Apply setup required.\n\nPlease complete your auto-apply setup:\n1. Fill out application questions\n2. Upload a resume PDF\n\nGo to: Auto-Apply → Complete Setup'
           );
-          navigate('/profile');
+          navigate('/application-questions');
         } else if (err.message.includes('Already applied')) {
           window.alert('ℹ️ You have already applied to this job. Check your Agent Dashboard for status updates.');
           navigate('/dashboard');
@@ -522,9 +537,9 @@ export default function FindJob() {
   // Tailwind replaces previous inline style objects
 
   return (
-    <div className={`flex-1 w-full ${isMobile ? 'pt-[72px] px-4 pb-6' : 'pt-[88px] px-6 pb-8'} bg-background min-h-[calc(100vh-64px)] text-text font-sans`}>
+    <div className={`flex-1 w-full ${isMobile ? 'pt-[72px] px-4 pb-6' : 'pt-[72px] px-6 pb-8'} bg-background min-h-[calc(100vh-64px)] text-text font-sans`}>
       <div className="max-w-[1160px] mx-auto flex flex-col gap-4">
-        <div className={`sticky top-[72px] z-10 bg-background ${isMobile ? 'pt-3 pb-4' : 'pt-4 pb-5'} border-b border-[rgba(12,19,16,0.06)] flex flex-col gap-3`}>
+        <div className={`sticky top-[72px] z-10 bg-background ${isMobile ? 'pt-2 pb-3' : 'pt-2 pb-3'} border-b border-[rgba(12,19,16,0.06)] flex flex-col gap-3`}>
           <form onSubmit={handleSearchSubmit} className={`${isMobile ? 'flex flex-col gap-2' : 'flex flex-row items-stretch gap-3'}`}>
             <div className="flex-1 flex items-center gap-2">
               <div className="relative flex-1">
@@ -564,9 +579,9 @@ export default function FindJob() {
           )}
         </div>
 
-        <div className="grid grid-cols-1 gap-4 items-start">
-          <div className={`flex flex-col ${isMobile ? 'gap-4 pr-0' : 'gap-3 pr-1'} overflow-hidden`}>
-            <div className={`${isMobile ? 'flex flex-col gap-4' : 'flex flex-col gap-3 max-h-[calc(100vh-260px)] overflow-y-auto pr-1.5'}`}>
+        <div className={`${selectedJob && isDetailOpen ? 'md:flex' : 'grid'} gap-4 items-start ${selectedJob && isDetailOpen ? '' : 'grid-cols-1'} transition-all duration-300`}>
+          <div className={`${isMobile ? 'flex flex-col gap-4 pr-0' : 'pr-1'} overflow-hidden ${selectedJob && isDetailOpen && !isMobile ? 'md:w-[620px] md:flex-none' : ''}`}>
+            <div className={`${isMobile ? 'flex flex-col gap-4' : selectedJob && isDetailOpen ? 'flex flex-col gap-3 max-h-[calc(100vh-260px)] overflow-y-auto pr-1.5' : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[calc(100vh-260px)] overflow-y-auto pr-1.5'}`}>
               {isInitialLoading && (
                 <>
                   {Array.from({ length: isMobile ? 4 : 6 }).map((_, index) => (
@@ -586,8 +601,9 @@ export default function FindJob() {
                 <Card key={job.id} className={`${selectedJob?.id === job.id ? 'border-primary-600' : ''}`}>
                   <JobCard
                     job={job}
+                    compact={!isMobile}
                     onClick={() => { setSelectedJob(job); setIsDetailOpen(true); }}
-                    onGenerateResume={() => navigate('/generate-resume', { state: { jobId: job.id } })}
+                    onGenerateResume={() => navigate('/generate', { state: { jobId: job.id } })}
                     onViewJob={(url) => window.open(url, '_blank', 'noopener')}
                     onAutoApply={(jobId) => handleAutoApply(job)}
                   />
@@ -635,17 +651,35 @@ export default function FindJob() {
             )}
           </div>
 
-          <div className="relative self-start" />
+          {/* Job Detail Panel - Side by Side on Desktop */}
+          {selectedJob && isDetailOpen && !isMobile && (
+            <div className="sticky top-[180px] self-start">
+              <JobDetailPanel
+                job={selectedJob as any}
+                isOpen={true}
+                onClose={() => setIsDetailOpen(false)}
+                onGenerateResume={(job) => navigate('/generate', { state: { jobId: job.id } })}
+                onApply={(url) => window.open(url, '_blank', 'noopener')}
+                onAutoApply={(job) => handleAutoApply(job as any)}
+                isSidePanel={true}
+              />
+            </div>
+          )}
         </div>
       </div>
-      <JobDetailPanel
-        job={selectedJob as any}
-        isOpen={Boolean(selectedJob) && isDetailOpen}
-        onClose={() => setIsDetailOpen(false)}
-        onGenerateResume={(job) => navigate('/generate-resume', { state: { jobId: job.id } })}
-        onApply={(url) => window.open(url, '_blank', 'noopener')}
-        onAutoApply={(job) => handleAutoApply(job as any)}
-      />
+
+      {/* Mobile Overlay Detail Panel */}
+      {isMobile && (
+        <JobDetailPanel
+          job={selectedJob as any}
+          isOpen={Boolean(selectedJob) && isDetailOpen}
+          onClose={() => setIsDetailOpen(false)}
+          onGenerateResume={(job) => navigate('/generate', { state: { jobId: job.id } })}
+          onApply={(url) => window.open(url, '_blank', 'noopener')}
+          onAutoApply={(job) => handleAutoApply(job as any)}
+          isSidePanel={false}
+        />
+      )}
     </div>
   );
 }

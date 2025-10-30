@@ -1,3 +1,4 @@
+import logger from './logger.js';
 import mammoth from 'mammoth';
 import aiClient from './ai-client.js';
 import cacheManager from './cache-manager.js';
@@ -59,13 +60,13 @@ class ResumeParser {
       if (mimeType === 'application/pdf') {
         // Parse PDF
         text = await this._extractPdfText(buffer);
-        console.log('✅ PDF parsed, extracted', text.length, 'characters');
+        logger.info('✅ PDF parsed, extracted', text.length, 'characters');
       }
       else if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
         // Parse DOCX (Word 2007+)
         const result = await mammoth.extractRawText({ buffer });
         text = result.value;
-        console.log('✅ DOCX parsed, extracted', text.length, 'characters');
+        logger.info('✅ DOCX parsed, extracted', text.length, 'characters');
       }
       else if (mimeType === 'application/msword') {
         // Parse DOC (Word 97-2003)
@@ -73,16 +74,16 @@ class ResumeParser {
         try {
           const result = await mammoth.extractRawText({ buffer });
           text = result.value;
-          console.log('✅ DOC parsed, extracted', text.length, 'characters');
+          logger.info('✅ DOC parsed, extracted', text.length, 'characters');
         } catch (docError) {
-          console.error('DOC parse error:', docError);
+          logger.error('DOC parse error:', docError);
           throw new Error('Cannot parse old .doc format. Please save as .docx or .pdf and try again.');
         }
       }
       else if (mimeType === 'text/plain') {
         // Parse TXT
         text = buffer.toString('utf-8');
-        console.log('✅ TXT file read, extracted', text.length, 'characters');
+        logger.info('✅ TXT file read, extracted', text.length, 'characters');
       }
       else {
         throw new Error(`Unsupported file format: ${mimeType}. Please upload PDF, DOCX, DOC, or TXT files.`);
@@ -100,24 +101,24 @@ class ResumeParser {
       }
 
       // OPTIMIZATION: Validate text quality before using AI
-      console.log('🔍 Validating resume text quality...');
+      logger.info('🔍 Validating resume text quality...');
       const validation = this.validator.validate(text);
 
-      console.log(`📊 Resume quality score: ${validation.score}/${validation.maxScore}`);
-      console.log(`   - Has basic info: ${validation.hasBasicInfo}`);
-      console.log(`   - Has sections: ${validation.hasSections} (${validation.details.sectionCount} found)`);
-      console.log(`   - Has dates: ${validation.hasDates} (${validation.details.dateCount} found)`);
-      console.log(`   - Well structured: ${validation.isWellStructured}`);
+      logger.info(`📊 Resume quality score: ${validation.score}/${validation.maxScore}`);
+      logger.info(`   - Has basic info: ${validation.hasBasicInfo}`);
+      logger.info(`   - Has sections: ${validation.hasSections} (${validation.details.sectionCount} found)`);
+      logger.info(`   - Has dates: ${validation.hasDates} (${validation.details.dateCount} found)`);
+      logger.info(`   - Well structured: ${validation.isWellStructured}`);
 
       let extractedData;
       let parsingMethod;
 
       // ALWAYS use AI for complete extraction - simple parser is too unreliable
-      console.log('🤖 Using AI parser for complete and accurate extraction');
+      logger.info('🤖 Using AI parser for complete and accurate extraction');
       parsingMethod = 'ai';
       extractedData = await this.extractInformation(text);
 
-      console.log(`✅ Resume parsed successfully using ${parsingMethod} method`);
+      logger.info(`✅ Resume parsed successfully using ${parsingMethod} method`);
 
       return {
         text,
@@ -130,7 +131,7 @@ class ResumeParser {
       };
 
     } catch (error) {
-      console.error('Resume parsing error:', error.message);
+      logger.error('Resume parsing error:', error.message);
       throw error;
     }
   }
@@ -142,11 +143,11 @@ class ResumeParser {
       const cached = await this.cache.getResumeParsing(resumeHash);
 
       if (cached) {
-        console.log('✅ Resume parsing: CACHE HIT - saving $$$ on AI');
+        logger.info('✅ Resume parsing: CACHE HIT - saving $$$ on AI');
         return cached;
       }
 
-      console.log('💰 Resume parsing: CACHE MISS - calling AI (using Gemini to save $$$)');
+      logger.info('💰 Resume parsing: CACHE MISS - calling AI (using Gemini to save $$$)');
 
       const systemPrompt = 'You are a resume parser. Extract information and return valid JSON only. Do not include any markdown formatting or code blocks.';
 
@@ -215,7 +216,7 @@ ${resumeText}`;
 
       return cleanedData;
     } catch (error) {
-      console.error('Failed to extract information from resume:', error);
+      logger.error('Failed to extract information from resume:', error);
       // Return a structure with empty fields if extraction fails
       return this.getEmptyStructure();
     }

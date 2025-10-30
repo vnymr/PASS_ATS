@@ -6,6 +6,7 @@ import Card, { CardContent } from '../ui/Card';
 import { Input } from '../ui/Input';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
+import logger from '../utils/logger';
 
 export default function History() {
   const [resumes, setResumes] = useState<ResumeEntry[]>([]);
@@ -24,7 +25,7 @@ export default function History() {
       const data = await api.getResumes();
       setResumes(data || []);
     } catch (err) {
-      console.error('Failed to load resumes:', err);
+      logger.error('Failed to load resumes', err);
       setError('Failed to load resume history');
     } finally {
       setLoading(false);
@@ -43,7 +44,7 @@ export default function History() {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (err) {
-      console.error('Failed to download resume:', err);
+      logger.error('Failed to download resume', err);
       alert('Failed to download resume. Please try again.');
     }
   };

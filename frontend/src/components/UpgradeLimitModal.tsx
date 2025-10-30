@@ -3,6 +3,7 @@ import { useAuth } from '@clerk/clerk-react';
 import { useNavigate } from 'react-router-dom';
 import Icons from './ui/icons';
 import { api } from '../api-clerk';
+import logger from '../utils/logger';
 
 interface UpgradeLimitModalProps {
   isOpen: boolean;
@@ -26,7 +27,7 @@ export default function UpgradeLimitModal({ isOpen, onClose, usedCount, limit }:
       const { sessionUrl } = await api.post('/api/create-checkout-session', { priceId }, token || undefined);
       window.location.href = sessionUrl;
     } catch (err) {
-      console.error('Failed to create checkout session:', err);
+      logger.error('Failed to create checkout session', err);
       setLoading(false);
     }
   }

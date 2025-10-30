@@ -1,34 +1,26 @@
 import { Routes, Route } from 'react-router-dom';
-import { SignedIn, SignedOut, SignInButton, SignUpButton, UserButton, useAuth, useUser } from '@clerk/clerk-react';
+import { SignInButton, SignUpButton, useAuth, useUser } from '@clerk/clerk-react';
 import { useEffect } from 'react';
+import { authLogger } from './utils/logger';
 // Tailwind is loaded via index.css in main.tsx
 
 // Page components
 import Landing from './pages/Landing';
-import Onboarding from './pages/Onboarding';
-import OnboardingNew from './pages/OnboardingNew';
-import Dashboard from './pages/Dashboard';
-import DashboardUnified from './pages/DashboardUnified';
 import DashboardModern from './pages/DashboardModern';
 import MemoryProfile from './pages/MemoryProfile';
 import GenerateResume from './pages/GenerateResume';
 import History from './pages/History';
-import Extension from './pages/Extension';
 import Billing from './pages/Billing';
 import CheckoutSuccess from './pages/CheckoutSuccess';
 import CheckoutCancel from './pages/CheckoutCancel';
 import Support from './pages/Support';
 import Privacy from './pages/Privacy';
 import FindJob from './pages/FindJob';
+import JobApplicationQuestions from './components/JobApplicationQuestions';
 
 // Layout components
 import ProtectedRoute from './layouts/ProtectedRoute';
-import DashboardLayout from './layouts/DashboardLayout';
-import MainLayout from './layouts/MainLayout';
 import ModernLayout from './layouts/ModernLayout';
-
-// Context providers
-import { OnboardingProvider } from './contexts/OnboardingContext';
 
 // Simple auth page component
 function AuthPage() {
@@ -70,7 +62,7 @@ export default function App() {
           const extensionId = import.meta.env.VITE_EXTENSION_ID;
 
           if (typeof (window as any).chrome !== 'undefined' && (window as any).chrome.runtime && extensionId) {
-            console.log('🔄 Syncing token to extension:', extensionId);
+            authLogger.attempt('extension-sync');
             (window as any).chrome.runtime.sendMessage(
               extensionId,
               {
@@ -80,17 +72,17 @@ export default function App() {
               },
               (response: any) => {
                 if ((window as any).chrome.runtime.lastError) {
-                  console.log('⚠️ Extension not available:', (window as any).chrome.runtime.lastError.message);
+                  authLogger.failure('Extension not available: ' + (window as any).chrome.runtime.lastError.message);
                 } else {
-                  console.log('✅ Token synced to extension', response);
+                  authLogger.success('Token synced to extension');
                 }
               }
             );
           } else {
-            console.log('ℹ️ Extension ID not configured or chrome runtime unavailable');
+            authLogger.attempt('Extension ID not configured or chrome runtime unavailable');
           }
         } catch (error) {
-          console.error('❌ Failed to sync token:', error);
+          authLogger.failure('Failed to sync token to extension');
         }
       }
     }
@@ -112,6 +104,13 @@ export default function App() {
         <ProtectedRoute>
           <ModernLayout>
             <MemoryProfile />
+          </ModernLayout>
+        </ProtectedRoute>
+      } />
+      <Route path="/application-questions" element={
+        <ProtectedRoute>
+          <ModernLayout>
+            <JobApplicationQuestions />
           </ModernLayout>
         </ProtectedRoute>
       } />

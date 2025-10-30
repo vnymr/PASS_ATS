@@ -1,3 +1,4 @@
+import logger from './logger.js';
 import fs from 'fs/promises';
 
 // Enhanced PDF Validator with real PDF parsing and ATS compliance checks
@@ -68,11 +69,11 @@ export class EnhancedPDFValidator {
         });
       } catch (parseError) {
         // Log but don't fail - continue with basic validation
-        console.warn(`PDF parse warning for ${pdfPath}: ${parseError.message}`);
+        logger.warn(`PDF parse warning for ${pdfPath}: ${parseError.message}`);
 
         // Check if error is about test file
         if (parseError.message && parseError.message.includes('test/data')) {
-          console.log('Ignoring pdf-parse test file error, continuing with basic validation');
+          logger.info('Ignoring pdf-parse test file error, continuing with basic validation');
         }
       }
 

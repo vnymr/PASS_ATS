@@ -100,7 +100,9 @@ import {
   ArrowRight,
   CreditCard,
   Infinity,
-  Sparkles
+  Sparkles,
+  HelpCircle,
+  Save
 } from 'lucide-react';
 
 export const Icons = {
@@ -205,7 +207,9 @@ export const Icons = {
   creditCard: CreditCard,
   infinity: Infinity,
   sparkles: Sparkles,
-  refreshCw: RefreshCw
+  refreshCw: RefreshCw,
+  helpCircle: HelpCircle,
+  save: Save
 };
 
 export default Icons;

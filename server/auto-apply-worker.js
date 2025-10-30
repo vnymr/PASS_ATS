@@ -9,6 +9,7 @@
  *   pm2 start auto-apply-worker.js --name auto-apply-worker
  */
 
+import 'dotenv/config';
 import autoApplyQueue from './lib/auto-apply-queue.js';
 import logger from './lib/logger.js';
 

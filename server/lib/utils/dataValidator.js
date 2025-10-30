@@ -2,6 +2,8 @@
  * Data validation and sanitization utilities for the resume pipeline
  */
 
+import logger from '../logger.js';
+
 /**
  * Validate profile data structure
  */
@@ -302,7 +304,7 @@ export function logDataQuality(data, jobId) {
     hasProcessedAdditionalInfo: !!data.processedAdditionalInfo?.newSkills?.length
   };
 
-  console.log(`[Data Quality ${jobId}] Profile Metrics:`, JSON.stringify(metrics, null, 2));
+  logger.info(`[Data Quality ${jobId}] Profile Metrics:`, JSON.stringify(metrics, null, 2));
 
   // Quality score (0-100)
   let score = 0;
@@ -316,7 +318,7 @@ export function logDataQuality(data, jobId) {
   if (metrics.projectCount > 0) score += 10;
   if (metrics.hasAdditionalInfo) score += 5;
 
-  console.log(`[Data Quality ${jobId}] Quality Score: ${score}/100`);
+  logger.info(`[Data Quality ${jobId}] Quality Score: ${score}/100`);
 
   return { metrics, score };
 }
