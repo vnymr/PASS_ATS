@@ -192,13 +192,22 @@ async function applyWithAI(jobUrl, user, jobData, resumePath = null) {
     // DEBUG: Take screenshot to see what's on the page
     logger.info('📸 Taking screenshot for debugging...');
     try {
+      // Ensure test-output directory exists
+      const fs = await import('fs');
+      const path = await import('path');
+      const outputDir = './test-output';
+
+      if (!fs.existsSync(outputDir)) {
+        fs.mkdirSync(outputDir, { recursive: true });
+      }
+
       const debugScreenshot = await page.screenshot({
-        path: `./test-output/debug-${Date.now()}.png`,
+        path: `${outputDir}/debug-${Date.now()}.png`,
         fullPage: true
       });
-      logger.info('✅ Screenshot saved to test-output directory');
+      logger.info({ outputDir }, '✅ Screenshot saved to test-output directory');
     } catch (screenshotError) {
-      logger.warn('⚠️  Failed to save screenshot:', screenshotError.message);
+      logger.warn({ error: screenshotError.message, stack: screenshotError.stack }, '⚠️  Failed to save screenshot');
     }
 
     // DEBUG: Log page content info
@@ -309,32 +318,66 @@ async function applyWithAI(jobUrl, user, jobData, resumePath = null) {
       }
     }
 
-    // Check for CAPTCHA before proceeding
-    const hasCaptcha = await page.evaluate(() => {
-      return !!(
-        document.querySelector('iframe[src*="recaptcha"]') ||
-        document.querySelector('.g-recaptcha') ||
-        document.querySelector('[class*="captcha"]') ||
-        document.querySelector('#captcha')
-      );
+    // Check for CAPTCHA before proceeding (detailed detection)
+    const captchaInfo = await page.evaluate(() => {
+      const recaptchaIframe = document.querySelector('iframe[src*="recaptcha"]');
+      const recaptchaDiv = document.querySelector('.g-recaptcha');
+      const hcaptchaDiv = document.querySelector('.h-captcha');
+      const genericCaptcha = document.querySelector('[class*="captcha"]');
+      const captchaById = document.querySelector('#captcha');
+
+      // Extract site key if available
+      let siteKey = null;
+      if (recaptchaDiv) {
+        siteKey = recaptchaDiv.getAttribute('data-sitekey');
+      } else if (hcaptchaDiv) {
+        siteKey = hcaptchaDiv.getAttribute('data-sitekey');
+      }
+
+      return {
+        detected: !!(recaptchaIframe || recaptchaDiv || hcaptchaDiv || genericCaptcha || captchaById),
+        type: recaptchaIframe || recaptchaDiv ? 'recaptcha' :
+              hcaptchaDiv ? 'hcaptcha' :
+              (genericCaptcha || captchaById) ? 'unknown' : null,
+        siteKey,
+        elements: {
+          recaptchaIframe: !!recaptchaIframe,
+          recaptchaDiv: !!recaptchaDiv,
+          hcaptchaDiv: !!hcaptchaDiv,
+          genericCaptcha: !!genericCaptcha
+        }
+      };
     });
 
-    if (hasCaptcha) {
-      logger.info('🔐 CAPTCHA detected');
+    if (captchaInfo.detected) {
+      logger.info({
+        captchaType: captchaInfo.type,
+        siteKey: captchaInfo.siteKey?.substring(0, 20) + '...',
+        elements: captchaInfo.elements
+      }, '🔐 CAPTCHA detected');
 
       // TESTING MODE: Skip CAPTCHA check to test AI form filling
       if (process.env.SKIP_CAPTCHA_FOR_TESTING === 'true') {
         logger.warn('⚠️  TESTING MODE: Skipping CAPTCHA check to test form filling');
         logger.warn('⚠️  NOTE: Application will likely fail to submit without solving CAPTCHA');
       } else if (process.env.TWOCAPTCHA_API_KEY) {
-        logger.info('Attempting to solve with 2Captcha...');
+        logger.info({ apiKeyPrefix: process.env.TWOCAPTCHA_API_KEY?.substring(0, 10) + '...' }, 'Attempting to solve with 2Captcha plugin...');
         try {
-          await page.solveRecaptchas();
-          logger.info('✅ CAPTCHA solved successfully!');
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          // The puppeteer-extra-plugin-recaptcha should automatically detect and solve
+          const solutions = await page.solveRecaptchas();
+          logger.info({ solutions, count: solutions?.solved?.length || 0 }, '✅ CAPTCHA solved successfully!');
+          await new Promise(resolve => setTimeout(resolve, 2000)); // Wait for solution to be injected
         } catch (captchaError) {
-          logger.error('❌ CAPTCHA solving failed:', captchaError.message);
-          throw new Error('CAPTCHA detected - could not solve automatically');
+          const errorDetails = {
+            message: captchaError.message || 'Unknown error',
+            name: captchaError.name,
+            stack: captchaError.stack,
+            captchaType: captchaInfo.type,
+            siteKey: captchaInfo.siteKey?.substring(0, 20),
+            apiKeyConfigured: !!process.env.TWOCAPTCHA_API_KEY
+          };
+          logger.error({ error: errorDetails }, '❌ CAPTCHA solving failed');
+          throw new Error(`CAPTCHA solving failed (${captchaInfo.type}): ${captchaError.message || 'Plugin error - check 2Captcha account balance and API key'}`);
         }
       } else {
         logger.warn('⚠️  CAPTCHA detected but no 2Captcha API key configured');
@@ -374,7 +417,7 @@ async function applyWithAI(jobUrl, user, jobData, resumePath = null) {
     const fillResult = await aiFormFiller.fillFormIntelligently(targetPage, userProfile, jobData, resumePath);
 
     if (!fillResult.success) {
-      logger.error('❌ AI form filling failed:', fillResult.errors);
+      logger.error({ errors: fillResult.errors, details: fillResult }, '❌ AI form filling failed');
       await browser.close();
       return {
         success: false,
@@ -399,7 +442,7 @@ async function applyWithAI(jobUrl, user, jobData, resumePath = null) {
         // Wait a bit for submission to process
         await new Promise(resolve => setTimeout(resolve, 2000));
       } catch (submitError) {
-        logger.error('❌ Failed to click submit button:', submitError.message);
+        logger.error({ error: submitError.message, stack: submitError.stack }, '❌ Failed to click submit button');
         // Continue anyway to take screenshot of current state
       }
     } else {
@@ -429,7 +472,7 @@ async function applyWithAI(jobUrl, user, jobData, resumePath = null) {
     };
 
   } catch (error) {
-    logger.error('❌ AI application error:', error);
+    logger.error({ error: error.message, stack: error.stack }, '❌ AI application error');
 
     if (browser) {
       await browser.close();
@@ -571,7 +614,7 @@ autoApplyQueue.process(2, async (job) => {
 
     // If AI fails, return error (don't fall back to BrowserUse)
     if (!result.success) {
-      logger.error('AI application failed:', result.error);
+      logger.error({ error: result.error, details: result }, 'AI application failed');
       // Note: Could fall back to recipe engine if BrowserUse API key is configured
       // But for now, we only support direct AI application
     }
