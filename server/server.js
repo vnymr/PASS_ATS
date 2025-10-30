@@ -2776,6 +2776,7 @@ import jobsRouter from './routes/jobs.js';
 import aiSearchRouter from './routes/ai-search.js';
 import autoApplyRouter from './routes/auto-apply.js';
 import diagnosticsRouter from './routes/diagnostics.js';
+import migrateDatabaseRouter from './routes/migrate-database.js';
 
 app.post('/api/generate-ai', authenticateToken, generateResumeEndpoint);
 app.get('/api/check-compilers', authenticateToken, checkCompilersEndpoint);
@@ -2788,6 +2789,8 @@ app.use('/api', authenticateToken, jobsRouter);
 app.use('/api', authenticateToken, aiSearchRouter);
 app.use('/api', authenticateToken, autoApplyRouter);
 app.use('/api', authenticateToken, diagnosticsRouter);
+// Migration endpoint (protected by secret key, no auth token needed)
+app.use('/api', migrateDatabaseRouter);
 
 // Static file serving in production - MUST be AFTER API routes!
 if (process.env.NODE_ENV === 'production') {
