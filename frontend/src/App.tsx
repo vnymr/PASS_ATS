@@ -53,14 +53,21 @@ export default function App() {
   const { isSignedIn, getToken } = useAuth();
   const { user } = useUser();
 
-  // Sync Clerk token to extension when user signs in
+  // Sync Clerk token to localStorage and extension when user signs in
   useEffect(() => {
-    async function syncTokenToExtension() {
+    async function syncToken() {
       if (isSignedIn && user) {
         try {
           const token = await getToken();
-          const extensionId = import.meta.env.VITE_EXTENSION_ID;
 
+          // CRITICAL FIX: Store token in localStorage so API service can access it
+          if (token) {
+            localStorage.setItem('token', token);
+            authLogger.success('Token synced to localStorage');
+          }
+
+          // Also sync to extension if available
+          const extensionId = import.meta.env.VITE_EXTENSION_ID;
           if (typeof (window as any).chrome !== 'undefined' && (window as any).chrome.runtime && extensionId) {
             authLogger.attempt('extension-sync');
             (window as any).chrome.runtime.sendMessage(
@@ -78,15 +85,28 @@ export default function App() {
                 }
               }
             );
-          } else {
-            authLogger.attempt('Extension ID not configured or chrome runtime unavailable');
           }
         } catch (error) {
-          authLogger.failure('Failed to sync token to extension');
+          authLogger.failure('Failed to sync token');
         }
+      } else if (!isSignedIn) {
+        // Clear token when user signs out
+        localStorage.removeItem('token');
+        authLogger.success('Token cleared from localStorage');
       }
     }
-    syncTokenToExtension();
+
+    // Sync immediately on auth state change
+    syncToken();
+
+    // Refresh token every 5 minutes to keep it fresh
+    const intervalId = setInterval(() => {
+      if (isSignedIn && user) {
+        syncToken();
+      }
+    }, 5 * 60 * 1000);
+
+    return () => clearInterval(intervalId);
   }, [isSignedIn, user, getToken]);
 
   return (

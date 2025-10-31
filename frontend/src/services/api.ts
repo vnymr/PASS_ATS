@@ -128,6 +128,11 @@ export interface ApplicationStats {
 
 /**
  * Get auth token from localStorage
+ *
+ * Note: The Clerk authentication token is automatically synced to localStorage
+ * by the App component when users sign in. This allows the API service to
+ * access the token for authenticated requests. The token is refreshed every
+ * 5 minutes to stay current.
  */
 function getAuthToken(): string | null {
   return localStorage.getItem('token');
