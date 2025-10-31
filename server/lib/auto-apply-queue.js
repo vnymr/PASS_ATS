@@ -241,10 +241,41 @@ async function applyWithAI(jobUrl, user, jobData, resumePath = null) {
     // First check if form fields are already visible on the page
     const hasFormFields = await page.evaluate(() => {
       const inputs = document.querySelectorAll('input:not([type="hidden"]), textarea, select');
-      return inputs.length > 3; // If we have more than 3 visible inputs, likely a form
+      // Filter to only count VISIBLE fields (not just existing ones)
+      const visibleInputs = Array.from(inputs).filter(input => {
+        // Check if element is visible (has dimensions and offsetParent)
+        return input.offsetParent !== null &&
+               input.offsetWidth > 0 &&
+               input.offsetHeight > 0;
+      });
+      return visibleInputs.length > 3; // If we have more than 3 VISIBLE inputs, likely a form
     });
 
-    if (hasFormFields) {
+    // Always check for application iframes (Greenhouse, Lever, etc.)
+    const frames = page.frames();
+    logger.info(`📊 Found ${frames.length} frames on page`);
+
+    let applicationFrame = null;
+    for (const frame of frames) {
+      const frameUrl = frame.url();
+      // Look for common ATS iframe patterns
+      if (frameUrl.includes('greenhouse') ||
+          frameUrl.includes('boards.greenhouse.io') ||
+          frameUrl.includes('apply') ||
+          frameUrl.includes('lever.co') ||
+          frameUrl.includes('workday') ||
+          frameUrl.includes('myworkdayjobs.com')) {
+        logger.info(`🎯 Found application iframe: ${frameUrl}`);
+        applicationFrame = frame;
+        break;
+      }
+    }
+
+    // If we found an iframe, use it regardless of main page form detection
+    if (applicationFrame) {
+      logger.info('🔄 Using application iframe for form extraction');
+      page._applicationFrame = applicationFrame;
+    } else if (hasFormFields) {
       logger.info('✅ Form fields already visible on page, skipping Apply button search');
     } else {
       // Try to find and click Apply button
@@ -293,25 +324,26 @@ async function applyWithAI(jobUrl, user, jobData, resumePath = null) {
         // Wait for form to appear (either in iframe or main page)
         await new Promise(resolve => setTimeout(resolve, 3000));
 
-        // Check if form is in an iframe
-        const frames = page.frames();
-        logger.info(`📊 Found ${frames.length} frames on page`);
+        // Re-check for iframes after clicking Apply (may have loaded new iframe)
+        if (!page._applicationFrame) {
+          const frames = page.frames();
+          logger.info(`📊 Re-checking frames after Apply click: ${frames.length} frames`);
 
-        // Look for application iframe
-        let applicationFrame = null;
-        for (const frame of frames) {
-          const frameUrl = frame.url();
-          if (frameUrl.includes('greenhouse') || frameUrl.includes('apply') || frameUrl.includes('job')) {
-            logger.info(`🎯 Found application iframe: ${frameUrl}`);
-            applicationFrame = frame;
-            break;
+          // Look for application iframe
+          for (const frame of frames) {
+            const frameUrl = frame.url();
+            if (frameUrl.includes('greenhouse') ||
+                frameUrl.includes('boards.greenhouse.io') ||
+                frameUrl.includes('apply') ||
+                frameUrl.includes('lever.co') ||
+                frameUrl.includes('workday') ||
+                frameUrl.includes('myworkdayjobs.com') ||
+                frameUrl.includes('job')) {
+              logger.info(`🎯 Found application iframe after Apply click: ${frameUrl}`);
+              page._applicationFrame = frame;
+              break;
+            }
           }
-        }
-
-        // If we found an iframe, switch to it for form extraction
-        if (applicationFrame) {
-          logger.info('🔄 Switching to application iframe...');
-          page._applicationFrame = applicationFrame;
         }
       } else {
         logger.warn('⚠️  No Apply button found, form may be embedded on page');
@@ -629,7 +661,7 @@ autoApplyQueue.process(2, async (job) => {
           submittedAt: new Date(),
           completedAt: new Date(),
           confirmationUrl: result.screenshot,
-          confirmationId: result.confirmationId,
+          confirmationId: result.confirmationId || null,
           confirmationData: result.confirmationData || {},
           cost: result.cost,
           retryCount: job.attemptsMade
@@ -838,7 +870,7 @@ export async function checkAutoApplyQueueConnection() {
     }
   });
   
-  const client = await autoApplyQueue.client;
+  const client = autoApplyQueue.client;
   await client.ping();
 }
 
