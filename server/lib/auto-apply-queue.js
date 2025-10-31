@@ -386,41 +386,98 @@ async function applyWithAI(jobUrl, user, jobData, resumePath = null) {
     logger.info(`   Cost: $${fillResult.cost.toFixed(4)}`);
 
     // IMPORTANT: Click the submit button to actually submit the application
+    let submitResult = { success: false, error: 'No submit button found' };
+
     if (fillResult.submitButton) {
       logger.info('📤 Attempting to submit application...');
       try {
-        await aiFormFiller.submitForm(page, fillResult.submitButton);
-        logger.info('✅ Application submitted successfully!');
+        // Pass userProfile for data verification
+        submitResult = await aiFormFiller.submitForm(page, fillResult.submitButton, userProfile);
 
-        // Wait a bit for submission to process
+        if (submitResult.success) {
+          logger.info({
+            successMessages: submitResult.successMessages,
+            urlChanged: submitResult.urlChanged,
+            currentUrl: submitResult.currentUrl
+          }, '✅ Application submitted successfully - verified!');
+        } else {
+          logger.error({
+            error: submitResult.error,
+            errorMessages: submitResult.errorMessages,
+            formStillVisible: submitResult.formStillVisible
+          }, '❌ Application submission failed - verification failed');
+        }
+
+        // Wait a bit for any final page updates
         await new Promise(resolve => setTimeout(resolve, 2000));
       } catch (submitError) {
-        logger.error({ error: submitError.message, stack: submitError.stack }, '❌ Failed to click submit button');
-        // Continue anyway to take screenshot of current state
+        logger.error({ error: submitError.message, stack: submitError.stack }, '❌ Failed to submit application');
+        submitResult = {
+          success: false,
+          error: submitError.message
+        };
       }
     } else {
-      logger.warn('⚠️  No submit button found - form filled but not submitted');
+      logger.error('⚠️  No submit button found - form filled but cannot submit');
     }
 
-    // Take final screenshot
-    const screenshot = await page.screenshot({
-      encoding: 'base64',
-      fullPage: false
-    });
+    // Take final screenshot to capture the result
+    let screenshot = null;
+    try {
+      const screenshotBuffer = await page.screenshot({
+        encoding: 'base64',
+        fullPage: true
+      });
+      screenshot = `data:image/png;base64,${screenshotBuffer}`;
+      logger.info('📸 Final screenshot captured');
+    } catch (screenshotError) {
+      logger.error({ error: screenshotError.message }, 'Failed to capture final screenshot');
+    }
 
     await browser.close();
+
+    // Only return success if form was filled AND submitted successfully
+    if (!submitResult.success) {
+      logger.error({
+        fillSuccess: fillResult.success,
+        submitSuccess: submitResult.success,
+        submitError: submitResult.error
+      }, '❌ Application failed: submission verification failed');
+
+      return {
+        success: false,
+        error: submitResult.error || 'Form submission failed',
+        method: 'AI_AUTO',
+        cost: fillResult.cost,
+        screenshot: screenshot,
+        confirmationData: {
+          fieldsExtracted: fillResult.fieldsExtracted,
+          fieldsFilled: fillResult.fieldsFilled,
+          aiCost: fillResult.cost,
+          complexity: fillResult.complexity,
+          learningRecorded: fillResult.learningRecorded,
+          submitAttempted: true,
+          submitError: submitResult.error,
+          submitErrorMessages: submitResult.errorMessages
+        }
+      };
+    }
 
     return {
       success: true,
       method: 'AI_AUTO',
       cost: fillResult.cost,
-      screenshot: `data:image/png;base64,${screenshot}`,
+      screenshot: screenshot,
       confirmationData: {
         fieldsExtracted: fillResult.fieldsExtracted,
         fieldsFilled: fillResult.fieldsFilled,
         aiCost: fillResult.cost,
         complexity: fillResult.complexity,
-        learningRecorded: fillResult.learningRecorded
+        learningRecorded: fillResult.learningRecorded,
+        submitted: true,
+        successMessages: submitResult.successMessages,
+        urlChanged: submitResult.urlChanged,
+        finalUrl: submitResult.currentUrl
       }
     };
 

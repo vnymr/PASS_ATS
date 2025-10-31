@@ -74,13 +74,43 @@ class AIFormFiller {
           try {
             const solved = await this.captchaSolver.solveAndInject(page);
             if (solved) {
-              logger.info('CAPTCHA solved successfully');
-              result.captchaSolved = true;
-              result.captchaCost = 0.03; // Approximate cost
+              logger.info('CAPTCHA solved - verifying solution was injected...');
+
+              // Wait a bit for CAPTCHA solution to be processed
+              await this.sleep(2000);
+
+              // Verify CAPTCHA solution is actually in the page
+              const captchaVerified = await page.evaluate(() => {
+                const recaptchaResponse = document.querySelector('#g-recaptcha-response');
+                const hcaptchaResponse = document.querySelector('textarea[name="h-captcha-response"]');
+
+                if (recaptchaResponse && recaptchaResponse.value) {
+                  return { verified: true, type: 'reCAPTCHA', hasValue: true };
+                }
+                if (hcaptchaResponse && hcaptchaResponse.value) {
+                  return { verified: true, type: 'hCaptcha', hasValue: true };
+                }
+
+                return { verified: false, type: 'unknown', hasValue: false };
+              });
+
+              if (captchaVerified.verified) {
+                logger.info({ captchaType: captchaVerified.type }, 'CAPTCHA solution verified in page');
+                result.captchaSolved = true;
+                result.captchaCost = 0.03; // Approximate cost
+              } else {
+                logger.error('CAPTCHA solution was not properly injected into page');
+                result.errors.push('CAPTCHA solving completed but solution not found in page');
+                result.captchaSolved = false;
+                return result;
+              }
+            } else {
+              logger.warn('No CAPTCHA found by solver (may have been detected incorrectly)');
+              result.captchaSolved = false;
             }
           } catch (error) {
-            logger.error({ error: error.message }, 'CAPTCHA solving failed');
-            result.errors.push('CAPTCHA detected but automatic solving failed');
+            logger.error({ error: error.message, stack: error.stack }, 'CAPTCHA solving failed');
+            result.errors.push(`CAPTCHA detected but automatic solving failed: ${error.message}`);
             result.captchaSolved = false;
             return result;
           }
@@ -600,9 +630,245 @@ class AIFormFiller {
   }
 
   /**
-   * Submit the form
+   * Verify filled data matches user profile (sanity check)
    */
-  async submitForm(page, submitButton) {
+  async verifyFilledData(page, userProfile) {
+    logger.info('🔍 Verifying filled data matches user profile...');
+
+    const filledData = await page.evaluate(() => {
+      const data = {};
+
+      // Extract common field values
+      const nameField = document.querySelector('input[name*="name" i]:not([name*="last" i]):not([name*="first" i])') ||
+                       document.querySelector('input[name*="full" i]');
+      const firstNameField = document.querySelector('input[name*="first" i]');
+      const lastNameField = document.querySelector('input[name*="last" i]');
+      const emailField = document.querySelector('input[type="email"], input[name*="email" i]');
+      const phoneField = document.querySelector('input[type="tel"], input[name*="phone" i]');
+
+      if (nameField) data.fullName = nameField.value;
+      if (firstNameField) data.firstName = firstNameField.value;
+      if (lastNameField) data.lastName = lastNameField.value;
+      if (emailField) data.email = emailField.value;
+      if (phoneField) data.phone = phoneField.value;
+
+      return data;
+    });
+
+    // Log what was actually filled
+    logger.info({
+      filled: filledData,
+      expected: {
+        email: userProfile.email,
+        phone: userProfile.phone,
+        name: userProfile.fullName
+      }
+    }, '📋 Form data verification');
+
+    // Verify critical fields match
+    const warnings = [];
+
+    if (filledData.email && filledData.email !== userProfile.email) {
+      warnings.push(`Email mismatch: filled="${filledData.email}" vs expected="${userProfile.email}"`);
+    }
+    if (filledData.phone && !filledData.phone.includes(userProfile.phone?.replace(/\D/g, '').slice(-4))) {
+      warnings.push(`Phone may not match: filled="${filledData.phone}"`);
+    }
+
+    if (warnings.length > 0) {
+      logger.warn({ warnings }, '⚠️  Data verification warnings detected');
+    } else {
+      logger.info('✅ Core user data verified correctly filled');
+    }
+
+    return {
+      verified: warnings.length === 0,
+      warnings: warnings,
+      filledData: filledData
+    };
+  }
+
+  /**
+   * Verify form is ready for submission (no validation errors, CAPTCHA solved)
+   */
+  async verifyFormReadyForSubmission(page) {
+    logger.info('Verifying form is ready for submission...');
+
+    const issues = [];
+
+    // Check for validation errors on the page
+    const validationErrors = await page.evaluate(() => {
+      const errors = [];
+
+      // Check for common error messages
+      const errorSelectors = [
+        '.error', '.field-error', '.form-error', '.validation-error',
+        '[class*="error"]', '[class*="invalid"]',
+        '.text-red-500', '.text-danger'
+      ];
+
+      for (const selector of errorSelectors) {
+        const elements = document.querySelectorAll(selector);
+        for (const el of elements) {
+          if (el.offsetParent !== null && el.textContent.trim()) {
+            errors.push(el.textContent.trim());
+          }
+        }
+      }
+
+      // Check for invalid/required fields
+      const invalidFields = document.querySelectorAll('input:invalid, select:invalid, textarea:invalid');
+      const requiredEmptyFields = document.querySelectorAll('input[required]:not([value]), select[required]:not([value]), textarea[required]:empty');
+
+      if (invalidFields.length > 0) {
+        errors.push(`${invalidFields.length} invalid field(s) detected`);
+      }
+      if (requiredEmptyFields.length > 0) {
+        errors.push(`${requiredEmptyFields.length} required field(s) empty`);
+      }
+
+      return errors;
+    });
+
+    if (validationErrors.length > 0) {
+      issues.push(...validationErrors);
+      logger.warn({ validationErrors }, 'Validation errors detected');
+    }
+
+    // Check if CAPTCHA is present and unsolved
+    const captchaUnsolved = await page.evaluate(() => {
+      // Check reCAPTCHA v2
+      const recaptchaResponse = document.querySelector('#g-recaptcha-response');
+      if (recaptchaResponse && !recaptchaResponse.value) {
+        return 'reCAPTCHA v2 not solved';
+      }
+
+      // Check hCaptcha
+      const hcaptchaResponse = document.querySelector('textarea[name="h-captcha-response"]');
+      if (hcaptchaResponse && !hcaptchaResponse.value) {
+        return 'hCaptcha not solved';
+      }
+
+      return null;
+    });
+
+    if (captchaUnsolved) {
+      issues.push(captchaUnsolved);
+      logger.warn({ captchaStatus: captchaUnsolved }, 'CAPTCHA verification failed');
+    }
+
+    return {
+      ready: issues.length === 0,
+      issues: issues
+    };
+  }
+
+  /**
+   * Verify submission was successful by checking page state
+   */
+  async verifySubmissionSuccess(page, initialUrl) {
+    logger.info('Verifying submission success...');
+
+    const currentUrl = page.url();
+
+    // Check for success indicators
+    const successIndicators = await page.evaluate(() => {
+      const indicators = {
+        hasSuccessMessage: false,
+        hasErrorMessage: false,
+        successMessages: [],
+        errorMessages: [],
+        urlChanged: false,
+        formStillVisible: false
+      };
+
+      // Success message selectors
+      const successSelectors = [
+        '.success', '.confirmation', '.thank-you', '.submitted',
+        '[class*="success"]', '[class*="confirmation"]', '[class*="complete"]',
+        '.text-green-500', '.text-success',
+        // Common success patterns
+        'h1:contains("Thank")', 'h2:contains("Success")', 'div:contains("submitted")'
+      ];
+
+      // Error message selectors
+      const errorSelectors = [
+        '.error', '.alert-error', '.alert-danger',
+        '[class*="error"]', '[role="alert"]',
+        '.text-red-500', '.text-danger'
+      ];
+
+      // Check for success messages
+      for (const selector of successSelectors) {
+        try {
+          const elements = document.querySelectorAll(selector);
+          for (const el of elements) {
+            if (el.offsetParent !== null && el.textContent.trim()) {
+              const text = el.textContent.trim().toLowerCase();
+              if (text.includes('thank') || text.includes('success') ||
+                  text.includes('submitted') || text.includes('received') ||
+                  text.includes('confirmation')) {
+                indicators.hasSuccessMessage = true;
+                indicators.successMessages.push(el.textContent.trim());
+              }
+            }
+          }
+        } catch (e) {}
+      }
+
+      // Check for error messages
+      for (const selector of errorSelectors) {
+        try {
+          const elements = document.querySelectorAll(selector);
+          for (const el of elements) {
+            if (el.offsetParent !== null && el.textContent.trim()) {
+              indicators.hasErrorMessage = true;
+              indicators.errorMessages.push(el.textContent.trim());
+            }
+          }
+        } catch (e) {}
+      }
+
+      // Check if original form is still visible (indicates submission failed)
+      const submitButtons = document.querySelectorAll('button[type="submit"], input[type="submit"]');
+      const visibleSubmitButtons = Array.from(submitButtons).filter(btn => btn.offsetParent !== null);
+      indicators.formStillVisible = visibleSubmitButtons.length > 0;
+
+      return indicators;
+    });
+
+    successIndicators.urlChanged = currentUrl !== initialUrl;
+
+    logger.info({
+      currentUrl,
+      initialUrl,
+      urlChanged: successIndicators.urlChanged,
+      hasSuccessMessage: successIndicators.hasSuccessMessage,
+      hasErrorMessage: successIndicators.hasErrorMessage,
+      formStillVisible: successIndicators.formStillVisible
+    }, 'Submission verification results');
+
+    // Determine success based on indicators
+    const isSuccess = (
+      successIndicators.hasSuccessMessage ||
+      (successIndicators.urlChanged && !successIndicators.hasErrorMessage)
+    ) && !successIndicators.hasErrorMessage;
+
+    return {
+      success: isSuccess,
+      urlChanged: successIndicators.urlChanged,
+      currentUrl: currentUrl,
+      successMessages: successIndicators.successMessages,
+      errorMessages: successIndicators.errorMessages,
+      formStillVisible: successIndicators.formStillVisible,
+      indicators: successIndicators
+    };
+  }
+
+  /**
+   * Submit the form with proper verification
+   */
+  async submitForm(page, submitButton, userProfile = null) {
     if (!submitButton) {
       throw new Error('No submit button provided');
     }
@@ -610,20 +876,81 @@ class AIFormFiller {
     logger.info({ buttonText: submitButton.text }, 'Clicking submit button');
 
     try {
-      await page.click(submitButton.selector);
+      // Step 0: Verify filled data matches user profile (if profile provided)
+      if (userProfile) {
+        await this.verifyFilledData(page, userProfile);
+      }
 
-      // Wait for navigation or confirmation
-      await Promise.race([
-        page.waitForNavigation({ timeout: 10000 }),
-        page.waitForSelector('.success, .confirmation, .thank-you', { timeout: 10000 }),
-        this.sleep(3000)
+      // Step 1: Verify form is ready for submission
+      const readyCheck = await this.verifyFormReadyForSubmission(page);
+      if (!readyCheck.ready) {
+        logger.error({ issues: readyCheck.issues }, 'Form not ready for submission');
+        return {
+          success: false,
+          error: 'Form validation failed: ' + readyCheck.issues.join('; '),
+          issues: readyCheck.issues
+        };
+      }
+
+      logger.info('Form validation passed, proceeding with submission');
+
+      // Step 2: Capture initial state
+      const initialUrl = page.url();
+      logger.info({ initialUrl }, 'Capturing initial state before submit');
+
+      // Step 3: Click submit button
+      await page.click(submitButton.selector);
+      logger.info('Submit button clicked');
+
+      // Step 4: Wait for page to process submission
+      // Use Promise.allSettled to wait for multiple possible outcomes
+      const waitResults = await Promise.allSettled([
+        page.waitForNavigation({ timeout: 15000 }).catch(() => null),
+        page.waitForSelector('.success, .confirmation, .thank-you, [class*="success"]', { timeout: 15000 }).catch(() => null),
+        page.waitForSelector('.error, .alert-error, [role="alert"]', { timeout: 15000 }).catch(() => null)
       ]);
 
-      logger.info('Form submitted successfully');
-      return true;
+      logger.info({ waitResults: waitResults.map(r => r.status) }, 'Wait conditions completed');
+
+      // Step 5: Give page extra time to stabilize
+      await this.sleep(3000);
+
+      // Step 6: Verify submission success
+      const verification = await this.verifySubmissionSuccess(page, initialUrl);
+
+      if (verification.success) {
+        logger.info({
+          successMessages: verification.successMessages,
+          urlChanged: verification.urlChanged
+        }, 'Form submitted successfully - verification passed');
+        return {
+          success: true,
+          urlChanged: verification.urlChanged,
+          currentUrl: verification.currentUrl,
+          successMessages: verification.successMessages
+        };
+      } else {
+        logger.error({
+          errorMessages: verification.errorMessages,
+          formStillVisible: verification.formStillVisible,
+          urlChanged: verification.urlChanged
+        }, 'Form submission failed - verification failed');
+        return {
+          success: false,
+          error: verification.errorMessages.length > 0
+            ? verification.errorMessages.join('; ')
+            : 'Submission verification failed - no success indicators found',
+          errorMessages: verification.errorMessages,
+          formStillVisible: verification.formStillVisible
+        };
+      }
+
     } catch (error) {
-      logger.error({ error: error.message }, 'Form submission failed');
-      return false;
+      logger.error({ error: error.message, stack: error.stack }, 'Form submission error');
+      return {
+        success: false,
+        error: error.message
+      };
     }
   }
 
