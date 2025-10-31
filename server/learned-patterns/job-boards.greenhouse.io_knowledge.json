@@ -1,7 +1,7 @@
 {
   "domain": "job-boards.greenhouse.io",
   "firstSeen": "2025-10-30T01:35:58.308Z",
-  "lastUpdated": "2025-10-30T01:37:10.906Z",
+  "lastUpdated": "2025-10-31T06:50:15.196Z",
   "applications": [
     {
       "timestamp": "2025-10-30T01:35:58.303Z",
@@ -17,6 +17,12 @@
       "timestamp": "2025-10-30T01:37:10.904Z",
       "fieldsCount": 14,
       "problemsSolved": 1
+    },
+    {
+      "timestamp": "2025-10-31T06:50:15.193Z",
+      "jobTitle": "Software Engineer",
+      "fieldsCount": 16,
+      "problemsSolved": 2
     }
   ],
   "commonPatterns": {
@@ -25,7 +31,7 @@
         "name": "unnamed_4",
         "type": "text",
         "label": "",
-        "count": 3
+        "count": 4
       },
       "question_60921384[]": {
         "name": "question_60921384[]",
@@ -38,6 +44,12 @@
         "type": "text",
         "label": "Select...",
         "count": 3
+      },
+      "unnamed_12": {
+        "name": "unnamed_12",
+        "type": "text",
+        "label": "Select...",
+        "count": 1
       }
     },
     "questionTypes": [
@@ -108,6 +120,22 @@
           "learnedPattern": "Ensure all required checkbox fields are checked before submission."
         },
         "timestamp": "2025-10-30T01:37:10.904Z"
+      },
+      {
+        "problem": "Failed to fill resume: No resume file available - user must generate a resume before applying to jobs",
+        "solution": {
+          "issue": "The system failed to fill the resume and cover letter fields because the specified files are not available.",
+          "solution": "Ensure that the resume and cover letter files are uploaded correctly before submitting the application.",
+          "fieldToRetry": "resume",
+          "newValue": null,
+          "needsManualIntervention": true,
+          "learnedPattern": "Check that required files are uploaded properly before applying."
+        },
+        "timestamp": "2025-10-31T06:50:15.193Z"
+      },
+      {
+        "problem": "Failed to fill cover_letter: No resume file available - user must generate a resume before applying to jobs",
+        "timestamp": "2025-10-31T06:50:15.193Z"
       }
     ]
   }

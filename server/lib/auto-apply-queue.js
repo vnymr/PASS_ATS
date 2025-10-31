@@ -12,24 +12,9 @@ import AIFormFiller from './ai-form-filler.js';
 // Use puppeteer-extra with stealth plugin to bypass bot detection
 import puppeteer from 'puppeteer-extra';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
-import RecaptchaPlugin from 'puppeteer-extra-plugin-recaptcha';
 
 // Add stealth plugin to hide automation
 puppeteer.use(StealthPlugin());
-
-// Add reCAPTCHA solver (requires 2CAPTCHA_API_KEY env var)
-if (process.env.TWOCAPTCHA_API_KEY) {
-  puppeteer.use(
-    RecaptchaPlugin({
-      provider: {
-        id: '2captcha',
-        token: process.env.TWOCAPTCHA_API_KEY
-      },
-      visualFeedback: true
-    })
-  );
-  logger.info('2Captcha plugin enabled for CAPTCHA solving');
-}
 
 const aiFormFiller = new AIFormFiller();
 
@@ -350,75 +335,8 @@ async function applyWithAI(jobUrl, user, jobData, resumePath = null) {
       }
     }
 
-    // Check for CAPTCHA before proceeding (detailed detection)
-    // Use iframe if detected, otherwise use main page
-    const targetPageForCaptcha = page._applicationFrame || page;
-    const captchaInfo = await targetPageForCaptcha.evaluate(() => {
-      const recaptchaIframe = document.querySelector('iframe[src*="recaptcha"]');
-      const recaptchaDiv = document.querySelector('.g-recaptcha');
-      const hcaptchaDiv = document.querySelector('.h-captcha');
-      const genericCaptcha = document.querySelector('[class*="captcha"]');
-      const captchaById = document.querySelector('#captcha');
-
-      // Extract site key if available
-      let siteKey = null;
-      if (recaptchaDiv) {
-        siteKey = recaptchaDiv.getAttribute('data-sitekey');
-      } else if (hcaptchaDiv) {
-        siteKey = hcaptchaDiv.getAttribute('data-sitekey');
-      }
-
-      return {
-        detected: !!(recaptchaIframe || recaptchaDiv || hcaptchaDiv || genericCaptcha || captchaById),
-        type: recaptchaIframe || recaptchaDiv ? 'recaptcha' :
-              hcaptchaDiv ? 'hcaptcha' :
-              (genericCaptcha || captchaById) ? 'unknown' : null,
-        siteKey,
-        elements: {
-          recaptchaIframe: !!recaptchaIframe,
-          recaptchaDiv: !!recaptchaDiv,
-          hcaptchaDiv: !!hcaptchaDiv,
-          genericCaptcha: !!genericCaptcha
-        }
-      };
-    });
-
-    if (captchaInfo.detected) {
-      logger.info({
-        captchaType: captchaInfo.type,
-        siteKey: captchaInfo.siteKey ? captchaInfo.siteKey.substring(0, 20) + '...' : 'none',
-        elements: captchaInfo.elements
-      }, '🔐 CAPTCHA detected');
-
-      // TESTING MODE: Skip CAPTCHA check to test AI form filling
-      if (process.env.SKIP_CAPTCHA_FOR_TESTING === 'true') {
-        logger.warn('⚠️  TESTING MODE: Skipping CAPTCHA check to test form filling');
-        logger.warn('⚠️  NOTE: Application will likely fail to submit without solving CAPTCHA');
-      } else if (process.env.TWOCAPTCHA_API_KEY) {
-        logger.info({ apiKeyPrefix: process.env.TWOCAPTCHA_API_KEY?.substring(0, 10) + '...', context: page._applicationFrame ? 'iframe' : 'main page' }, 'Attempting to solve with 2Captcha plugin...');
-        try {
-          // The puppeteer-extra-plugin-recaptcha should automatically detect and solve
-          // Note: solveRecaptchas must be called on the main page, not the frame
-          const solutions = await page.solveRecaptchas();
-          logger.info({ solutions, count: solutions?.solved?.length || 0 }, '✅ CAPTCHA solved successfully!');
-          await new Promise(resolve => setTimeout(resolve, 2000)); // Wait for solution to be injected
-        } catch (captchaError) {
-          const errorDetails = {
-            message: captchaError.message || 'Unknown error',
-            name: captchaError.name,
-            stack: captchaError.stack,
-            captchaType: captchaInfo.type,
-            siteKey: captchaInfo.siteKey?.substring(0, 20),
-            apiKeyConfigured: !!process.env.TWOCAPTCHA_API_KEY
-          };
-          logger.error({ error: errorDetails }, '❌ CAPTCHA solving failed');
-          throw new Error(`CAPTCHA solving failed (${captchaInfo.type}): ${captchaError.message || 'Plugin error - check 2Captcha account balance and API key'}`);
-        }
-      } else {
-        logger.warn('⚠️  CAPTCHA detected but no 2Captcha API key configured');
-        throw new Error('CAPTCHA detected - manual intervention required. Set TWOCAPTCHA_API_KEY to enable auto-solving.');
-      }
-    }
+    // Note: CAPTCHA detection and solving is handled by AIFormFiller
+    // which has better context about the form and can solve CAPTCHAs in iframes
 
     // Prepare user profile data (support both old and new profile structures)
     const profileData = user.profile.data;
