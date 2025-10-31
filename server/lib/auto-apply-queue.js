@@ -351,7 +351,9 @@ async function applyWithAI(jobUrl, user, jobData, resumePath = null) {
     }
 
     // Check for CAPTCHA before proceeding (detailed detection)
-    const captchaInfo = await page.evaluate(() => {
+    // Use iframe if detected, otherwise use main page
+    const targetPageForCaptcha = page._applicationFrame || page;
+    const captchaInfo = await targetPageForCaptcha.evaluate(() => {
       const recaptchaIframe = document.querySelector('iframe[src*="recaptcha"]');
       const recaptchaDiv = document.querySelector('.g-recaptcha');
       const hcaptchaDiv = document.querySelector('.h-captcha');
@@ -384,7 +386,7 @@ async function applyWithAI(jobUrl, user, jobData, resumePath = null) {
     if (captchaInfo.detected) {
       logger.info({
         captchaType: captchaInfo.type,
-        siteKey: captchaInfo.siteKey?.substring(0, 20) + '...',
+        siteKey: captchaInfo.siteKey ? captchaInfo.siteKey.substring(0, 20) + '...' : 'none',
         elements: captchaInfo.elements
       }, '🔐 CAPTCHA detected');
 
@@ -393,9 +395,10 @@ async function applyWithAI(jobUrl, user, jobData, resumePath = null) {
         logger.warn('⚠️  TESTING MODE: Skipping CAPTCHA check to test form filling');
         logger.warn('⚠️  NOTE: Application will likely fail to submit without solving CAPTCHA');
       } else if (process.env.TWOCAPTCHA_API_KEY) {
-        logger.info({ apiKeyPrefix: process.env.TWOCAPTCHA_API_KEY?.substring(0, 10) + '...' }, 'Attempting to solve with 2Captcha plugin...');
+        logger.info({ apiKeyPrefix: process.env.TWOCAPTCHA_API_KEY?.substring(0, 10) + '...', context: page._applicationFrame ? 'iframe' : 'main page' }, 'Attempting to solve with 2Captcha plugin...');
         try {
           // The puppeteer-extra-plugin-recaptcha should automatically detect and solve
+          // Note: solveRecaptchas must be called on the main page, not the frame
           const solutions = await page.solveRecaptchas();
           logger.info({ solutions, count: solutions?.solved?.length || 0 }, '✅ CAPTCHA solved successfully!');
           await new Promise(resolve => setTimeout(resolve, 2000)); // Wait for solution to be injected
