@@ -2778,6 +2778,10 @@ import autoApplyRouter from './routes/auto-apply.js';
 import diagnosticsRouter from './routes/diagnostics.js';
 import migrateDatabaseRouter from './routes/migrate-database.js';
 
+// Import and initialize auto-apply queue worker (processes queued jobs in background)
+import autoApplyQueue, { checkAutoApplyQueueConnection } from './lib/auto-apply-queue.js';
+logger.info('Auto-apply queue worker initialized and processing jobs');
+
 app.post('/api/generate-ai', authenticateToken, generateResumeEndpoint);
 app.get('/api/check-compilers', authenticateToken, checkCompilersEndpoint);
 
@@ -2812,11 +2816,19 @@ app.use((err, req, res, next) => {
 
 // Start server
 const PORT = config.server.port;
-const server = app.listen(PORT, () => {
+const server = app.listen(PORT, async () => {
   logger.info(`✅ Server running on port ${PORT}`);
   logger.info(`   - Health check: http://localhost:${PORT}/health`);
   logger.info(`   - Auth endpoints: http://localhost:${PORT}/api/register, /api/login`);
   logger.info(`   - Environment: ${process.env.NODE_ENV || 'development'}`);
+
+  // Verify auto-apply queue connection
+  try {
+    await checkAutoApplyQueueConnection();
+    logger.info('✅ Auto-apply queue connected and ready to process jobs');
+  } catch (error) {
+    logger.error({ error: error.message }, '❌ Auto-apply queue connection failed - check REDIS_URL');
+  }
 });
 
 // Graceful shutdown
@@ -2825,6 +2837,7 @@ process.on('SIGTERM', async () => {
 
   // Close server
   server.close(async () => {
+    await autoApplyQueue.close();
     await prisma.$disconnect();
     process.exit(0);
   });
@@ -2834,6 +2847,7 @@ process.on('SIGINT', async () => {
   logger.info('SIGINT received, shutting down gracefully...');
 
   server.close(async () => {
+    await autoApplyQueue.close();
     await prisma.$disconnect();
     process.exit(0);
   });
