@@ -9,6 +9,7 @@ import { Input } from '../ui/Input';
 import { Textarea } from '../ui/Textarea';
 import { Button } from '../ui/Button';
 import logger from '../utils/logger';
+import { motion, AnimatePresence } from 'framer-motion';
 
 // Define the profile type with all fields
 type Profile = {
@@ -411,23 +412,71 @@ export default function MemoryProfile() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-8">
-      {(error || success) && (
-        <div className="mb-4">
-          {error && (
-            <div className="mb-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 inline-flex items-center gap-2">
-              <span>✕</span>
-              <span>{error}</span>
-            </div>
-          )}
-          {success && (
-            <div className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 inline-flex items-center gap-2">
-              <span>✓</span>
-              <span>Profile saved successfully!</span>
-            </div>
-          )}
+    <div className="flex-1 w-full bg-background min-h-screen text-text font-sans">
+      {/* Minimalist Header */}
+      <div className="w-full">
+        <div className="max-w-[780px] mx-auto px-8 py-8">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.6 }}
+            className="mb-6"
+          >
+            <motion.h1
+              initial={{ fontSize: '24px' }}
+              style={{
+                fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif',
+                fontWeight: 500,
+                color: 'var(--text-900)',
+                letterSpacing: '-0.01em',
+                marginBottom: '8px'
+              }}
+            >
+              Your Profile
+            </motion.h1>
+            <p
+              className="text-sm"
+              style={{
+                color: 'var(--text-600)',
+                fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif',
+              }}
+            >
+              {autoSaving ? 'Auto-saving...' : 'Manage your professional information'}
+            </p>
+          </motion.div>
         </div>
-      )}
+      </div>
+
+      {/* Content Area */}
+      <div className="max-w-[780px] mx-auto px-8 pb-8">
+        {/* Status Messages */}
+        <AnimatePresence>
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="mb-4 flex items-center gap-2 rounded-xl border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.08)] px-4 py-3 text-[13px] text-[#b91c1c]"
+            >
+              <Icons.alertCircle size={18} />
+              <span>{error}</span>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {success && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="mb-4 flex items-center gap-2 rounded-xl border border-[rgba(34,197,94,0.35)] bg-[rgba(34,197,94,0.08)] px-4 py-3 text-[13px] text-[#166534]"
+            >
+              <Icons.checkCircle size={18} />
+              <span>Profile saved successfully!</span>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
       <Tabs
         value={activeTab}
@@ -647,6 +696,7 @@ export default function MemoryProfile() {
           )}
         </div>
       )}
+      </div>
     </div>
   );
 }

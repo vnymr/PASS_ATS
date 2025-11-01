@@ -1,151 +1,47 @@
-import React, { useState, useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { UserButton, useAuth } from '@clerk/clerk-react';
-import Icons from '../components/ui/icons';
-import { api, type Quota } from '../api-clerk';
-import logoImg from '../logo.svg';
-import logger from '../utils/logger';
+import React from 'react';
+import { useLocation } from 'react-router-dom';
+import { UserButton } from '@clerk/clerk-react';
+import MinimalNav from '../components/MinimalNav';
+import { motion } from 'framer-motion';
 
 interface ModernLayoutProps {
   children: React.ReactNode;
 }
 
-function UsageBadge() {
-  const { getToken } = useAuth();
-  const [quota, setQuota] = useState<Quota | null>(null);
-
-  useEffect(() => {
-    loadQuota();
-    // Refresh quota every 30 seconds
-    const interval = setInterval(loadQuota, 30000);
-    return () => clearInterval(interval);
-  }, []);
-
-  async function loadQuota() {
-    try {
-      const token = await getToken();
-      const data = await api.getQuota(token || undefined);
-      setQuota(data);
-    } catch (error) {
-      logger.error('Failed to load quota', error);
-    }
-  }
-
-  if (!quota) return null;
-
-  const percentage = (quota.used / quota.limit) * 100;
-  const isNearLimit = percentage >= 80;
-
-  return (
-    <div
-      className={`px-2.5 py-1 rounded-md text-xs font-medium text-white ml-2 transition ${isNearLimit ? 'bg-[#cd0000]' : 'bg-black'}`}
-    >
-      {quota.used}/{quota.limit}
-    </div>
-  );
-}
-
 export default function ModernLayout({ children }: ModernLayoutProps) {
   const location = useLocation();
-  const navigate = useNavigate();
-
-  const scrollToHistory = () => {
-    if (location.pathname !== '/dashboard') {
-      navigate('/dashboard');
-      setTimeout(() => {
-        document.getElementById('history-section')?.scrollIntoView({
-          behavior: 'smooth',
-          block: 'start'
-        });
-      }, 100);
-    } else {
-      document.getElementById('history-section')?.scrollIntoView({
-        behavior: 'smooth',
-        block: 'start'
-      });
-    }
-  };
 
   return (
-    <div className="modern-app">
-      {/* Top Navigation */}
-      <nav className="modern-nav">
-        <div className="modern-nav-container">
-          <div className="modern-nav-brand">
-            <img src={logoImg} alt="HappyResume" className="modern-nav-logo-img" />
-          </div>
+    <div className="min-h-screen bg-background">
+      {/* Minimal Left Navigation */}
+      <MinimalNav />
 
-          <div className="modern-nav-menu">
-            <button
-              className={`modern-nav-item ${location.pathname === '/dashboard' ? 'active' : ''}`}
-              onClick={() => navigate('/dashboard')}
-              aria-label="Generate"
-            >
-              <Icons.zap size={16} />
-              <span>Generate</span>
-            </button>
-
-            
-
-            <button
-              className={`modern-nav-item ${location.pathname === '/find-jobs' ? 'active' : ''}`}
-              onClick={() => navigate('/find-jobs')}
-              aria-label="Find Jobs"
-            >
-              <Icons.briefcase size={16} />
-              <span>Jobs</span>
-            </button>
-
-            <button
-              className={`modern-nav-item ${location.pathname === '/profile' ? 'active' : ''}`}
-              onClick={() => navigate('/profile')}
-              aria-label="Profile"
-            >
-              <Icons.user size={16} />
-              <span>Profile</span>
-            </button>
-
-            <button
-              className={`modern-nav-item ${location.pathname === '/application-questions' ? 'active' : ''}`}
-              onClick={() => navigate('/application-questions')}
-              aria-label="Application Questions"
-            >
-              <Icons.fileText size={16} />
-              <span>Auto-Apply</span>
-            </button>
-
-            <button
-              className={`modern-nav-item ${location.pathname === '/billing' || location.pathname === '/pricing' ? 'active' : ''}`}
-              onClick={() => navigate('/billing')}
-              aria-label="Billing"
-            >
-              <Icons.dollarSign size={16} />
-              <span>Billing</span>
-              <UsageBadge />
-            </button>
-
-            <div className="modern-nav-user">
-              <UserButton
-                afterSignOutUrl="/"
-                appearance={{
-                  elements: { avatarBox: 'w-8 h-8' }
-                }}
-              />
-            </div>
-          </div>
+      {/* User Button - Top Right */}
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.2 }}
+        className="fixed top-6 right-6 md:top-8 md:right-8 z-40"
+      >
+        <div className="p-1 bg-card rounded-full shadow-[0_2px_12px_rgba(0,0,0,0.08)] hover:shadow-[0_4px_20px_rgba(0,0,0,0.12)] transition-all duration-200">
+          <UserButton
+            afterSignOutUrl="/"
+            appearance={{
+              elements: {
+                avatarBox: 'w-9 h-9',
+                userButtonPopoverCard: 'shadow-lg'
+              }
+            }}
+          />
         </div>
-      </nav>
+      </motion.div>
 
       {/* Main Content */}
-      {['/dashboard', '/generate'].includes(location.pathname) ? (
-        <main className="w-full px-4 lg:px-8 pt-[88px] pb-8">
-          <div className="max-w-[1160px] mx-auto">
-            {children}
-          </div>
-        </main>
-      ) : (
-        children
-      )}
+      <main className="w-full min-h-screen px-4 lg:px-8 pt-8 pb-8 md:pl-32">
+        <div className="max-w-[1200px] mx-auto">
+          {children}
+        </div>
+      </main>
     </div>
   );
 }

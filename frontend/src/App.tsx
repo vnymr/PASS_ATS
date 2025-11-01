@@ -17,6 +17,7 @@ import Support from './pages/Support';
 import Privacy from './pages/Privacy';
 import FindJob from './pages/FindJob';
 import JobApplicationQuestions from './components/JobApplicationQuestions';
+import Happy from './pages/Happy';
 
 // Layout components
 import ProtectedRoute from './layouts/ProtectedRoute';
@@ -188,6 +189,11 @@ export default function App() {
       } />
       <Route path="/support" element={<Support />} />
       <Route path="/privacy" element={<Privacy />} />
+      <Route path="/happy" element={
+        <ProtectedRoute>
+          <Happy />
+        </ProtectedRoute>
+      } />
     </Routes>
   );
 }

@@ -8,6 +8,7 @@ import type { Job as JobType, GetJobsResponse } from '../services/api';
 import JobCard from '../components/JobCard';
 import JobDetailPanel from '../components/JobDetailPanel';
 import logger from '../utils/logger';
+import MinimalSearch from '../components/MinimalSearch';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '';
 const PAGE_SIZE = 50;
@@ -537,25 +538,26 @@ export default function FindJob() {
   // Tailwind replaces previous inline style objects
 
   return (
-    <div className={`flex-1 w-full ${isMobile ? 'pt-[72px] px-4 pb-6' : 'pt-[72px] px-6 pb-8'} bg-background min-h-[calc(100vh-64px)] text-text font-sans`}>
-      <div className="max-w-[1160px] mx-auto flex flex-col gap-4">
-        <div className={`sticky top-[72px] z-10 bg-background ${isMobile ? 'pt-2 pb-3' : 'pt-2 pb-3'} border-b border-[rgba(12,19,16,0.06)] flex flex-col gap-3`}>
-          <form onSubmit={handleSearchSubmit} className={`${isMobile ? 'flex flex-col gap-2' : 'flex flex-row items-stretch gap-3'}`}>
-            <div className="flex-1 flex items-center gap-2">
-              <div className="relative flex-1">
-                <Input
-                  value={searchInput}
-                  onChange={event => setSearchInput(event.target.value)}
-                  placeholder="Search by job title, company, or skills…"
-                  className={`${isMobile ? 'h-11' : 'h-12'} pl-9`}
-                />
-                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400">🔍</div>
-              </div>
-              <Button type="submit" className={`${isMobile ? 'h-11' : 'h-12'}`}>Search</Button>
-            </div>
-          </form>
+    <div className="flex-1 w-full bg-background min-h-screen text-text font-sans">
+      {/* Minimal Search Header */}
+      <MinimalSearch
+        value={searchInput}
+        onChange={setSearchInput}
+        onSubmit={() => {
+          const trimmed = searchInput.trim();
+          if (trimmed) {
+            skipDebounceRef.current = true;
+            runSearch(trimmed, { offset: 0, append: false });
+          }
+        }}
+        title="Find your next opportunity"
+      />
 
-          <div className={`flex ${isMobile ? 'items-start' : 'items-center'} justify-between flex-wrap gap-3`}>
+      <div className="max-w-[1160px] mx-auto flex flex-col gap-4 px-4 lg:px-6 pb-8">
+        <div className="flex flex-col gap-3">
+
+          {/* Filters and Count */}
+          <div className="flex items-center justify-between flex-wrap gap-3 pb-3 border-b border-[rgba(12,19,16,0.06)]">
             <div className="flex items-center gap-2.5 flex-wrap">
               <button
                 type="button"
@@ -565,7 +567,7 @@ export default function FindJob() {
                 {remoteOnly ? 'Remote only: On' : 'Remote only: Off'}
               </button>
               {mode === 'search' && activeQuery && (
-                <span className="text-[13px] text-[var(--gray-600)]">“{activeQuery}”</span>
+                <span className="text-[13px] text-[var(--gray-600)]">"{activeQuery}"</span>
               )}
             </div>
 

@@ -19,7 +19,11 @@
     "test:integration": "NODE_ENV=test jest tests/integration",
     "test:e2e": "NODE_ENV=test jest tests/e2e",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate deploy"
+    "prisma:migrate": "prisma migrate deploy",
+    "embeddings:init": "node scripts/init-embeddings-db.js",
+    "embeddings:test": "node scripts/test-embeddings-flow.js",
+    "embeddings:test-semantic": "node scripts/test-semantic-search.js",
+    "embeddings:verify": "node scripts/verify-all.js"
   },
   "dependencies": {
     "@clerk/clerk-sdk-node": "^4.13.23",
@@ -64,7 +68,6 @@
     "prom-client": "^15.1.3",
     "puppeteer": "^23.0.0",
     "puppeteer-extra": "^3.3.6",
-    "puppeteer-extra-plugin-recaptcha": "^3.6.8",
     "puppeteer-extra-plugin-stealth": "^2.11.2",
     "redis": "^5.8.2",
     "stripe": "^19.1.0",

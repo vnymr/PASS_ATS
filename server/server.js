@@ -48,6 +48,7 @@ async function extractPdfText(buffer) {
   return fullText;
 }
 import { config, getOpenAIModel } from './lib/config.js';
+import { startRoutineExecutor, stopRoutineExecutor } from './lib/routine-executor.js';
 import dataValidator from './lib/utils/dataValidator.js';
 import ResumeParser from './lib/resume-parser.js';
 // Import LaTeX compiler
@@ -2777,6 +2778,9 @@ import aiSearchRouter from './routes/ai-search.js';
 import autoApplyRouter from './routes/auto-apply.js';
 import diagnosticsRouter from './routes/diagnostics.js';
 import migrateDatabaseRouter from './routes/migrate-database.js';
+import chatRouter from './routes/chat.js';
+import profileRouter from './routes/profile.js';
+import goalsRouter from './routes/goals.js';
 
 app.post('/api/generate-ai', authenticateToken, generateResumeEndpoint);
 app.get('/api/check-compilers', authenticateToken, checkCompilersEndpoint);
@@ -2789,6 +2793,9 @@ app.use('/api', authenticateToken, jobsRouter);
 app.use('/api', authenticateToken, aiSearchRouter);
 app.use('/api', authenticateToken, autoApplyRouter);
 app.use('/api', authenticateToken, diagnosticsRouter);
+app.use('/api', authenticateToken, chatRouter);
+app.use('/api', authenticateToken, profileRouter);
+app.use('/api', authenticateToken, goalsRouter);
 // Migration endpoint (protected by secret key, no auth token needed)
 app.use('/api', migrateDatabaseRouter);
 
@@ -2817,11 +2824,17 @@ const server = app.listen(PORT, () => {
   logger.info(`   - Health check: http://localhost:${PORT}/health`);
   logger.info(`   - Auth endpoints: http://localhost:${PORT}/api/register, /api/login`);
   logger.info(`   - Environment: ${process.env.NODE_ENV || 'development'}`);
+
+  // Start routine executor for automated task scheduling
+  startRoutineExecutor();
 });
 
 // Graceful shutdown
 process.on('SIGTERM', async () => {
   logger.info('SIGTERM received, shutting down gracefully...');
+
+  // Stop routine executor
+  stopRoutineExecutor();
 
   // Close server
   server.close(async () => {
@@ -2832,6 +2845,9 @@ process.on('SIGTERM', async () => {
 
 process.on('SIGINT', async () => {
   logger.info('SIGINT received, shutting down gracefully...');
+
+  // Stop routine executor
+  stopRoutineExecutor();
 
   server.close(async () => {
     await prisma.$disconnect();
