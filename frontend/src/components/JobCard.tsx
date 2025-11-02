@@ -1,17 +1,19 @@
 import { Job } from '../services/api';
 import Icons from './ui/icons';
 import { htmlToPlainText } from '../utils/htmlCleaner';
+import CompanyLogo from './CompanyLogo';
 
 interface JobCardProps {
-  job: Job;
+  job: Job & { relevanceScore?: number };
   onGenerateResume: (job: Job) => void;
   onViewJob: (url: string) => void;
   onAutoApply?: (jobId: string) => void;
   compact?: boolean;
   onClick?: (job: Job) => void;
+  showMatchScore?: boolean;
 }
 
-export default function JobCard({ job, onGenerateResume, onViewJob, onAutoApply, compact = false, onClick }: JobCardProps) {
+export default function JobCard({ job, onGenerateResume, onViewJob, onAutoApply, compact = false, onClick, showMatchScore = false }: JobCardProps) {
   const Icon = (name: keyof typeof Icons) => {
     const Component = Icons[name];
     return <Component className="w-4 h-4" />;
@@ -45,14 +47,8 @@ export default function JobCard({ job, onGenerateResume, onViewJob, onAutoApply,
       <div className={`flex justify-between items-start ${compact ? 'mb-3' : 'mb-4'}`}>
         <div className="flex-1">
           <div className={`flex items-start ${compact ? 'gap-2' : 'gap-3'}`}>
-            {/* Company Logo Placeholder */}
-            {!compact && (
-              <div
-                className="w-12 h-12 rounded-xl flex items-center justify-center text-lg font-bold flex-shrink-0 bg-[var(--primary-100)] text-[var(--primary)]"
-              >
-                {job.company.charAt(0).toUpperCase()}
-              </div>
-            )}
+            {/* Company Logo */}
+            {!compact && <CompanyLogo company={job.company} size={48} />}
 
             <div className="flex-1 min-w-0">
               <h3
@@ -74,21 +70,38 @@ export default function JobCard({ job, onGenerateResume, onViewJob, onAutoApply,
           </div>
         </div>
 
-        {/* AI Badge */}
-        {job.aiApplyable && (
+        <div className="flex flex-col gap-2 items-end ml-2">
+          {/* Match Score Badge - ALWAYS show when available */}
+          {job.relevanceScore !== undefined && (
+            <div
+              className={`rounded-full font-bold flex items-center gap-1.5 flex-shrink-0 ${
+                compact ? 'px-3 py-1.5 text-sm' : 'px-4 py-2 text-sm'
+              }`}
+              style={{
+                backgroundColor: job.relevanceScore >= 0.7 ? '#10B981' : job.relevanceScore >= 0.5 ? '#F59E0B' : '#EF4444',
+                color: 'white',
+              }}
+              title={`${Math.round(job.relevanceScore * 100)}% match with your profile`}
+            >
+              {job.relevanceScore >= 0.7 ? '🎯' : job.relevanceScore >= 0.5 ? '⚡' : '📌'}
+              <span className="font-extrabold">{Math.round(job.relevanceScore * 100)}%</span>
+            </div>
+          )}
+
+          {/* AI Badge or Manual Badge */}
           <div
-            className={`rounded-full font-bold flex items-center gap-1.5 ml-2 flex-shrink-0 ${
+            className={`rounded-full font-bold flex items-center gap-1.5 flex-shrink-0 ${
               compact ? 'px-2 py-1 text-xs' : 'px-3 py-1.5 text-xs'
             }`}
             style={{
-              backgroundColor: 'var(--primary)',
-              color: 'var(--background-elevated)',
+              backgroundColor: job.aiApplyable ? 'var(--primary)' : 'rgb(243 244 246)',
+              color: job.aiApplyable ? 'var(--background-elevated)' : 'rgb(107 114 128)',
             }}
           >
-            {Icon('zap')}
-            {!compact && <span>AI Apply</span>}
+            {job.aiApplyable ? Icon('zap') : Icon('hand')}
+            {!compact && <span>{job.aiApplyable ? 'AI Apply' : 'Manual'}</span>}
           </div>
-        )}
+        </div>
       </div>
 
       {/* Metadata Row */}
@@ -167,18 +180,32 @@ export default function JobCard({ job, onGenerateResume, onViewJob, onAutoApply,
           <span>View</span>
         </button>
 
-        {/* Auto Apply (if available) */}
-        {job.aiApplyable && onAutoApply && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onAutoApply(job.id);
-            }}
-            className="px-4 py-2.5 rounded-xl font-semibold transition-all hover:opacity-90 flex items-center justify-center gap-2 bg-secondary text-[var(--background-elevated)]"
-          >
-            {Icon('zap')}
-            <span>Auto Apply</span>
-          </button>
+        {/* Auto Apply (if available) or Apply Manually */}
+        {onAutoApply && (
+          job.aiApplyable ? (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onAutoApply(job.id);
+              }}
+              className="px-4 py-2.5 rounded-xl font-semibold transition-all hover:opacity-90 flex items-center justify-center gap-2 bg-secondary text-[var(--background-elevated)]"
+            >
+              {Icon('zap')}
+              <span>Auto Apply</span>
+            </button>
+          ) : (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onViewJob(job.applyUrl);
+              }}
+              className="px-4 py-2.5 rounded-xl font-semibold transition-all hover:opacity-90 flex items-center justify-center gap-2 bg-gray-100 text-gray-700 ring-1 ring-gray-200"
+              title="This job requires manual application"
+            >
+              {Icon('externalLink')}
+              <span>Apply Manually</span>
+            </button>
+          )
         )}
         </div>
       )}

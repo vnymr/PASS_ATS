@@ -11,7 +11,7 @@ import logger from '../utils/logger';
 import MinimalSearch from '../components/MinimalSearch';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '';
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 100; // Increased from 50 to 100
 
 type JobWithExtras = JobType & {
   logoUrl?: string | null;
@@ -131,6 +131,9 @@ export default function FindJob() {
   const [browseMeta, setBrowseMeta] = useState<BrowseMeta>({ offset: 0, hasMore: false });
   const [searchMeta, setSearchMeta] = useState<SearchMeta>({ query: initialQueryRef.current, offset: initialQueryRef.current ? PAGE_SIZE : 0, hasMore: false });
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [usePersonalized, setUsePersonalized] = useState(true); // Default to personalized
+  const [isPersonalizedResponse, setIsPersonalizedResponse] = useState(false); // Track if response is personalized
+  const prevPersonalizedRef = useRef(true); // Track previous personalized state
 
   const debouncedSearch = useDebouncedValue(searchInput, 500);
   const requestIdRef = useRef(0);
@@ -198,7 +201,8 @@ export default function FindJob() {
           Authorization: `Bearer ${token}`,
         };
 
-        const response = await fetch(buildUrl(`/api/jobs?limit=${PAGE_SIZE}&offset=${offset}`), {
+        const personalizedParam = usePersonalized ? '&personalized=true' : '';
+        const response = await fetch(buildUrl(`/api/jobs?limit=${PAGE_SIZE}&offset=${offset}${personalizedParam}`), {
           headers,
         });
 
@@ -206,20 +210,37 @@ export default function FindJob() {
           throw new Error('Failed to load jobs');
         }
 
-        const data = (await response.json()) as GetJobsResponse;
-        logger.debug('API Response', { total: data.total, jobCount: data.jobs?.length });
+        const data = (await response.json()) as GetJobsResponse & { personalized?: boolean };
+        logger.debug('API Response', { total: data.total, jobCount: data.jobs?.length, personalized: data.personalized });
         if (requestId !== requestIdRef.current) {
           return;
         }
 
-        const normalized = (data.jobs || []).map(job => normalizeJob(job as JobWithExtras));
+        // Track if response is personalized
+        setIsPersonalizedResponse(data.personalized || false);
+
+        const normalized = (data.jobs || []).map((job: any) => normalizeJob(job as JobWithExtras));
+
+        // Log for debugging
+        logger.debug('Jobs fetched', {
+          append,
+          newJobs: normalized.length,
+          currentJobs: jobs.length,
+          willHave: append ? jobs.length + normalized.length : normalized.length
+        });
 
         setBrowseMeta({
           offset: offset + PAGE_SIZE,
           hasMore: Boolean(data.hasMore),
         });
 
-        setJobs(prev => (append ? [...prev, ...normalized] : normalized));
+        // Ensure we never clear jobs when appending
+        setJobs(prev => {
+          if (append && prev.length > 0) {
+            return [...prev, ...normalized];
+          }
+          return normalized;
+        });
 
         if (!append) {
           setSelectedJob(normalized[0] ?? null);
@@ -251,7 +272,7 @@ export default function FindJob() {
         }
       }
     },
-    [getToken, setSearchParams]
+    [getToken, setSearchParams, usePersonalized]
   );
 
   const runSearch = useCallback(
@@ -286,35 +307,46 @@ export default function FindJob() {
         }
 
         const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         };
 
-        // Use simple search with query parameter instead of AI search
-        const searchUrl = buildUrl(`/api/jobs?search=${encodeURIComponent(trimmedQuery)}&limit=${PAGE_SIZE}&offset=${offset}`);
-        logger.debug('Making API call to /api/jobs with search', { query: trimmedQuery, limit: PAGE_SIZE, offset });
+        // Use AI-powered search endpoint
+        const searchUrl = buildUrl('/api/ai-search');
+        logger.debug('Making AI search request', { query: trimmedQuery, limit: PAGE_SIZE, offset });
 
-        const response = await fetch(searchUrl, { headers });
+        const response = await fetch(searchUrl, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            query: trimmedQuery,
+            limit: PAGE_SIZE,
+            offset: offset
+          })
+        });
 
         if (!response.ok) {
           throw new Error('Failed to search jobs');
         }
 
-        const data = (await response.json()) as GetJobsResponse;
-        logger.debug('Search API Response', {
+        const data = await response.json();
+        logger.debug('AI Search Response', {
           totalResults: data.total,
           jobsCount: data.jobs?.length,
           hasMore: data.hasMore,
-          isAppend: append
+          isAppend: append,
+          parsedQuery: data.parsedQuery,
+          explanation: data.explanation
         });
 
         if (requestId !== requestIdRef.current) {
           return;
         }
 
-        const normalized = (data.jobs || []).map(job => normalizeJob(job as JobWithExtras));
+        const normalized = (data.jobs || []).map((job: any) => normalizeJob(job as JobWithExtras));
 
-        // Simple explanation for search results
-        setExplanation(`Found ${data.total} job${data.total === 1 ? '' : 's'} matching "${trimmedQuery}"`);
+        // Use AI-generated explanation
+        setExplanation(data.explanation || `Found ${data.total} job${data.total === 1 ? '' : 's'} matching "${trimmedQuery}"`);
 
         logger.debug('Updating jobs state', {
           append,
@@ -390,6 +422,18 @@ export default function FindJob() {
     }
   }, [searchParams, runSearch, fetchJobs]);
 
+  // Refetch when personalized toggle changes
+  useEffect(() => {
+    if (prevPersonalizedRef.current !== usePersonalized) {
+      prevPersonalizedRef.current = usePersonalized;
+
+      // Only refetch if we're in browse mode (not search)
+      if (mode === 'browse') {
+        fetchJobs({ offset: 0, append: false });
+      }
+    }
+  }, [usePersonalized, mode, fetchJobs]);
+
   useEffect(() => {
     const trimmed = debouncedSearch.trim();
 
@@ -456,6 +500,13 @@ export default function FindJob() {
   };
 
   const handleLoadMore = () => {
+    logger.debug('Load more clicked', {
+      mode,
+      currentJobs: jobs.length,
+      browseOffset: browseMeta.offset,
+      searchOffset: searchMeta.offset
+    });
+
     if (mode === 'search' && activeQuery) {
       runSearch(activeQuery, { offset: searchMeta.offset, append: true });
     } else {
@@ -561,6 +612,18 @@ export default function FindJob() {
             <div className="flex items-center gap-2.5 flex-wrap">
               <button
                 type="button"
+                onClick={() => setUsePersonalized(prev => !prev)}
+                className={`rounded-full px-[14px] py-[6px] text-[13px] font-medium cursor-pointer transition flex items-center gap-1.5 ${usePersonalized ? 'border border-primary bg-[var(--primary-50)] text-primary' : 'border border-[rgba(12,19,16,0.12)] bg-white text-accent'}`}
+                title={usePersonalized ? 'Showing jobs matched to your profile' : 'Showing all jobs chronologically'}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                  <path d="M2 17l10 5 10-5M2 12l10 5 10-5"/>
+                </svg>
+                {usePersonalized ? '🎯 Personalized' : '📅 Latest'}
+              </button>
+              <button
+                type="button"
                 onClick={toggleRemoteOnly}
                 className={`rounded-full px-[14px] py-[6px] text-[13px] font-medium cursor-pointer transition ${remoteOnly ? 'border border-primary bg-[var(--primary-50)] text-primary' : 'border border-[rgba(12,19,16,0.12)] bg-white text-accent'}`}
               >
@@ -568,6 +631,14 @@ export default function FindJob() {
               </button>
               {mode === 'search' && activeQuery && (
                 <span className="text-[13px] text-[var(--gray-600)]">"{activeQuery}"</span>
+              )}
+              {isPersonalizedResponse && (
+                <span className="text-[13px] text-primary font-medium flex items-center gap-1">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                  </svg>
+                  Matched to your profile
+                </span>
               )}
             </div>
 
@@ -577,7 +648,16 @@ export default function FindJob() {
           </div>
 
           {mode === 'search' && explanation && (
-            <div className="text-xs text-primary">{explanation}</div>
+            <div className="bg-[var(--primary-50)] border border-[rgba(62,172,167,0.2)] rounded-xl px-4 py-3 flex items-start gap-3">
+              <div className="text-primary mt-0.5">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                </svg>
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-accent leading-relaxed">{explanation}</p>
+              </div>
+            </div>
           )}
         </div>
 
@@ -600,16 +680,16 @@ export default function FindJob() {
               )}
 
               {!isInitialLoading && filteredJobs.map(job => (
-                <Card key={job.id} className={`${selectedJob?.id === job.id ? 'border-primary-600' : ''}`}>
-                  <JobCard
-                    job={job}
-                    compact={!isMobile}
-                    onClick={() => { setSelectedJob(job); setIsDetailOpen(true); }}
-                    onGenerateResume={() => navigate('/generate', { state: { jobId: job.id } })}
-                    onViewJob={(url) => window.open(url, '_blank', 'noopener')}
-                    onAutoApply={(jobId) => handleAutoApply(job)}
-                  />
-                </Card>
+                <JobCard
+                  key={job.id}
+                  job={job}
+                  compact={!isMobile}
+                  onClick={() => { setSelectedJob(job); setIsDetailOpen(true); }}
+                  onGenerateResume={() => navigate('/generate', { state: { jobId: job.id } })}
+                  onViewJob={(url) => window.open(url, '_blank', 'noopener')}
+                  onAutoApply={(jobId) => handleAutoApply(job)}
+                  showMatchScore={isPersonalizedResponse}
+                />
               ))}
 
               {showEmptyState && (

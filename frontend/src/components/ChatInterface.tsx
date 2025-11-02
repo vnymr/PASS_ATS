@@ -32,9 +32,17 @@ export interface Message {
   resumeText?: string;
 }
 
+export interface StreamingCallbacks {
+  onTextChunk?: (chunk: string) => void;
+  onToolExecuted?: (toolName: string, payload: any) => void;
+  onComplete?: (message: Message) => void;
+  onError?: (error: string) => void;
+}
+
 interface ChatInterfaceProps {
   title?: string;
-  onSubmit: (message: string) => Promise<Message>;
+  onSubmit?: (message: string) => Promise<Message>;
+  onSubmitStreaming?: (message: string, callbacks: StreamingCallbacks) => Promise<void>;
   placeholder?: string;
   analyzeQuery?: (query: string) => ContentType;
   showDashboard?: boolean;
@@ -43,22 +51,40 @@ interface ChatInterfaceProps {
 export default function ChatInterface({
   title = "Ask me anything",
   onSubmit,
+  onSubmitStreaming,
   placeholder = "",
   analyzeQuery,
   showDashboard = true
 }: ChatInterfaceProps) {
+  const isDev = import.meta.env.DEV;
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [isTyping, setIsTyping] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [currentProcessing, setCurrentProcessing] = useState<ProcessingTool[]>([]);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
+  const [streamingMessageIndex, setStreamingMessageIndex] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const streamingContentRef = useRef<HTMLDivElement>(null);
+  const accumulatedContentRef = useRef<string>('');
 
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
+
+  // Debug: Log messages when they change
+  useEffect(() => {
+    if (isDev) {
+      console.log('[ChatInterface] Messages state changed:', {
+        count: messages.length,
+        messages: messages.map(m => ({ type: m.type, contentLength: m.content?.length || 0, hasContent: !!m.content })),
+        streamingIndex: streamingMessageIndex,
+        isLoading
+      });
+    }
+  }, [messages, streamingMessageIndex, isLoading]);
 
   useEffect(() => {
     if (containerRef.current) {
@@ -91,30 +117,203 @@ export default function ChatInterface({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim()) return;
+    if (isDev) {
+      console.log('[ChatInterface] handleSubmit called, input:', input, 'isLoading:', isLoading);
+    }
+    if (!input.trim() || isLoading) return;
 
     const userMessage: Message = { type: 'user', content: input };
-    setMessages((prev) => [...prev, userMessage]);
     const userQuery = input;
     setInput('');
     setIsTyping(false);
     setIsLoading(true);
     setCurrentProcessing([]);
+    setError(null);
 
-    // Analyze query if function provided
-    const contentType = analyzeQuery ? analyzeQuery(userQuery) : 'general';
+    // Create empty AI message for streaming
+    const aiMessage: Message = {
+      type: 'ai',
+      content: '',
+      contentType: 'general',
+      processing: []
+    };
 
-    // Default processing steps
-    const defaultSteps = ['Processing your request', 'Analyzing context', 'Generating response'];
-    await simulateProcessing(defaultSteps);
+    // Reset accumulated content for new message
+    accumulatedContentRef.current = '';
 
-    // Call the provided onSubmit handler
-    const aiResponse = await onSubmit(userQuery);
-    aiResponse.processing = currentProcessing;
+    // Calculate AI message index based on current state
+    const aiMessageIndex = messages.length + 1;
+    
+    setMessages((prev) => {
+      if (isDev) {
+        console.log('[ChatInterface] Previous messages:', prev.length);
+      }
+      const newMessages = [...prev, userMessage, aiMessage];
+      if (isDev) {
+        console.log('[ChatInterface] New messages after adding both:', newMessages.length, 'AI index:', aiMessageIndex);
+      }
+      return newMessages;
+    });
 
-    setMessages((prev) => [...prev, aiResponse]);
-    setIsLoading(false);
-    setCurrentProcessing([]);
+    // Set streaming index
+    setStreamingMessageIndex(aiMessageIndex);
+    if (isDev) {
+      console.log('[ChatInterface] 🚀 Streaming started for message at index:', aiMessageIndex);
+    }
+
+    try {
+      // Use streaming callback if available
+      if (onSubmitStreaming) {
+        if (isDev) {
+          console.log('[ChatInterface] 📡 Calling onSubmitStreaming with query:', userQuery.substring(0, 30));
+        }
+        await onSubmitStreaming(userQuery, {
+          onTextChunk: (chunk: string) => {
+            if (isDev) {
+              console.log('[ChatInterface] ✅ Text chunk received:', chunk.substring(0, 50));
+            }
+            // Accumulate content in ref to avoid stale closures
+            accumulatedContentRef.current += chunk;
+
+            // Capture the current accumulated content to avoid closure issues
+            const currentContent = accumulatedContentRef.current;
+
+            // Use regular state update - React 18's automatic batching handles optimization
+            // The 30ms delay between chunks in the backend ensures visible streaming
+            setMessages((prev) => {
+              const updated = [...prev];
+              const lastIndex = updated.length - 1;
+              if (updated[lastIndex] && updated[lastIndex].type === 'ai') {
+                // Use the captured content, not the ref (which might be reset)
+                updated[lastIndex] = {
+                  ...updated[lastIndex],
+                  content: currentContent
+                };
+                if (isDev) {
+                  console.log('[ChatInterface] 🔄 Updated content, length:', currentContent.length);
+                }
+              }
+              return updated;
+            });
+          },
+          onToolExecuted: (toolName: string, payload: any) => {
+            if (isDev) {
+              console.log('[ChatInterface] onToolExecuted called:', toolName, payload);
+            }
+            // Add to processing steps
+            setCurrentProcessing((prev) => [
+              ...prev,
+              { name: toolName, status: 'complete' }
+            ]);
+
+            // Update message with tool results
+            setMessages((prev) => {
+              const updated = [...prev];
+              const lastIndex = updated.length - 1;
+              if (updated[lastIndex] && updated[lastIndex].type === 'ai') {
+                const msg = updated[lastIndex];
+                if (isDev) {
+                  console.log('[ChatInterface] Updating message with tool result:', toolName);
+                }
+
+                // Map tool results to message properties
+                if (toolName === 'search_jobs' && payload?.items) {
+                  if (isDev) {
+                    console.log('[ChatInterface] Setting jobs:', payload.items.length);
+                  }
+                  msg.jobs = payload.items;
+                  msg.contentType = 'jobs';
+                } else if (toolName === 'track_applications' && payload?.applications) {
+                  if (isDev) {
+                    console.log('[ChatInterface] Setting applications:', payload.applications.length);
+                  }
+                  msg.applications = payload.applications;
+                  msg.contentType = 'applications';
+                } else if (toolName === 'create_goal' && payload) {
+                  msg.content += `\n\n✅ Created goal: "${payload.title}"`;
+                } else if (toolName === 'create_routine' && payload) {
+                  msg.content += `\n\n📅 Set up routine: "${payload.title}"`;
+                }
+
+                msg.processing = currentProcessing;
+              }
+              return updated;
+            });
+          },
+          onComplete: (finalMessage: Message) => {
+            if (isDev) {
+              console.log('[ChatInterface] onComplete called, final content length:', accumulatedContentRef.current.length);
+            }
+            // Ensure final content is in state (should already be there from onTextChunk)
+            setMessages((prev) => {
+              const updated = [...prev];
+              const lastIndex = updated.length - 1;
+              if (updated[lastIndex] && updated[lastIndex].type === 'ai') {
+                // Make sure content is set (use ref in case state didn't capture last chunk)
+                const finalContent = accumulatedContentRef.current || updated[lastIndex].content;
+                if (finalContent !== updated[lastIndex].content) {
+                  updated[lastIndex] = {
+                    ...updated[lastIndex],
+                    content: finalContent
+                  };
+                  if (isDev) {
+                    console.log('[ChatInterface] Synced final content on complete, length:', finalContent.length);
+                  }
+                }
+              }
+              return updated;
+            });
+            // Reset ref after ensuring state is updated
+            accumulatedContentRef.current = '';
+          },
+          onError: (errorMsg: string) => {
+            if (isDev) {
+              console.error('[ChatInterface] onError called:', errorMsg);
+            }
+            setError(errorMsg);
+            setMessages((prev) => {
+              const updated = [...prev];
+              const lastIndex = updated.length - 1;
+              if (updated[lastIndex] && updated[lastIndex].type === 'ai') {
+                updated[lastIndex].content = `Error: ${errorMsg}`;
+              }
+              return updated;
+            });
+          }
+        });
+      } else if (onSubmit) {
+        // Fallback to promise-based submit
+        const defaultSteps = ['Processing your request', 'Analyzing context', 'Generating response'];
+        await simulateProcessing(defaultSteps);
+
+        const aiResponse = await onSubmit(userQuery);
+        aiResponse.processing = currentProcessing;
+
+        setMessages((prev) => {
+          const updated = [...prev];
+          const lastIndex = updated.length - 1;
+          updated[lastIndex] = aiResponse;
+          return updated;
+        });
+      }
+    } catch (error) {
+      if (isDev) {
+        console.error('Error in handleSubmit:', error);
+      }
+      setError(error instanceof Error ? error.message : 'Unknown error');
+      setMessages((prev) => {
+        const updated = [...prev];
+        const lastIndex = updated.length - 1;
+        if (updated[lastIndex] && updated[lastIndex].type === 'ai') {
+          updated[lastIndex].content = `Error: ${error instanceof Error ? error.message : 'Unknown error'}`;
+        }
+        return updated;
+      });
+    } finally {
+      setIsLoading(false);
+      setCurrentProcessing([]);
+      setStreamingMessageIndex(null);
+    }
   };
 
   const handleContainerClick = () => {
@@ -206,9 +405,11 @@ export default function ChatInterface({
               >
                 {message.type === 'user' ? (
                   <div
-                    className="text-foreground"
                     style={{
                       fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif',
+                      color: 'var(--text-900, #1a1a1a)',
+                      fontSize: '16px',
+                      lineHeight: '1.6'
                     }}
                   >
                     {message.content}
@@ -228,14 +429,32 @@ export default function ChatInterface({
                       </div>
                     )}
 
-                    {message.content && (
+                    {/* Show AI message content - always render if it's the streaming message or has content */}
+                    {(streamingMessageIndex === index || message.content) && (
                       <div
-                        className="text-foreground whitespace-pre-wrap"
+                        ref={streamingMessageIndex === index ? streamingContentRef : null}
+                        className="whitespace-pre-wrap"
                         style={{
                           fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif',
+                          color: 'var(--text-900, #1a1a1a)',
+                          fontSize: '16px',
+                          lineHeight: '1.6',
+                          minHeight: streamingMessageIndex === index && isLoading ? '1em' : 'auto'
                         }}
                       >
-                        {message.content}
+                        {message.content || ''}
+                        {streamingMessageIndex === index && isLoading && !message.content && (
+                          <span style={{ color: '#666' }}>...</span>
+                        )}
+                        {streamingMessageIndex === index && isLoading && (
+                          <motion.span
+                            animate={{ opacity: [1, 0] }}
+                            transition={{ duration: 0.8, repeat: Infinity, repeatType: 'reverse' }}
+                            style={{ color: 'var(--primary-600, #2563eb)', marginLeft: '2px' }}
+                          >
+                            ▋
+                          </motion.span>
+                        )}
                       </div>
                     )}
 
@@ -361,6 +580,39 @@ export default function ChatInterface({
             )}
           </AnimatePresence>
 
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="rounded-[12px] p-4 mb-6"
+              style={{ backgroundColor: 'var(--accent-100)', borderLeft: '3px solid var(--accent-600)' }}
+            >
+              <div className="flex items-start gap-3">
+                <span style={{ color: 'var(--accent-700)', fontSize: '14px' }}>⚠️</span>
+                <div style={{ flex: 1 }}>
+                  <p style={{ color: 'var(--accent-900)', fontSize: '14px', marginBottom: '8px' }}>{error}</p>
+                  <button
+                    onClick={() => {
+                      setError(null);
+                    }}
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: '6px',
+                      backgroundColor: 'var(--accent-600)',
+                      color: 'white',
+                      fontSize: '13px',
+                      fontWeight: 500,
+                      border: 'none',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
           <form onSubmit={handleSubmit}>
             <div className="relative">
               <input
@@ -368,7 +620,8 @@ export default function ChatInterface({
                 type="text"
                 value={input}
                 onChange={handleInputChange}
-                className="w-full bg-transparent border-none outline-none text-foreground"
+                disabled={isLoading}
+                className="w-full bg-transparent border-none outline-none text-foreground disabled:opacity-50"
                 style={{
                   fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif',
                   caretColor: 'var(--text-900)',
@@ -377,7 +630,7 @@ export default function ChatInterface({
                 }}
                 autoComplete="off"
                 spellCheck="false"
-                placeholder={placeholder}
+                placeholder={isLoading ? 'AI is thinking...' : placeholder}
               />
               {!input && !isTyping && messages.length === 0 && !placeholder && (
                 <motion.div

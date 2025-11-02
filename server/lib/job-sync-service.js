@@ -1,16 +1,21 @@
 /**
- * Job Sync Service - V2 with Smart Aggregator
+ * Job Sync Service - V3 with FREE Auto-Discovery
  *
- * Uses self-learning company discovery to fetch jobs from:
+ * Uses 100% FREE sources with NO manual company lists:
+ * - SimplifyJobs GitHub (daily updates, 1000+ jobs)
+ * - Hacker News Who's Hiring (monthly, 500+ jobs)
+ * - RSS Feeds (real-time, unlimited)
  * - Greenhouse API (direct, free, unlimited)
  * - Lever API (direct, free, unlimited)
  * - Remotive API (remote jobs, free)
- * - JSearch API (optional discovery, free tier 1000/month)
  *
- * NO MORE ADZUNA - we fetch directly from ATS platforms!
+ * TOTAL COST: $0/month
+ * AUTO-DISCOVERY: Yes (no manual company lists!)
  */
 
 import smartAggregator from './job-sources/smart-aggregator.js';
+import freeAutoDiscovery from './job-sources/free-auto-discovery.js';
+import aggressiveDiscovery from './job-sources/aggressive-discovery.js';
 import { prisma } from './prisma-client.js';
 import logger from './logger.js';
 import cron from 'node-cron';
@@ -18,43 +23,117 @@ import cron from 'node-cron';
 class JobSyncService {
   constructor() {
     this.isRunning = false;
+    this.isDiscovering = false;
     this.lastSync = null;
+    this.lastDiscovery = null;
     this.stats = {
       totalSynced: 0,
       lastRunDate: null,
       lastRunDuration: 0,
-      companiesDiscovered: 0
+      companiesDiscovered: 0,
+      totalCompanies: 0
     };
 
-    // Initialize cron job (disabled by default - call start() to enable)
-    this.cronJob = null;
+    // Initialize cron jobs (disabled by default - call start() to enable)
+    this.syncCronJob = null;
+    this.discoveryCronJob = null;
   }
 
   /**
-   * Start the cron job
-   * Runs every 6 hours by default (to fetch fresh jobs)
+   * Start the cron jobs
+   * - Job sync: Runs every day at midnight (fetch fresh jobs)
+   * - Company discovery: Runs every 24 hours at 2 AM (find new companies)
    */
-  start(schedule = '0 */6 * * *') {
-    if (this.cronJob) {
+  start(syncSchedule = '0 0 * * *', discoverySchedule = '0 2 * * *') {
+    if (this.syncCronJob) {
       logger.warn('Job sync cron already running');
       return;
     }
 
-    this.cronJob = cron.schedule(schedule, () => {
+    // Job sync cron (daily at midnight)
+    this.syncCronJob = cron.schedule(syncSchedule, () => {
       this.syncJobs();
     });
 
-    logger.info(`✅ Job sync cron started (schedule: ${schedule})`);
+    // Company discovery cron (daily at 2 AM)
+    this.discoveryCronJob = cron.schedule(discoverySchedule, () => {
+      this.discoverNewCompanies();
+    });
+
+    logger.info(`✅ Job sync cron started (schedule: ${syncSchedule})`);
+    logger.info(`   Running daily at midnight to fetch fresh jobs`);
+    logger.info(`✅ Company discovery cron started (schedule: ${discoverySchedule})`);
+    logger.info(`   Running DAILY at 2 AM to discover new companies automatically!`);
   }
 
   /**
-   * Stop the cron job
+   * Stop the cron jobs
    */
   stop() {
-    if (this.cronJob) {
-      this.cronJob.stop();
-      this.cronJob = null;
+    if (this.syncCronJob) {
+      this.syncCronJob.stop();
+      this.syncCronJob = null;
       logger.info('Job sync cron stopped');
+    }
+
+    if (this.discoveryCronJob) {
+      this.discoveryCronJob.stop();
+      this.discoveryCronJob = null;
+      logger.info('Company discovery cron stopped');
+    }
+  }
+
+  /**
+   * Discover new companies automatically
+   * Runs weekly to find hundreds of new companies
+   */
+  async discoverNewCompanies() {
+    if (this.isDiscovering) {
+      logger.warn('Company discovery already in progress, skipping');
+      return { skipped: true };
+    }
+
+    this.isDiscovering = true;
+    const startTime = Date.now();
+
+    try {
+      logger.info('🔍 Starting company discovery...');
+
+      // Run aggressive discovery
+      const result = await aggressiveDiscovery.runFullDiscovery();
+
+      const duration = Date.now() - startTime;
+
+      // Update stats
+      this.stats.companiesDiscovered = result.companies.length;
+      this.lastDiscovery = new Date();
+
+      // Get total companies in database
+      const totalCompanies = await prisma.discoveredCompany.count({
+        where: { isActive: true }
+      });
+      this.stats.totalCompanies = totalCompanies;
+
+      logger.info('✅ Company discovery completed');
+      logger.info(`  - New companies found: ${result.companies.length}`);
+      logger.info(`  - Total companies in DB: ${totalCompanies}`);
+      logger.info(`  - Duration: ${(duration / 1000).toFixed(1)}s`);
+
+      return {
+        success: true,
+        discovered: result.companies.length,
+        totalCompanies: totalCompanies,
+        duration
+      };
+
+    } catch (error) {
+      logger.error({ error: error.message }, 'Company discovery failed');
+      return {
+        success: false,
+        error: error.message
+      };
+    } finally {
+      this.isDiscovering = false;
     }
   }
 
@@ -73,10 +152,13 @@ class JobSyncService {
     const startTime = Date.now();
 
     try {
-      logger.info('🔄 Starting smart job sync...');
+      logger.info('🔄 Starting FREE auto-discovery job sync...');
 
-      // Use smart aggregator to fetch jobs
-      const result = await smartAggregator.aggregateAll({
+      // Fetch from FREE auto-discovery sources (SimplifyJobs, HN, RSS)
+      const freeResult = await freeAutoDiscovery.aggregateAll();
+
+      // Fetch from smart aggregator (Greenhouse, Lever, Remotive)
+      const atsResult = await smartAggregator.aggregateAll({
         // Force discovery on first run or if requested
         forceDiscovery: this.stats.totalSynced === 0 || options.forceDiscovery,
 
@@ -87,10 +169,27 @@ class JobSyncService {
         }
       });
 
-      logger.info(`📊 Fetched ${result.jobs.length} jobs from APIs`);
-      logger.info(`  - AI-applyable: ${result.stats.aiApplyable} (${result.stats.aiApplyablePercent}%)`);
-      logger.info(`  - Greenhouse companies: ${result.companies.greenhouse.length}`);
-      logger.info(`  - Lever companies: ${result.companies.lever.length}`);
+      // Combine results
+      const result = {
+        jobs: [...freeResult.jobs, ...atsResult.jobs],
+        stats: {
+          ...atsResult.stats,
+          simplify: freeResult.stats.simplify,
+          hackernews: freeResult.stats.hackernews,
+          rss: freeResult.stats.rss,
+          total: freeResult.jobs.length + atsResult.jobs.length
+        },
+        companies: atsResult.companies
+      };
+
+      logger.info(`📊 Fetched ${result.jobs.length} jobs from all sources`);
+      logger.info(`  - SimplifyJobs: ${result.stats.simplify}`);
+      logger.info(`  - Hacker News: ${result.stats.hackernews}`);
+      logger.info(`  - RSS Feeds: ${result.stats.rss}`);
+      logger.info(`  - Y Combinator: ${result.stats.yc}`);
+      logger.info(`  - Greenhouse: ${result.stats.greenhouse || 0}`);
+      logger.info(`  - Lever: ${result.stats.lever || 0}`);
+      logger.info(`  - AI-applyable: ${result.stats.aiApplyable || 0}`);
 
       // Save to database
       let saved = 0;
@@ -147,17 +246,27 @@ class JobSyncService {
         }
       }
 
-      // Mark old jobs as inactive (not checked in last 7 days)
-      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      // Mark old jobs as inactive (older than 2 weeks)
+      const twoWeeksAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
       const deactivated = await prisma.aggregatedJob.updateMany({
         where: {
           lastChecked: {
-            lt: sevenDaysAgo
+            lt: twoWeeksAgo
           },
           isActive: true
         },
         data: {
           isActive: false
+        }
+      });
+
+      // Also delete jobs that have been inactive for over 2 weeks (cleanup)
+      const deleted = await prisma.aggregatedJob.deleteMany({
+        where: {
+          isActive: false,
+          updatedAt: {
+            lt: twoWeeksAgo
+          }
         }
       });
 
@@ -175,7 +284,8 @@ class JobSyncService {
       logger.info(`  - New jobs: ${saved}`);
       logger.info(`  - Updated jobs: ${updated}`);
       logger.info(`  - Skipped: ${skipped}`);
-      logger.info(`  - Deactivated old jobs: ${deactivated.count}`);
+      logger.info(`  - Deactivated old jobs (>2 weeks): ${deactivated.count}`);
+      logger.info(`  - Deleted inactive jobs: ${deleted.count}`);
       logger.info(`  - Duration: ${(duration / 1000).toFixed(1)}s`);
       logger.info(`  - Companies tracked: ${this.stats.companiesDiscovered}`);
 
@@ -185,6 +295,7 @@ class JobSyncService {
         updated,
         skipped,
         deactivated: deactivated.count,
+        deleted: deleted.count,
         duration,
         stats: result.stats,
         companies: this.stats.companiesDiscovered
@@ -220,8 +331,11 @@ class JobSyncService {
     return {
       ...this.stats,
       isRunning: this.isRunning,
+      isDiscovering: this.isDiscovering,
       lastSync: this.lastSync,
-      cronEnabled: this.cronJob !== null
+      lastDiscovery: this.lastDiscovery,
+      syncCronEnabled: this.syncCronJob !== null,
+      discoveryCronEnabled: this.discoveryCronJob !== null
     };
   }
 

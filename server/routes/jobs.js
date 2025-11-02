@@ -7,6 +7,8 @@
 import express from 'express';
 import { prisma } from '../lib/prisma-client.js';
 import jobSyncService from '../lib/job-sync-service.js';
+import jobRecommendationEngine from '../lib/job-recommendation-engine.js';
+import jobProfileMatcher from '../lib/job-profile-matcher.js';
 import logger from '../lib/logger.js';
 
 const router = express.Router();
@@ -37,6 +39,7 @@ function respondWithJobsError(res, error, fallbackMessage) {
 /**
  * GET /api/jobs
  * Get all jobs with filtering
+ * Optionally uses personalized recommendations if ?personalized=true
  */
 router.get('/jobs', async (req, res) => {
   try {
@@ -46,10 +49,40 @@ router.get('/jobs', async (req, res) => {
       company,                  // Filter by company
       source,                   // Filter by source (greenhouse, lever, etc.)
       search,                   // Search in title/description
+      personalized = 'false',   // Use personalized recommendations
       limit = '50',
       offset = '0'
     } = req.query;
 
+    // Check if personalized recommendations requested
+    if (personalized === 'true' && req.userId) {
+      // Use recommendation engine
+      const result = await jobRecommendationEngine.getRecommendations(req.userId, {
+        filter,
+        atsType,
+        company,
+        source,
+        search,
+        limit: parseInt(limit),
+        offset: parseInt(offset)
+      });
+
+      // Prevent caching issues
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+
+      return res.json({
+        jobs: result.jobs,
+        total: result.total,
+        limit: parseInt(limit),
+        offset: parseInt(offset),
+        hasMore: result.hasMore,
+        personalized: true
+      });
+    }
+
+    // Otherwise, use default (chronological) listing
     const where = { isActive: true };
 
     // Apply filters
@@ -129,7 +162,8 @@ router.get('/jobs', async (req, res) => {
       total,
       limit: parseInt(limit),
       offset: parseInt(offset),
-      hasMore: total > (parseInt(offset) + parseInt(limit))
+      hasMore: total > (parseInt(offset) + parseInt(limit)),
+      personalized: false
     });
 
   } catch (error) {
@@ -215,6 +249,113 @@ router.post('/jobs/sync', async (req, res) => {
   } catch (error) {
     logger.error({ error: error.message, code: error.code }, 'Failed to trigger sync');
     return respondWithJobsError(res, error, 'Failed to trigger sync');
+  }
+});
+
+/**
+ * GET /api/jobs/recommendations
+ * Get personalized job recommendations for the authenticated user
+ */
+router.get('/jobs/recommendations', async (req, res) => {
+  try {
+    if (!req.userId) {
+      return res.status(401).json({ error: 'Authentication required for personalized recommendations' });
+    }
+
+    const {
+      filter = 'all',
+      limit = '50',
+      offset = '0',
+      includeScores = 'false'  // Debug flag to see recommendation scores
+    } = req.query;
+
+    const result = await jobRecommendationEngine.getRecommendations(req.userId, {
+      filter,
+      limit: parseInt(limit),
+      offset: parseInt(offset)
+    });
+
+    // Optionally include score breakdowns for debugging
+    if (includeScores === 'true') {
+      res.json({
+        jobs: result.jobs,
+        total: result.total,
+        hasMore: result.hasMore
+      });
+    } else {
+      // Remove score data for cleaner response
+      const cleanedJobs = result.jobs.map(job => {
+        const { scoreBreakdown, ...cleanJob } = job;
+        return cleanJob;
+      });
+
+      res.json({
+        jobs: cleanedJobs,
+        total: result.total,
+        hasMore: result.hasMore
+      });
+    }
+
+  } catch (error) {
+    logger.error({ error: error.message, userId: req.userId }, 'Failed to get recommendations');
+    return respondWithJobsError(res, error, 'Failed to get recommendations');
+  }
+});
+
+/**
+ * POST /api/jobs/discover
+ * Manually trigger company discovery (finds new companies automatically)
+ */
+router.post('/jobs/discover', async (req, res) => {
+  try {
+    logger.info('Manual company discovery triggered via API');
+
+    // Start discovery in background
+    jobSyncService.discoverNewCompanies().then(result => {
+      logger.info({ result }, 'Company discovery completed');
+    }).catch(error => {
+      logger.error({ error: error.message }, 'Company discovery failed');
+    });
+
+    res.json({
+      success: true,
+      message: 'Company discovery started in background. This will find hundreds of new companies!'
+    });
+
+  } catch (error) {
+    logger.error({ error: error.message, code: error.code }, 'Failed to trigger discovery');
+    return respondWithJobsError(res, error, 'Failed to trigger discovery');
+  }
+});
+
+/**
+ * GET /api/jobs/:id/match-analysis
+ * Get detailed match analysis between user profile and specific job
+ */
+router.get('/jobs/:id/match-analysis', async (req, res) => {
+  try {
+    if (!req.userId) {
+      return res.status(401).json({ error: 'Authentication required for match analysis' });
+    }
+
+    const { id: jobId } = req.params;
+
+    logger.info({ userId: req.userId, jobId }, 'Analyzing job-profile match');
+
+    const analysis = await jobProfileMatcher.analyzeMatch(req.userId, jobId);
+
+    if (analysis.error) {
+      return res.status(400).json(analysis);
+    }
+
+    res.json({
+      success: true,
+      analysis
+    });
+
+  } catch (error) {
+    logger.error({ error: error.message, userId: req.userId, jobId: req.params.id }, 'Failed to analyze match');
+    return respondWithJobsError(res, error, 'Failed to analyze job match');
   }
 });
 

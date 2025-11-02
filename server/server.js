@@ -51,6 +51,8 @@ import { config, getOpenAIModel } from './lib/config.js';
 import { startRoutineExecutor, stopRoutineExecutor } from './lib/routine-executor.js';
 import dataValidator from './lib/utils/dataValidator.js';
 import ResumeParser from './lib/resume-parser.js';
+// Import job sync service for automated job discovery
+import jobSyncService from './lib/job-sync-service.js';
 // Import LaTeX compiler
 import { compileLatex } from './lib/latex-compiler.js';
 // Import production logger
@@ -218,8 +220,10 @@ app.post('/api/webhooks/stripe',
   }
 );
 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+// Request size limits to prevent DoS attacks
+// 100kb is generous for chat messages while preventing payload bombs
+app.use(express.json({ limit: '100kb' }));
+app.use(express.urlencoded({ extended: true, limit: '100kb' }));
 
 // Security: Block access to sensitive files and directories
 app.use((req, res, next) => {
@@ -2827,6 +2831,12 @@ const server = app.listen(PORT, () => {
 
   // Start routine executor for automated task scheduling
   startRoutineExecutor();
+
+  // Start job sync service (daily at midnight + company discovery at 2 AM)
+  jobSyncService.start();
+  logger.info('✅ Job sync service started');
+  logger.info('   - Job sync: Daily at midnight');
+  logger.info('   - Company discovery: Daily at 2 AM');
 });
 
 // Graceful shutdown
@@ -2835,6 +2845,9 @@ process.on('SIGTERM', async () => {
 
   // Stop routine executor
   stopRoutineExecutor();
+
+  // Stop job sync service
+  jobSyncService.stop();
 
   // Close server
   server.close(async () => {
@@ -2848,6 +2861,9 @@ process.on('SIGINT', async () => {
 
   // Stop routine executor
   stopRoutineExecutor();
+
+  // Stop job sync service
+  jobSyncService.stop();
 
   server.close(async () => {
     await prisma.$disconnect();

@@ -3,10 +3,9 @@ import { useAuth } from '@clerk/clerk-react';
 import Icons from '../components/ui/icons';
 import BillingSection from '../components/BillingSection';
 import { Tabs } from '../ui/Tabs';
-import Card, { CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '../ui/Card';
-import { Label } from '../ui/Label';
-import { Input } from '../ui/Input';
-import { Textarea } from '../ui/Textarea';
+import { MinimalCard, MinimalCardHeader, MinimalCardTitle, MinimalCardDescription, MinimalCardContent } from '../components/MinimalCard';
+import MinimalInput from '../components/MinimalInput';
+import MinimalTextareaField from '../components/MinimalTextareaField';
 import { Button } from '../ui/Button';
 import logger from '../utils/logger';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -494,77 +493,86 @@ export default function MemoryProfile() {
       />
 
       {activeTab === 'personal' && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Personal</CardTitle>
-            <CardDescription>Your basic contact details</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label>Full Name</Label>
-                <Input value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="John Doe" />
-              </div>
-              <div>
-                <Label>Email</Label>
-                <Input type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} placeholder="john.doe@example.com" />
-              </div>
-              <div>
-                <Label>Phone</Label>
-                <Input value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} placeholder="+1 (555) 123-4567" />
-              </div>
-              <div>
-                <Label>Location</Label>
-                <Input value={formData.location} onChange={(e) => setFormData({ ...formData, location: e.target.value })} placeholder="San Francisco, CA" />
-              </div>
-              <div>
-                <Label>LinkedIn</Label>
-                <Input value={formData.linkedin} onChange={(e) => setFormData({ ...formData, linkedin: e.target.value })} placeholder="https://linkedin.com/in/johndoe" />
-              </div>
-              <div>
-                <Label>Website</Label>
-                <Input value={formData.website} onChange={(e) => setFormData({ ...formData, website: e.target.value })} placeholder="https://johndoe.com" />
-              </div>
+        <MinimalCard>
+          <MinimalCardHeader>
+            <MinimalCardTitle>Personal</MinimalCardTitle>
+            <MinimalCardDescription>Your basic contact details</MinimalCardDescription>
+          </MinimalCardHeader>
+          <MinimalCardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <MinimalInput
+                label="Full Name"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                placeholder="John Doe"
+              />
+              <MinimalInput
+                label="Email"
+                type="email"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                placeholder="john.doe@example.com"
+              />
+              <MinimalInput
+                label="Phone"
+                value={formData.phone}
+                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                placeholder="+1 (555) 123-4567"
+              />
+              <MinimalInput
+                label="Location"
+                value={formData.location}
+                onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                placeholder="San Francisco, CA"
+              />
+              <MinimalInput
+                label="LinkedIn"
+                value={formData.linkedin}
+                onChange={(e) => setFormData({ ...formData, linkedin: e.target.value })}
+                placeholder="https://linkedin.com/in/johndoe"
+              />
+              <MinimalInput
+                label="Website"
+                value={formData.website}
+                onChange={(e) => setFormData({ ...formData, website: e.target.value })}
+                placeholder="https://johndoe.com"
+              />
             </div>
-          </CardContent>
-        </Card>
+          </MinimalCardContent>
+        </MinimalCard>
       )}
 
       {activeTab === 'summary' && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Professional Summary</CardTitle>
-            <CardDescription>Brief overview of your professional background and career objectives</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div>
-              <Label>Summary</Label>
-              <Textarea
-                value={formData.summary}
-                onChange={(e) => setFormData({ ...formData, summary: e.target.value })}
-                placeholder={
-                  'Write a compelling summary of your professional experience, key achievements, technical skills, and career objectives.'
-                }
-                rows={12}
-              />
-              <div className="mt-3 flex items-center gap-2 text-neutral-600 text-sm">
-                <Icons.info size={14} />
-                <span>Tip: Write 3-5 sentences highlighting your experience, skills, and what makes you unique.</span>
-              </div>
+        <MinimalCard>
+          <MinimalCardHeader>
+            <MinimalCardTitle>Professional Summary</MinimalCardTitle>
+            <MinimalCardDescription>Brief overview of your professional background and career objectives</MinimalCardDescription>
+          </MinimalCardHeader>
+          <MinimalCardContent>
+            <MinimalTextareaField
+              label="Summary"
+              value={formData.summary}
+              onChange={(e) => setFormData({ ...formData, summary: e.target.value })}
+              placeholder="Write a compelling summary of your professional experience, key achievements, technical skills, and career objectives."
+              rows={12}
+            />
+            <div className="mt-3 flex items-center gap-2 text-sm" style={{ color: 'var(--text-600)' }}>
+              <Icons.info size={14} />
+              <span>Tip: Write 3-5 sentences highlighting your experience, skills, and what makes you unique.</span>
             </div>
-          </CardContent>
-        </Card>
+          </MinimalCardContent>
+        </MinimalCard>
       )}
 
       {activeTab === 'skills' && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Skills & Expertise</CardTitle>
-            <CardDescription>Your technical and professional skills</CardDescription>
-          </CardHeader>
-          <CardContent>
+        <MinimalCard>
+          <MinimalCardHeader>
+            <MinimalCardTitle>Skills & Expertise</MinimalCardTitle>
+            <MinimalCardDescription>Your technical and professional skills</MinimalCardDescription>
+          </MinimalCardHeader>
+          <MinimalCardContent>
             <div className="flex gap-2">
-              <Input
+              <MinimalInput
                 value={newSkill}
                 onChange={(e) => setNewSkill(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && addSkill()}
@@ -575,43 +583,62 @@ export default function MemoryProfile() {
                 Add
               </Button>
             </div>
-            <div className="mt-4 flex flex-wrap gap-2">
+            <div className="mt-6 flex flex-wrap gap-2">
               {formData.skills.map((skill) => (
-                <span key={skill} className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 text-neutral-700 px-3 py-1 text-sm">
+                <span
+                  key={skill}
+                  className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition-all duration-200 hover:bg-[var(--text-100)]"
+                  style={{
+                    backgroundColor: 'var(--text-50)',
+                    color: 'var(--text-900)',
+                    fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif',
+                  }}
+                >
                   {skill}
-                  <button onClick={() => removeSkill(skill)} aria-label={`Remove ${skill}`} className="text-neutral-500 hover:text-neutral-700">
+                  <button
+                    onClick={() => removeSkill(skill)}
+                    aria-label={`Remove ${skill}`}
+                    className="transition-colors duration-200"
+                    style={{ color: 'var(--text-500)' }}
+                    onMouseEnter={(e) => e.currentTarget.style.color = 'var(--text-700)'}
+                    onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-500)'}
+                  >
                     <Icons.x size={14} />
                   </button>
                 </span>
               ))}
               {formData.skills.length === 0 && (
-                <p className="text-sm text-neutral-600">No skills added yet. Start adding your skills above or upload a resume to auto-fill.</p>
+                <p className="text-sm" style={{ color: 'var(--text-600)' }}>
+                  No skills added yet. Start adding your skills above or upload a resume to auto-fill.
+                </p>
               )}
             </div>
-          </CardContent>
-        </Card>
+          </MinimalCardContent>
+        </MinimalCard>
       )}
 
       {activeTab === 'experience' && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Work Experience</CardTitle>
-            <CardDescription>Your professional work history</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col gap-3">
+        <MinimalCard>
+          <MinimalCardHeader>
+            <MinimalCardTitle>Work Experience</MinimalCardTitle>
+            <MinimalCardDescription>Your professional work history</MinimalCardDescription>
+          </MinimalCardHeader>
+          <MinimalCardContent>
+            <div className="flex flex-col gap-6">
               {formData.experiences.map((exp, index) => (
-                <div key={index} className="rounded-xl border border-neutral-200 p-4">
-                  <div className="flex items-center justify-between">
+                <div key={index} className="pb-6" style={{ borderBottom: index < formData.experiences.length - 1 ? '1px solid var(--text-100)' : 'none' }}>
+                  <div className="flex items-start justify-between mb-2">
                     <div>
-                      <h3 className="font-semibold">{exp.role}</h3>
-                      <p className="text-sm text-neutral-600">{exp.company}</p>
+                      <h3 className="font-semibold" style={{ color: 'var(--text-900)', fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif' }}>
+                        {exp.role}
+                      </h3>
+                      <p className="text-sm mt-0.5" style={{ color: 'var(--text-600)' }}>{exp.company}</p>
                     </div>
-                    <div className="text-sm text-neutral-500">{exp.dates}</div>
+                    <div className="text-sm" style={{ color: 'var(--text-500)' }}>{exp.dates}</div>
                   </div>
-                  {exp.location && <div className="text-xs text-neutral-500 mt-1">{exp.location}</div>}
+                  {exp.location && <div className="text-xs mb-2" style={{ color: 'var(--text-500)' }}>{exp.location}</div>}
                   {exp.bullets && exp.bullets.length > 0 && (
-                    <ul className="mt-3 list-disc pl-5 text-sm text-neutral-700">
+                    <ul className="mt-3 space-y-1.5 list-disc pl-5 text-sm" style={{ color: 'var(--text-700)' }}>
                       {exp.bullets.map((bullet: string, idx: number) => (
                         <li key={idx}>{bullet}</li>
                       ))}
@@ -620,41 +647,50 @@ export default function MemoryProfile() {
                 </div>
               ))}
               {formData.experiences.length === 0 && (
-                <p className="text-sm text-neutral-600">No experiences added yet. Upload a resume to auto-fill your work history.</p>
+                <p className="text-sm" style={{ color: 'var(--text-600)' }}>
+                  No experiences added yet. Upload a resume to auto-fill your work history.
+                </p>
               )}
             </div>
-          </CardContent>
-        </Card>
+          </MinimalCardContent>
+        </MinimalCard>
       )}
 
       {activeTab === 'additional' && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Additional Information</CardTitle>
-            <CardDescription>Any other relevant details or notes</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div>
-              <Label>Additional Information</Label>
-              <Textarea value={additionalInfo} onChange={(e) => setAdditionalInfo(e.target.value)} placeholder="Add any additional information, certifications, awards, or notes..." rows={10} />
-            </div>
-          </CardContent>
-        </Card>
+        <MinimalCard>
+          <MinimalCardHeader>
+            <MinimalCardTitle>Additional Information</MinimalCardTitle>
+            <MinimalCardDescription>Any other relevant details or notes</MinimalCardDescription>
+          </MinimalCardHeader>
+          <MinimalCardContent>
+            <MinimalTextareaField
+              label="Additional Information"
+              value={additionalInfo}
+              onChange={(e) => setAdditionalInfo(e.target.value)}
+              placeholder="Add any additional information, certifications, awards, or notes..."
+              rows={10}
+            />
+          </MinimalCardContent>
+        </MinimalCard>
       )}
 
       {activeTab === 'resume' && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Resume Text</CardTitle>
-            <CardDescription>Raw text content of your resume</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div>
-              <Label>Resume Content</Label>
-              <Textarea className="font-mono" value={resumeText} onChange={(e) => setResumeText(e.target.value)} placeholder="Paste your resume content here or upload a file to auto-fill..." rows={16} />
-            </div>
-          </CardContent>
-        </Card>
+        <MinimalCard>
+          <MinimalCardHeader>
+            <MinimalCardTitle>Resume Text</MinimalCardTitle>
+            <MinimalCardDescription>Raw text content of your resume</MinimalCardDescription>
+          </MinimalCardHeader>
+          <MinimalCardContent>
+            <MinimalTextareaField
+              label="Resume Content"
+              value={resumeText}
+              onChange={(e) => setResumeText(e.target.value)}
+              placeholder="Paste your resume content here or upload a file to auto-fill..."
+              rows={16}
+              className="font-mono"
+            />
+          </MinimalCardContent>
+        </MinimalCard>
       )}
 
       {activeTab === 'billing' && <BillingSection />}

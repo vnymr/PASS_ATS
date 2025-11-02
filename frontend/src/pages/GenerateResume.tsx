@@ -14,6 +14,8 @@ export default function GenerateResume() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [generatedResume, setGeneratedResume] = useState('');
+  const [jobId, setJobId] = useState('');
+  const [tailoringDetails, setTailoringDetails] = useState<string[]>([]);
 
   // Load user's resume text from profile
   useEffect(() => {
@@ -47,6 +49,13 @@ export default function GenerateResume() {
     setGeneratedResume('');
 
     try {
+      // Show initial tailoring steps
+      setTailoringDetails([
+        'Analyzing job requirements and key skills',
+        'Matching your experience to job description',
+        'Optimizing keywords for ATS compatibility'
+      ]);
+
       // Use api-adapter.ts signature: generateResume(jobUrl, jobDetails)
       const result = await api.generateResume('', {
         description: jobDescription,
@@ -56,8 +65,17 @@ export default function GenerateResume() {
       });
 
       if (result.jobId) {
+        setJobId(result.jobId);
         setSuccess(true);
-        setGeneratedResume('Your tailored resume has been generated and downloaded!');
+        setGeneratedResume('Your tailored resume has been generated successfully!');
+
+        // Add completion details
+        setTailoringDetails([
+          'Job requirements analyzed',
+          'Experience matched and optimized',
+          'ATS keywords integrated',
+          'Resume formatted and ready for download'
+        ]);
 
         // Show success message
         setTimeout(() => setSuccess(false), 5000);
@@ -66,6 +84,7 @@ export default function GenerateResume() {
       }
     } catch (err: any) {
       setError(err.message || 'Failed to generate resume');
+      setTailoringDetails([]);
     } finally {
       setIsGenerating(false);
     }
@@ -156,9 +175,29 @@ export default function GenerateResume() {
                   <h4 className="text-sm font-semibold" style={{ color: 'var(--text-900)' }}>
                     AI is working its magic…
                   </h4>
-                  <p className="text-xs" style={{ color: 'var(--text-600)' }}>
+                  <p className="text-xs mb-3" style={{ color: 'var(--text-600)' }}>
                     Analyzing job requirements and tailoring your resume
                   </p>
+
+                  {/* Tailoring Details */}
+                  {tailoringDetails.length > 0 && (
+                    <div className="mb-3 space-y-1.5">
+                      {tailoringDetails.map((detail, index) => (
+                        <motion.div
+                          key={index}
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: index * 0.2 }}
+                          className="flex items-center gap-2 text-xs"
+                          style={{ color: 'var(--text-700)' }}
+                        >
+                          <div className="h-1.5 w-1.5 rounded-full bg-primary" />
+                          {detail}
+                        </motion.div>
+                      ))}
+                    </div>
+                  )}
+
                   <div className="mt-3">
                     <div className="h-2 w-full rounded-full overflow-hidden" style={{ backgroundColor: 'var(--background-100)' }}>
                       <motion.div
@@ -186,7 +225,7 @@ export default function GenerateResume() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 10 }}
-              className="rounded-[12px] p-6"
+              className="rounded-[12px] p-6 border border-[rgba(34,197,94,0.2)]"
               style={{ backgroundColor: 'var(--background-50)' }}
             >
               <div className="flex items-center gap-2 mb-3">
@@ -199,10 +238,11 @@ export default function GenerateResume() {
                     color: 'var(--text-900)',
                   }}
                 >
-                  Resume Generated
+                  Resume Generated Successfully
                 </h3>
               </div>
               <p
+                className="mb-4"
                 style={{
                   fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif',
                   fontSize: '14px',
@@ -212,6 +252,56 @@ export default function GenerateResume() {
               >
                 {generatedResume}
               </p>
+
+              {/* What was tailored section */}
+              {tailoringDetails.length > 0 && (
+                <div className="mb-4 p-3 rounded-lg" style={{ backgroundColor: 'var(--background-100)' }}>
+                  <h4 className="text-xs font-semibold mb-2" style={{ color: 'var(--text-700)' }}>
+                    What we optimized:
+                  </h4>
+                  <div className="space-y-1">
+                    {tailoringDetails.map((detail, index) => (
+                      <div key={index} className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-600)' }}>
+                        <Icons.checkCircle size={14} style={{ color: 'var(--secondary-500)' }} />
+                        {detail}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    if (jobId) {
+                      window.open(`${api.base}/api/job/${jobId}/download/pdf`, '_blank');
+                    }
+                  }}
+                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl font-semibold h-11 px-6 transition-all duration-200"
+                  style={{
+                    backgroundColor: 'var(--primary-600)',
+                    color: 'white',
+                    fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif',
+                  }}
+                >
+                  <Icons.download size={18} />
+                  Download PDF
+                </button>
+                <button
+                  onClick={() => navigate('/history')}
+                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl font-semibold h-11 px-6 transition-all duration-200 border"
+                  style={{
+                    backgroundColor: 'white',
+                    color: 'var(--text-700)',
+                    borderColor: 'var(--border-color)',
+                    fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif',
+                  }}
+                >
+                  <Icons.fileText size={18} />
+                  View All Resumes
+                </button>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>

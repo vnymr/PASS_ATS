@@ -90,6 +90,8 @@ router.post('/chat', chatLimiter, validateBody(chatMessageSchema), asyncHandler(
       metadata: metadata || {}
     });
 
+    let doneSent = false;
+
     for await (const event of messageStream) {
       if (!isConnected) {
         break;
@@ -102,6 +104,7 @@ router.post('/chat', chatLimiter, validateBody(chatMessageSchema), asyncHandler(
       try {
         const parsed = JSON.parse(event);
         if (parsed.type === 'error' || parsed.type === 'done') {
+          doneSent = true;
           break;
         }
       } catch {
@@ -110,7 +113,7 @@ router.post('/chat', chatLimiter, validateBody(chatMessageSchema), asyncHandler(
     }
 
     // Send final done event if not already sent
-    if (isConnected) {
+    if (isConnected && !doneSent) {
       res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
     }
 

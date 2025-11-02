@@ -24,53 +24,95 @@ export async function* handleMessage({ conversationId, userId, message, metadata
   try {
     logger.info({ conversationId, userId, messageLength: message.length }, 'Handling message with persona');
 
-    // Load user profile
-    const profile = await getUserProfile(userId);
-    const profileContext = getProfileContext(profile);
+    // IMMEDIATE FEEDBACK: Send thinking indicator right away (0ms perceived delay)
+    yield JSON.stringify({
+      type: 'thinking',
+      content: ''
+    });
 
+    // Append user message to history immediately (non-blocking)
+    const appendPromise = appendMessage(conversationId, { role: 'user', content: message });
+
+    // PARALLEL EXECUTION: Load profile, history, and plan in parallel
+    const [profile, history] = await Promise.all([
+      getUserProfile(userId),
+      getConversation(conversationId)
+    ]);
+
+    const profileContext = getProfileContext(profile);
     logger.info({ userId, hasProfile: !!profile, profileContext: profileContext.substring(0, 100) }, 'Loaded user profile');
 
-    // Get conversation history
-    const history = await getConversation(conversationId);
+    // Ensure user message append completed
+    await appendPromise;
 
-    // Append user message to history
-    await appendMessage(conversationId, { role: 'user', content: message });
+    // Fast path: Check if this is a simple message that doesn't need tools
+    const isSimpleMessage = /^(hi|hey|hello|sup|yo|what can you do|help|thanks|thank you|okay|ok|cool|nice|great)$/i.test(message.trim());
 
-    // Plan actions using persona with profile context and userId for memory
+    // Stream planning progress to frontend in real-time
+    // The LLM will analyze conversation history and decide when to be proactive (like ChatGPT)
+    let planningBuffer = '';
+    const planningStartTime = Date.now();
     const { plan, actions } = await personaPlan({
       message,
       metadata,
-      conversation: history,
+      conversation: history, // Full history allows LLM to detect patterns naturally
       profile,
       profileContext,
-      userId
+      userId,
+      fastMode: isSimpleMessage, // Enable fast mode for simple messages
+      // Stream planning chunks to frontend as they arrive from OpenAI
+      onStream: (chunk) => {
+        planningBuffer += chunk;
+        // Note: We collect chunks but don't send partial JSON to avoid breaking the frontend
+        // The 'thinking' indicator already shows progress
+      }
     });
+
+    const planningTime = Date.now() - planningStartTime;
+    logger.info({ planningTime, actionCount: actions.length }, 'Planning completed');
 
     logger.info({ plan, actionCount: actions.length }, 'Persona generated plan');
 
     let assistantResponse = '';
 
-    // Execute each action
-    for (const action of actions) {
-      if (action.type === 'message') {
-        // Stream message content as text chunks
-        const content = action.content || '';
+    // PARALLEL EXECUTION: Group consecutive tool actions for concurrent execution
+    const actionGroups = groupActionsForParallelExecution(actions);
 
-        // Split into words for smoother streaming effect
-        const words = content.split(' ');
-        for (let i = 0; i < words.length; i++) {
-          const word = words[i];
-          const chunk = i === 0 ? word : ' ' + word;
+    logger.info({
+      totalActions: actions.length,
+      groupCount: actionGroups.length,
+      parallelGroups: actionGroups.filter(g => g.length > 1).length
+    }, 'Grouped actions for parallel execution');
 
-          yield JSON.stringify({
-            type: 'text',
-            content: chunk
-          });
-        }
+    // Execute action groups (some sequential, some parallel)
+    for (const group of actionGroups) {
+      // Single action - execute normally
+      if (group.length === 1) {
+        const action = group[0];
 
-        assistantResponse += content;
+        if (action.type === 'message') {
+          // Stream message content as text chunks (token by token)
+          const content = action.content || '';
 
-      } else if (action.type === 'tool') {
+          // Simulate token-by-token streaming for better UX
+          // Split into words and stream progressively
+          const words = content.split(' ');
+          for (let i = 0; i < words.length; i++) {
+            const chunk = i === 0 ? words[i] : ' ' + words[i];
+
+            yield JSON.stringify({
+              type: 'text',
+              content: chunk
+            });
+
+            // Small delay between words to simulate natural typing and make streaming visible
+            // This prevents chunks from arriving faster than React can render
+            await new Promise(resolve => setTimeout(resolve, 30));
+          }
+
+          assistantResponse += content;
+
+        } else if (action.type === 'tool') {
         // Execute tool via registry
         try {
           logger.info({ tool: action.name, input: action.input }, 'Executing tool action');
@@ -95,6 +137,115 @@ export async function* handleMessage({ conversationId, userId, message, metadata
           // Add tool execution to assistant response for history
           const resultSummary = formatToolResult(action.name, result);
           assistantResponse += `\n${resultSummary}`;
+
+          // TOOL RESULT FEEDBACK LOOP (LLM-native approach):
+          // For search_jobs, let the LLM analyze results and decide if adjustment is needed
+          // PROTECTION: Only trigger feedback loop once to prevent infinite recursion
+          const feedbackAttempted = metadata.feedbackAttempted || false;
+
+          if (action.name === 'search_jobs' &&
+              (result.items?.length === 0 || result.paging?.total === 0) &&
+              !feedbackAttempted) {
+
+            logger.info({
+              tool: action.name,
+              originalInput: action.input,
+              resultCount: result.items?.length || 0
+            }, 'Search returned 0 results, asking LLM to analyze and adjust (first attempt)');
+
+            // Mark feedback as attempted to prevent recursion
+            metadata.feedbackAttempted = true;
+
+            // Ask the LLM to analyze the result and decide what to do
+            const analysisPrompt = `The search returned 0 results. Original parameters: ${JSON.stringify(action.input)}. Should I try a broader search, or would the user prefer to know there are no matches right now?`;
+
+            const followUpPlan = await personaPlan({
+              message: analysisPrompt,
+              metadata, // Pass metadata with feedbackAttempted flag
+              conversation: [
+                ...history,
+                { role: 'user', content: message },
+                { role: 'assistant', content: assistantResponse }
+              ],
+              profile,
+              profileContext,
+              userId,
+              fastMode: false
+            });
+
+            logger.info({
+              followUpActionCount: followUpPlan.actions.length,
+              followUpPlan: followUpPlan.plan
+            }, 'LLM decided on follow-up actions after analyzing 0 results');
+
+            // Execute follow-up actions decided by the LLM
+            // NOTE: If follow-up search also returns 0 results, we won't retry again
+            for (const followUpAction of followUpPlan.actions) {
+              if (followUpAction.type === 'message') {
+                const content = followUpAction.content || '';
+                const words = content.split(' ');
+
+                for (let i = 0; i < words.length; i++) {
+                  const chunk = i === 0 ? words[i] : ' ' + words[i];
+                  yield JSON.stringify({
+                    type: 'text',
+                    content: chunk
+                  });
+                  await new Promise(resolve => setTimeout(resolve, 30));
+                }
+
+                assistantResponse += `\n${content}`;
+
+              } else if (followUpAction.type === 'tool') {
+                // Execute follow-up tool call (will NOT trigger another feedback loop)
+                try {
+                  const followUpResult = await executeToolFromRegistry(
+                    followUpAction.name,
+                    followUpAction.input || {},
+                    ctx
+                  );
+
+                  yield JSON.stringify({
+                    type: 'action',
+                    name: followUpAction.name,
+                    payload: followUpResult
+                  });
+
+                  const followUpSummary = formatToolResult(followUpAction.name, followUpResult);
+                  assistantResponse += `\n${followUpSummary}`;
+
+                  // Log if follow-up also returned 0 results (for monitoring)
+                  if (followUpAction.name === 'search_jobs' &&
+                      (followUpResult.items?.length === 0 || followUpResult.paging?.total === 0)) {
+                    logger.warn({
+                      originalInput: action.input,
+                      followUpInput: followUpAction.input,
+                      userId
+                    }, 'Follow-up search also returned 0 results - no further retries');
+                  }
+
+                } catch (followUpError) {
+                  logger.error({ error: followUpError.message, tool: followUpAction.name }, 'Follow-up tool execution failed');
+
+                  yield JSON.stringify({
+                    type: 'error',
+                    message: `Follow-up search failed: ${followUpError.message}`
+                  });
+
+                  assistantResponse += `\n[Error: ${followUpError.message}]`;
+                }
+              }
+            }
+          } else if (action.name === 'search_jobs' &&
+                     (result.items?.length === 0 || result.paging?.total === 0) &&
+                     feedbackAttempted) {
+            // Second 0-result search - just log it, don't retry again
+            logger.info({
+              tool: action.name,
+              originalInput: action.input,
+              feedbackAttempted: true
+            }, 'Search returned 0 results but feedback already attempted - skipping retry');
+          }
 
         } catch (error) {
           logger.error({ error: error.message, tool: action.name }, 'Tool execution failed');
@@ -167,15 +318,82 @@ export async function* handleMessage({ conversationId, userId, message, metadata
           assistantResponse += clarificationMessage;
         }
       }
+
+      // Multiple actions in group - execute tools in parallel
+      } else if (group.length > 1 && group.every(a => a.type === 'tool')) {
+        logger.info({
+          toolCount: group.length,
+          tools: group.map(a => a.name)
+        }, 'Executing tools in parallel');
+
+        const ctx = {
+          userId,
+          conversationId,
+          metadata
+        };
+
+        // Execute all tools in parallel using Promise.all
+        const startTime = Date.now();
+        const toolPromises = group.map(async (action) => {
+          try {
+            const result = await executeToolFromRegistry(action.name, action.input || {}, ctx);
+            return { success: true, action, result };
+          } catch (error) {
+            logger.error({ error: error.message, tool: action.name }, 'Parallel tool execution failed');
+            return { success: false, action, error };
+          }
+        });
+
+        const results = await Promise.all(toolPromises);
+        const parallelTime = Date.now() - startTime;
+
+        logger.info({
+          toolCount: group.length,
+          parallelTime,
+          successCount: results.filter(r => r.success).length
+        }, 'Parallel tool execution completed');
+
+        // Stream all results
+        for (const { success, action, result, error } of results) {
+          if (success) {
+            yield JSON.stringify({
+              type: 'action',
+              name: action.name,
+              payload: result
+            });
+
+            const resultSummary = formatToolResult(action.name, result);
+            assistantResponse += `\n${resultSummary}`;
+
+            // Check if this search needs follow-up (0 results)
+            if (action.name === 'search_jobs' && (result.items?.length === 0 || result.paging?.total === 0)) {
+              logger.info({
+                tool: action.name,
+                originalInput: action.input
+              }, 'Parallel search returned 0 results, may trigger follow-up');
+              // Note: For simplicity in MVP, we don't trigger feedback loop for parallel searches
+              // This can be added in future if needed
+            }
+          } else {
+            yield JSON.stringify({
+              type: 'error',
+              message: `Tool ${action.name} failed: ${error.message}`
+            });
+
+            assistantResponse += `\n[Error: ${error.message}]`;
+          }
+        }
+      }
     }
 
-    // Append assistant response to history
-    if (assistantResponse.trim()) {
-      await appendMessage(conversationId, { role: 'assistant', content: assistantResponse.trim() });
-    }
-
-    // Send done event
+    // Send done event immediately (don't wait for database writes)
     yield JSON.stringify({ type: 'done' });
+
+    // Append assistant response to history (async, non-blocking)
+    if (assistantResponse.trim()) {
+      appendMessage(conversationId, { role: 'assistant', content: assistantResponse.trim() })
+        .catch(err => logger.error({ error: err.message, conversationId }, 'Failed to append assistant message (non-critical)'));
+    }
 
     // Extract and update profile from conversation (async, don't wait)
     // Do this after streaming completes so we don't slow down the response
@@ -290,4 +508,42 @@ function formatToolResult(toolName, result) {
     default:
       return `Tool ${toolName} executed`;
   }
+}
+
+/**
+ * Group actions for parallel execution
+ * Groups consecutive tool actions together so they can be executed in parallel
+ * Messages and other action types force a new group (must execute sequentially)
+ *
+ * @param {Array} actions - Array of actions from persona planning
+ * @returns {Array<Array>} - Array of action groups
+ *
+ * Example:
+ * Input: [message, tool, tool, message, tool]
+ * Output: [[message], [tool, tool], [message], [tool]]
+ */
+function groupActionsForParallelExecution(actions) {
+  const groups = [];
+  let currentGroup = [];
+
+  for (const action of actions) {
+    // Tool actions can be grouped together for parallel execution
+    if (action.type === 'tool') {
+      currentGroup.push(action);
+    } else {
+      // Non-tool action (message, UNKNOWN, etc.) - flush current group and start new one
+      if (currentGroup.length > 0) {
+        groups.push(currentGroup);
+        currentGroup = [];
+      }
+      groups.push([action]); // Non-tool actions execute alone
+    }
+  }
+
+  // Flush remaining tools
+  if (currentGroup.length > 0) {
+    groups.push(currentGroup);
+  }
+
+  return groups;
 }
