@@ -24,6 +24,8 @@ class CacheManager {
       resumeParsing: 60 * 60,      // 1 hour
       atsKeywords: 60 * 60 * 24,   // 24 hours
       quota: 60 * 5,               // 5 minutes
+      jobList: 60 * 5,             // 5 minutes (job lists change frequently)
+      recommendations: 60 * 10,    // 10 minutes (personalized recommendations)
     };
   }
 
@@ -138,6 +140,42 @@ class CacheManager {
 
   async setUserQuota(userId, quota) {
     return this.set(`user:${userId}:quota`, quota, this.ttl.quota);
+  }
+
+  /**
+   * Cache job listings
+   */
+  async getJobList(cacheKey) {
+    return this.get(`jobs:list:${cacheKey}`);
+  }
+
+  async setJobList(cacheKey, jobs) {
+    return this.set(`jobs:list:${cacheKey}`, jobs, this.ttl.jobList);
+  }
+
+  /**
+   * Cache personalized recommendations
+   */
+  async getRecommendations(userId, cacheKey) {
+    return this.get(`user:${userId}:recs:${cacheKey}`);
+  }
+
+  async setRecommendations(userId, cacheKey, recommendations) {
+    return this.set(`user:${userId}:recs:${cacheKey}`, recommendations, this.ttl.recommendations);
+  }
+
+  async invalidateRecommendations(userId) {
+    // Delete all recommendation keys for a user
+    const pattern = `user:${userId}:recs:*`;
+    try {
+      const keys = await this.redis.keys(pattern);
+      if (keys.length > 0) {
+        await this.redis.del(...keys);
+        logger.debug({ userId, count: keys.length }, 'Invalidated recommendation cache');
+      }
+    } catch (error) {
+      logger.error({ error: error.message, userId }, 'Failed to invalidate recommendations');
+    }
   }
 
   /**

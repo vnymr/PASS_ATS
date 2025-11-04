@@ -219,6 +219,9 @@ model AggregatedJob {
   @@index([isActive, postedDate])
   @@index([source])
   @@index([extractedSkills], type: Gin)
+  @@index([company])
+  @@index([location])
+  @@index([isActive, aiApplyable, postedDate])
 }
 
 model AutoApplication {

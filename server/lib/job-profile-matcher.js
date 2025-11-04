@@ -7,7 +7,7 @@
 
 import { prisma } from './prisma-client.js';
 import logger from './logger.js';
-import { getGeminiClient } from './gemini-client.js';
+import { generateSimpleJsonWithGemini } from './gemini-client.js';
 
 class JobProfileMatcher {
   /**
@@ -470,9 +470,7 @@ class JobProfileMatcher {
    */
   async generateInsights(profile, job, analysis) {
     try {
-      const gemini = getGeminiClient();
-
-      const prompt = `Analyze this job match and provide 3-5 concise insights:
+      const prompt = `Analyze this job match and provide 3-5 concise insights in JSON format.
 
 User Profile:
 - Skills: ${profile.skills.join(', ')}
@@ -490,15 +488,24 @@ Analysis:
 - Experience Match: ${Math.round(analysis.experience.score * 100)}%
 - Overall Score: ${Math.round(((analysis.skills.score * 0.4) + (analysis.experience.score * 0.25)) * 100)}%
 
-Provide insights in this format:
-✅ [Strength]: Brief explanation
-⚠️ [Gap/Concern]: Brief explanation
-💡 [Recommendation]: Brief actionable advice
+Return JSON with structure:
+{
+  "insights": [
+    { "type": "strength", "emoji": "✅", "text": "Brief explanation" },
+    { "type": "gap", "emoji": "⚠️", "text": "Brief explanation" },
+    { "type": "recommendation", "emoji": "💡", "text": "Brief actionable advice" }
+  ]
+}
 
 Keep each insight to 1-2 sentences. Focus on the most important points.`;
 
-      const result = await gemini.generateContent(prompt);
-      const aiInsights = result.response.text();
+      const jsonResponse = await generateSimpleJsonWithGemini(prompt);
+      const data = JSON.parse(jsonResponse);
+
+      // Format insights as text for display
+      const aiInsights = data.insights
+        .map(insight => `${insight.emoji} ${insight.text}`)
+        .join('\n\n');
 
       return aiInsights;
 

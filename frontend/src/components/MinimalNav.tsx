@@ -3,9 +3,10 @@ import { Briefcase, FileText, User, MessageSquare } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 interface NavItem {
-  icon: React.ReactNode;
-  path: string;
+  id: string;
   label: string;
+  icon: typeof Briefcase;
+  path: string;
 }
 
 export default function MinimalNav() {
@@ -13,64 +14,61 @@ export default function MinimalNav() {
   const location = useLocation();
 
   const navItems: NavItem[] = [
-    { icon: <Briefcase className="w-5 h-5" />, path: '/find-jobs', label: 'Jobs' },
-    { icon: <FileText className="w-5 h-5" />, path: '/generate', label: 'Resume' },
-    { icon: <User className="w-5 h-5" />, path: '/profile', label: 'Profile' },
-    { icon: <MessageSquare className="w-5 h-5" />, path: '/happy', label: 'Chat' },
+    { id: 'jobs', label: 'Jobs', icon: Briefcase, path: '/find-jobs' },
+    { id: 'resume', label: 'Resume', icon: FileText, path: '/generate' },
+    { id: 'profile', label: 'Profile', icon: User, path: '/profile' },
+    { id: 'chat', label: 'Chat', icon: MessageSquare, path: '/happy' },
   ];
 
   return (
     <motion.div
-      initial={{ opacity: 0, x: -10 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ duration: 0.4 }}
-      className="fixed left-6 top-6 md:left-8 md:top-8 z-40 flex flex-col gap-3"
+      initial={{ opacity: 0, y: -10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, delay: 0.1 }}
+      className="fixed top-6 left-6 md:top-8 md:left-8 z-30"
     >
-      {navItems.map((item, index) => {
-        const isActive = location.pathname === item.path;
-        return (
-          <motion.button
-            key={item.path}
-            initial={{ opacity: 0, x: -10 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.3, delay: index * 0.05 }}
-            onClick={() => navigate(item.path)}
-            className="p-3 rounded-[12px] shadow-[0_2px_12px_rgba(0,0,0,0.08)] hover:shadow-[0_4px_20px_rgba(0,0,0,0.12)] transition-all duration-200 cursor-pointer relative group"
-            style={{
-              backgroundColor: isActive ? 'var(--primary-600)' : 'var(--card)',
-              color: isActive ? 'white' : 'var(--text-900)',
-            }}
-            onMouseEnter={(e) => {
-              if (!isActive) {
-                e.currentTarget.style.backgroundColor = 'var(--background-100)';
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (!isActive) {
-                e.currentTarget.style.backgroundColor = 'var(--card)';
-              }
-            }}
-            title={item.label}
-          >
-            {item.icon}
+      <div
+        className="flex flex-col gap-1 bg-white/80 backdrop-blur-sm rounded-2xl p-1.5"
+        style={{
+          boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+        }}
+      >
+        {navItems.map((item) => {
+          const Icon = item.icon;
+          const isActive = location.pathname === item.path;
 
-            {/* Tooltip */}
-            <motion.div
-              initial={{ opacity: 0, x: -10 }}
-              whileHover={{ opacity: 1, x: 0 }}
-              className="absolute left-full ml-3 top-1/2 -translate-y-1/2 px-3 py-1.5 rounded-lg whitespace-nowrap pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+          return (
+            <button
+              key={item.id}
+              onClick={() => navigate(item.path)}
+              className="relative p-2.5 rounded-xl transition-all duration-200"
               style={{
-                backgroundColor: 'var(--text-900)',
-                color: 'white',
-                fontSize: '13px',
-                fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif',
+                backgroundColor: isActive ? 'rgba(0,0,0,0.04)' : 'transparent',
+                color: isActive ? 'var(--text-900)' : 'var(--text-500)',
               }}
+              title={item.label}
             >
-              {item.label}
-            </motion.div>
-          </motion.button>
-        );
-      })}
+              <Icon className="w-4.5 h-4.5" />
+
+              {isActive && (
+                <motion.div
+                  layoutId="activeTab"
+                  className="absolute inset-0 rounded-xl"
+                  style={{
+                    backgroundColor: 'rgba(0,0,0,0.04)',
+                    zIndex: -1,
+                  }}
+                  transition={{
+                    type: 'spring',
+                    bounce: 0.2,
+                    duration: 0.6,
+                  }}
+                />
+              )}
+            </button>
+          );
+        })}
+      </div>
     </motion.div>
   );
 }

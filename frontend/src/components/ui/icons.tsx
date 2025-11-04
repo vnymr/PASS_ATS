@@ -84,6 +84,7 @@ import {
   Paperclip,
   BarChart,
   BarChart2,
+  BarChart3,
   PieChart,
   Activity,
   Layers,
@@ -102,7 +103,10 @@ import {
   Infinity,
   Sparkles,
   HelpCircle,
-  Save
+  Save,
+  Hand,
+  MessageCircle,
+  History
 } from 'lucide-react';
 
 export const Icons = {
@@ -190,6 +194,7 @@ export const Icons = {
   paperclip: Paperclip,
   barChart: BarChart,
   barChart2: BarChart2,
+  barChart3: BarChart3,
   pieChart: PieChart,
   activity: Activity,
   layers: Layers,
@@ -209,7 +214,10 @@ export const Icons = {
   sparkles: Sparkles,
   refreshCw: RefreshCw,
   helpCircle: HelpCircle,
-  save: Save
+  save: Save,
+  hand: Hand,
+  messageCircle: MessageCircle,
+  history: History
 };
 
 export default Icons;

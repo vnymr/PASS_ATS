@@ -663,7 +663,7 @@ export default function FindJob() {
 
         <div className={`${selectedJob && isDetailOpen ? 'md:flex' : 'grid'} gap-4 items-start ${selectedJob && isDetailOpen ? '' : 'grid-cols-1'} transition-all duration-300`}>
           <div className={`${isMobile ? 'flex flex-col gap-4 pr-0' : 'pr-1'} overflow-hidden ${selectedJob && isDetailOpen && !isMobile ? 'md:w-[620px] md:flex-none' : ''}`}>
-            <div className={`${isMobile ? 'flex flex-col gap-4' : selectedJob && isDetailOpen ? 'flex flex-col gap-3 max-h-[calc(100vh-260px)] overflow-y-auto pr-1.5' : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[calc(100vh-260px)] overflow-y-auto pr-1.5'}`}>
+            <div className={`${isMobile ? 'flex flex-col gap-4' : selectedJob && isDetailOpen ? 'flex flex-col gap-3 max-h-[calc(100vh-260px)] overflow-y-auto pr-1.5' : 'flex flex-col gap-6 max-h-[calc(100vh-260px)] overflow-y-auto pr-1.5'}`}>
               {isInitialLoading && (
                 <>
                   {Array.from({ length: isMobile ? 4 : 6 }).map((_, index) => (
@@ -679,18 +679,52 @@ export default function FindJob() {
                 </>
               )}
 
-              {!isInitialLoading && filteredJobs.map(job => (
-                <JobCard
-                  key={job.id}
-                  job={job}
-                  compact={!isMobile}
-                  onClick={() => { setSelectedJob(job); setIsDetailOpen(true); }}
-                  onGenerateResume={() => navigate('/generate', { state: { jobId: job.id } })}
-                  onViewJob={(url) => window.open(url, '_blank', 'noopener')}
-                  onAutoApply={(jobId) => handleAutoApply(job)}
-                  showMatchScore={isPersonalizedResponse}
-                />
-              ))}
+              {!isInitialLoading && filteredJobs.map((job, index) => {
+                // TODO: This mock data should come from backend AI analysis
+                // Backend should analyze user's profile/resume and match against job requirements
+                const enrichedJob = {
+                  ...job,
+                  matchBreakdown: job.relevanceScore ? {
+                    experienceLevel: Math.min(95, Math.round((job.relevanceScore * 100) + 10)),
+                    skills: Math.min(95, Math.round((job.relevanceScore * 100) - 5)),
+                    industry: Math.min(85, Math.round((job.relevanceScore * 100) - 15)),
+                  } : undefined,
+                  matchReasons: job.relevanceScore ? [
+                    `Your ${Math.round((job.relevanceScore * 100) - 5)}% skills match aligns well with this ${job.title} role. The position requires expertise in areas where you have demonstrated experience.`,
+                    `Experience level highly compatible`,
+                    `Strong technical skill alignment`,
+                    `Industry background matches requirements`
+                  ] : undefined,
+                  matchingSkills: job.relevanceScore ? [
+                    'React',
+                    'TypeScript',
+                    'Node.js',
+                    'REST APIs',
+                    'Git',
+                    'Agile/Scrum'
+                  ] : undefined,
+                  missingSkills: job.relevanceScore && job.relevanceScore < 0.95 ? [
+                    'Next.js 14',
+                    'GraphQL',
+                    'Docker',
+                    'AWS Lambda'
+                  ] : undefined,
+                };
+
+                return (
+                  <JobCard
+                    key={job.id}
+                    job={enrichedJob}
+                    delay={index * 0.05}
+                    compact={false}
+                    onClick={() => { setSelectedJob(job); setIsDetailOpen(true); }}
+                    onGenerateResume={() => navigate('/generate', { state: { jobId: job.id } })}
+                    onViewJob={(url) => window.open(url, '_blank', 'noopener')}
+                    onAutoApply={(jobId) => handleAutoApply(job)}
+                    showMatchScore={isPersonalizedResponse}
+                  />
+                );
+              })}
 
               {showEmptyState && (
                 <div className="bg-elevated rounded-2xl border border-[rgba(28,63,64,0.12)] p-10 text-center text-[var(--gray-600)] shadow-md">

@@ -12,7 +12,7 @@ interface MatchBreakdown {
   education?: number;
 }
 
-interface JobCardProps {
+interface ComprehensiveJobCardProps {
   job: Job & {
     relevanceScore?: number;
     matchBreakdown?: MatchBreakdown;
@@ -27,12 +27,9 @@ interface JobCardProps {
   onReject?: (jobId: string) => void;
   onSave?: (jobId: string) => void;
   delay?: number;
-  compact?: boolean;
-  onClick?: (job: Job) => void;
-  showMatchScore?: boolean;
 }
 
-export default function JobCard({
+export default function ComprehensiveJobCard({
   job,
   onGenerateResume,
   onViewJob,
@@ -40,9 +37,7 @@ export default function JobCard({
   onReject,
   onSave,
   delay = 0,
-  compact = false,
-  onClick,
-}: JobCardProps) {
+}: ComprehensiveJobCardProps) {
   const matchScore = job.relevanceScore ? Math.round(job.relevanceScore * 100) : 0;
 
   const formatDate = (dateString: string | null | undefined) => {

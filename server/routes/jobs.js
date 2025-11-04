@@ -10,6 +10,7 @@ import jobSyncService from '../lib/job-sync-service.js';
 import jobRecommendationEngine from '../lib/job-recommendation-engine.js';
 import jobProfileMatcher from '../lib/job-profile-matcher.js';
 import logger from '../lib/logger.js';
+import cacheManager from '../lib/cache-manager.js';
 
 const router = express.Router();
 
@@ -56,6 +57,21 @@ router.get('/jobs', async (req, res) => {
 
     // Check if personalized recommendations requested
     if (personalized === 'true' && req.userId) {
+      // Create cache key from parameters
+      const cacheKey = `${filter}-${atsType || 'all'}-${company || 'all'}-${source || 'all'}-${search || 'all'}-${limit}-${offset}`;
+
+      // Try cache first
+      const cached = await cacheManager.getRecommendations(req.userId, cacheKey);
+      if (cached) {
+        logger.debug({ userId: req.userId, cacheKey }, 'Recommendations loaded from cache');
+        // Allow short-term browser caching (60 seconds)
+        res.setHeader('Cache-Control', 'public, max-age=60');
+        return res.json({
+          ...cached,
+          fromCache: true
+        });
+      }
+
       // Use recommendation engine
       const result = await jobRecommendationEngine.getRecommendations(req.userId, {
         filter,
@@ -67,19 +83,21 @@ router.get('/jobs', async (req, res) => {
         offset: parseInt(offset)
       });
 
-      // Prevent caching issues
-      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-      res.setHeader('Pragma', 'no-cache');
-      res.setHeader('Expires', '0');
-
-      return res.json({
+      // Cache the result
+      const response = {
         jobs: result.jobs,
         total: result.total,
         limit: parseInt(limit),
         offset: parseInt(offset),
         hasMore: result.hasMore,
         personalized: true
-      });
+      };
+      await cacheManager.setRecommendations(req.userId, cacheKey, response);
+
+      // Allow short-term browser caching (60 seconds)
+      res.setHeader('Cache-Control', 'public, max-age=60');
+
+      return res.json(response);
     }
 
     // Otherwise, use default (chronological) listing
@@ -113,6 +131,21 @@ router.get('/jobs', async (req, res) => {
         { description: { contains: search, mode: 'insensitive' } },
         { company: { contains: search, mode: 'insensitive' } }
       ];
+    }
+
+    // Create cache key from parameters
+    const cacheKey = `${filter}-${atsType || 'all'}-${company || 'all'}-${source || 'all'}-${search || 'all'}-${limit}-${offset}`;
+
+    // Try cache first
+    const cached = await cacheManager.getJobList(cacheKey);
+    if (cached) {
+      logger.debug({ cacheKey }, 'Job list loaded from cache');
+      // Allow short-term browser caching (60 seconds)
+      res.setHeader('Cache-Control', 'public, max-age=60');
+      return res.json({
+        ...cached,
+        fromCache: true
+      });
     }
 
     // Get jobs with pagination
@@ -152,19 +185,21 @@ router.get('/jobs', async (req, res) => {
       prisma.aggregatedJob.count({ where })
     ]);
 
-    // Prevent caching issues
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
-
-    res.json({
+    // Cache the result
+    const response = {
       jobs,
       total,
       limit: parseInt(limit),
       offset: parseInt(offset),
       hasMore: total > (parseInt(offset) + parseInt(limit)),
       personalized: false
-    });
+    };
+    await cacheManager.setJobList(cacheKey, response);
+
+    // Allow short-term browser caching (60 seconds)
+    res.setHeader('Cache-Control', 'public, max-age=60');
+
+    res.json(response);
 
   } catch (error) {
     logger.error({ error: error.message, code: error.code }, 'Failed to fetch jobs');

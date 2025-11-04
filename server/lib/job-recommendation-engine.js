@@ -14,6 +14,7 @@
 
 import { prisma } from './prisma-client.js';
 import logger from './logger.js';
+import cacheManager from './cache-manager.js';
 
 class JobRecommendationEngine {
   constructor() {
@@ -79,8 +80,15 @@ class JobRecommendationEngine {
         ];
       }
 
+      // PERFORMANCE FIX: Only fetch a reasonable batch to score
+      // Fetch 10x the requested limit to ensure good results after scoring
+      // This prevents loading thousands of jobs into memory
+      const batchSize = Math.min(limit * 10, 1000); // Cap at 1000 jobs max
+
       const jobs = await prisma.aggregatedJob.findMany({
         where,
+        take: batchSize,
+        orderBy: { postedDate: 'desc' }, // Get recent jobs first
         select: {
           id: true,
           title: true,
@@ -381,6 +389,13 @@ class JobRecommendationEngine {
    */
   async getUserProfile(userId) {
     try {
+      // Try cache first
+      const cachedProfile = await cacheManager.getUserProfile(userId);
+      if (cachedProfile) {
+        logger.debug({ userId }, 'User profile loaded from cache');
+        return cachedProfile;
+      }
+
       const profile = await prisma.profile.findUnique({
         where: { userId }
       });
@@ -433,7 +448,7 @@ class JobRecommendationEngine {
         }
       }
 
-      return {
+      const userProfile = {
         skills: skills,
         experience: experienceLevel,
         jobLevel: data.jobLevel || data.desiredRole || 'individual_contributor',
@@ -443,6 +458,12 @@ class JobRecommendationEngine {
         resumeText: data.resumeText || '',
         summary: data.summary || ''
       };
+
+      // Cache the profile for 15 minutes
+      await cacheManager.setUserProfile(userId, userProfile);
+      logger.debug({ userId }, 'User profile cached');
+
+      return userProfile;
     } catch (error) {
       logger.error({ error: error.message, userId }, 'Failed to get user profile');
       return null;
@@ -458,7 +479,7 @@ class JobRecommendationEngine {
       const applications = await prisma.autoApplication.findMany({
         where: { userId },
         select: {
-          aggregatedJobId: true,
+          jobId: true,
           createdAt: true
         },
         orderBy: { createdAt: 'desc' },
@@ -467,7 +488,7 @@ class JobRecommendationEngine {
 
       // Map to interaction format
       return applications.map(app => ({
-        jobId: app.aggregatedJobId,
+        jobId: app.jobId,
         type: 'apply',
         createdAt: app.createdAt
       }));
