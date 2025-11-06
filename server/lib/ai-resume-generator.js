@@ -225,7 +225,7 @@ class AIResumeGenerator {
 
       // Generate LaTeX with enhanced prompts
       const response = await this.openai.chat.completions.create({
-        model: options.model || 'gpt-5',
+        model: options.model || 'gpt-4o-mini',
         messages: [
           {
             role: 'system',
@@ -236,8 +236,8 @@ class AIResumeGenerator {
             content: context.userPrompt
           }
         ],
-        temperature: 0.5, // Lower temperature for more consistent factual output
-        max_completion_tokens: 10000  // Increased for complete LaTeX resume generation
+        temperature: 0.3,  // More deterministic for resume generation
+        max_tokens: 4000  // gpt-4o-mini has 128k context, plenty of room
       });
 
       let latexCode = response.choices[0].message.content.trim();
@@ -302,7 +302,7 @@ class AIResumeGenerator {
         latex: cleanedLatex,
         metadata: {
           generatedAt: new Date().toISOString(),
-          model: options.model || 'gpt-5',
+          model: options.model || 'gpt-4o-mini',
           domain: context.jobAnalysis.domain,
           matchedSkills: context.skillMatch.matched,
           unmatchedKeywords: context.skillMatch.unmatched,
@@ -339,7 +339,7 @@ class AIResumeGenerator {
 
       // Generate LaTeX with simple prompts
       const response = await this.openai.chat.completions.create({
-        model: options.model || 'gpt-5',
+        model: options.model || 'gpt-4o-mini',
         messages: [
           {
             role: 'system',
@@ -350,8 +350,8 @@ class AIResumeGenerator {
             content: context.userPrompt
           }
         ],
-        temperature: 0.5,
-        max_completion_tokens: 10000  // Increased for complete LaTeX resume generation
+        temperature: 0.3,  // More deterministic for resume generation
+        max_tokens: 4000  // gpt-4o-mini has 128k context, plenty of room
       });
 
       let latexCode = response.choices[0].message.content.trim();
@@ -402,7 +402,7 @@ class AIResumeGenerator {
         latex: cleanedLatex,
         metadata: {
           generatedAt: new Date().toISOString(),
-          model: options.model || 'gpt-5',
+          model: options.model || 'gpt-4o-mini',
           approach: 'simple-raw-data',
           dataSize: JSON.stringify(rawUserData).length
         }
@@ -663,13 +663,13 @@ ${JSON.stringify(userData, null, 2)}
 Output only the LaTeX code for the new ${section} section, from \\section{${section}} to the start of the next section.`;
 
     const response = await this.openai.chat.completions.create({
-      model: 'gpt-4',
+      model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: 'You are a LaTeX expert. Output only valid LaTeX code.' },
         { role: 'user', content: prompt }
       ],
-      temperature: 0.7,
-      max_completion_tokens: 1000
+      temperature: 0.3,
+      max_tokens: 1000
     });
 
     return response.choices[0].message.content.trim();

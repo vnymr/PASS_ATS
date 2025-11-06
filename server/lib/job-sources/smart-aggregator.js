@@ -16,6 +16,7 @@
  */
 
 import atsDetector from '../ats-detector.js';
+import aggregatorDetector from '../aggregator-detector.js';
 import { prisma } from '../prisma-client.js';
 import logger from '../logger.js';
 import { getAllCompanies, TOTAL_COMPANIES } from './comprehensive-company-list.js';
@@ -178,8 +179,17 @@ class SmartAggregator {
       }
     }
 
+    // Filter out aggregator jobs (only keep direct postings)
+    const beforeFilter = allJobs.length;
+    const filteredJobs = aggregatorDetector.filterJobs(allJobs);
+    const afterFilter = filteredJobs.length;
+
+    if (beforeFilter > afterFilter) {
+      logger.info(`🔍 Filtered out ${beforeFilter - afterFilter} aggregator jobs (${afterFilter} direct postings remain)`);
+    }
+
     return {
-      jobs: allJobs,
+      jobs: filteredJobs,
       companies: Object.fromEntries(
         Object.entries(companiesByATS).map(([ats, set]) => [ats, Array.from(set)])
       )
@@ -490,67 +500,13 @@ class SmartAggregator {
   }
 
   /**
-   * Fetch from Remotive (remote jobs - free API, direct URLs)
+   * Fetch from Remotive - DISABLED
+   * Remotive is a job aggregator that redirects to other sites
+   * We only want direct job postings from company career pages/ATS platforms
    */
   async fetchFromRemotive() {
-    try {
-      logger.info('📥 Fetching from Remotive (remote jobs)...');
-
-      const response = await this.fetchWithRetry(
-        'https://remotive.com/api/remote-jobs',
-        {},
-        2,
-        10000 // 10s timeout for remote API
-      );
-
-      if (!response.ok) {
-        logger.warn(`Remotive API returned ${response.status}`);
-        return [];
-      }
-
-      const data = await response.json();
-
-      const jobs = (data.jobs || []).map(job => {
-        const atsInfo = atsDetector.detectFromURL(job.url);
-        const companySlug = atsDetector.extractCompanyIdentifier(job.url, atsInfo.atsType);
-
-        // Track discovered companies
-        if (companySlug && atsInfo.atsType !== 'UNKNOWN') {
-          const atsKey = atsInfo.atsType.toLowerCase();
-          if (this.discoveredCompanies[atsKey]) {
-            this.discoveredCompanies[atsKey].add(companySlug);
-          }
-        }
-
-        return {
-          externalId: `remotive_${job.id}`,
-          source: 'remotive',
-          title: job.title,
-          company: job.company_name,
-          location: 'Remote',
-          salary: job.salary || null,
-          description: job.description,
-          applyUrl: job.url, // DIRECT URL
-          postedDate: new Date(job.publication_date),
-
-          // ATS detection
-          atsType: atsInfo.atsType,
-          atsCompany: companySlug,
-          atsComplexity: atsInfo.complexity,
-          atsConfidence: atsInfo.confidence,
-          aiApplyable: atsInfo.aiApplyable
-        };
-      });
-
-      logger.info(`✅ Fetched ${jobs.length} jobs from Remotive`);
-      return jobs;
-
-    } catch (error) {
-      if (error.name !== 'AbortError') {
-        logger.warn(`Remotive fetch failed: ${error.message}`);
-      }
-      return [];
-    }
+    logger.info('📥 Skipping Remotive (aggregator site - not direct postings)');
+    return [];
   }
 
   /**
@@ -575,12 +531,10 @@ class SmartAggregator {
     if (totalDiscovered < 100 || options.forceDiscovery) {
       logger.info('🔍 Running discovery phase (building company list)...');
 
-      const [jsearchResult, remotiveJobs] = await Promise.all([
-        this.discoverViaJSearch(options.jsearch),
-        this.fetchFromRemotive()
-      ]);
+      // Only discover via JSearch (skip Remotive as it's an aggregator)
+      const jsearchResult = await this.discoverViaJSearch(options.jsearch);
 
-      results.push(...jsearchResult.jobs, ...remotiveJobs);
+      results.push(...jsearchResult.jobs);
 
       // Save discovered companies to database
       await this.saveDiscoveredCompanies();

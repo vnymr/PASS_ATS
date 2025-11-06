@@ -1,0 +1,141 @@
+{
+  "metadata": {
+    "url": "https://job-boards.greenhouse.io/gitlab/jobs/8195921002",
+    "domain": "job-boards.greenhouse.io",
+    "company": "Not found",
+    "jobTitle": "Director of Engineering, Security Risk Management",
+    "timestamp": "2025-11-06T19:39:13.021Z",
+    "success": true
+  },
+  "formStructure": {
+    "totalFields": 25,
+    "fieldTypes": {
+      "text": 22,
+      "tel": 1,
+      "file": 2
+    },
+    "requiredFields": [
+      {
+        "name": "unnamed_7",
+        "type": "text",
+        "label": ""
+      },
+      {
+        "name": "unnamed_13",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_15",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_19",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_21",
+        "type": "text",
+        "label": "Select..."
+      }
+    ]
+  },
+  "aiResponses": {
+    "first_name": "Sarah",
+    "last_name": "Martinez",
+    "email": "sarah.martinez@example.com",
+    "country": "United States",
+    "phone": "+1 (555) 345-6789",
+    "candidate-location": "Austin, TX",
+    "unnamed_7": "I am a Senior Software Engineer with six years of professional experience building secure, scalable cloud-native applications. At TechCorp (2020–Present) I led efforts to containerize legacy services using Docker and Kubernetes, migrate critical workloads to AWS, and introduce hardened CI/CD practices that integrated security scanning tools (SAST and container image scanners) into our pipelines. I partnered closely with product and SRE teams to define secure deployment patterns, implement RBAC and network policies in Kubernetes, and codify incident response runbooks—work that materially improved our security posture and speed of delivery.\n\nEarlier at StartupXYZ (2018–2020) I architected authentication and authorization services using OAuth2/OpenID Connect, implemented multi-factor authentication for key user flows, and built automated testing and monitoring that caught vulnerabilities earlier in the SDLC. I combine hands-on engineering with cross-functional leadership—mentoring engineers, running security-focused design reviews, and driving initiatives that balance risk reduction with developer productivity. I’m excited by the Director of Engineering, Security Risk Management role because it would let me apply my technical experience, cloud and Kubernetes expertise, and strong collaborator mindset to scale security engineering practices across an organization.",
+    "resume": "Sarah_Martinez_Resume.pdf",
+    "cover_letter": "Sarah_Martinez_CoverLetter.pdf",
+    "question_33402662002": "https://linkedin.com/in/sarahmartinez",
+    "question_33402663002": "Sarah",
+    "question_33402664002": "United States",
+    "unnamed_13": "Yes",
+    "question_33402665002": "No",
+    "unnamed_15": "Yes",
+    "question_33402666002": "I do not currently require any specific accommodations, but I appreciate an interview process that is structured and transparent. For technical interviews, I find it helpful to receive the format and topics in advance (e.g., whether there will be a systems design exercise, a timed coding challenge, or a hands-on Kubernetes/Cloud scenario) so I can prepare relevant examples and ensure I can demonstrate my skills effectively. Clear agendas and time estimates for each interview segment help me and likely others plan around different time zones and commitments.\n\nIf any adjustments would be useful, I value the option for screen-reader friendly materials, the ability to request short breaks during longer interview blocks, and flexibility on scheduling to accommodate Central Time working hours. I’m also happy to discuss any other accessibility needs should they arise, and I appreciate GitLab’s commitment to making the process inclusive.",
+    "question_33402667002": "sarahmartinez",
+    "question_33402668002": "No",
+    "unnamed_19": "Yes",
+    "question_33402669002": "No",
+    "unnamed_21": "Yes",
+    "gender": "Prefer not to say",
+    "hispanic_ethnicity": "Prefer not to say",
+    "veteran_status": "Not a veteran",
+    "disability_status": "Prefer not to say"
+  },
+  "problemsSolved": [
+    {
+      "problem": "Dropdown \"phone\" failed: Failed to fill custom dropdown \"phone\" after 3 attempts. AI provided: \"+1 (555) 345-6789\". Error: Failed to select: No options found in dropdown. Available options: none",
+      "solution": {
+        "issue": "Failed to analyze screenshot",
+        "solution": "Manual intervention required",
+        "needsManualIntervention": true
+      },
+      "timestamp": "2025-11-06T19:39:13.022Z"
+    },
+    {
+      "problem": "Dropdown \"candidate-location\" failed: Failed to fill custom dropdown \"candidate-location\" after 3 attempts. AI provided: \"Austin, TX\". Error: Failed to select: No options found in dropdown. Available options: none",
+      "timestamp": "2025-11-06T19:39:13.022Z"
+    },
+    {
+      "problem": "Dropdown \"unnamed_7\" failed: Failed to fill custom dropdown \"unnamed_7\" after 3 attempts. AI provided: \"I am a Senior Software Engineer with six years of professional experience building secure, scalable cloud-native applications. At TechCorp (2020–Present) I led efforts to containerize legacy services using Docker and Kubernetes, migrate critical workloads to AWS, and introduce hardened CI/CD practices that integrated security scanning tools (SAST and container image scanners) into our pipelines. I partnered closely with product and SRE teams to define secure deployment patterns, implement RBAC and network policies in Kubernetes, and codify incident response runbooks—work that materially improved our security posture and speed of delivery.\n\nEarlier at StartupXYZ (2018–2020) I architected authentication and authorization services using OAuth2/OpenID Connect, implemented multi-factor authentication for key user flows, and built automated testing and monitoring that caught vulnerabilities earlier in the SDLC. I combine hands-on engineering with cross-functional leadership—mentoring engineers, running security-focused design reviews, and driving initiatives that balance risk reduction with developer productivity. I’m excited by the Director of Engineering, Security Risk Management role because it would let me apply my technical experience, cloud and Kubernetes expertise, and strong collaborator mindset to scale security engineering practices across an organization.\". Error: Failed to select: No options found in dropdown. Available options: none",
+      "timestamp": "2025-11-06T19:39:13.022Z"
+    },
+    {
+      "problem": "Failed to fill resume: No resume file available - user must generate a resume before applying to jobs",
+      "timestamp": "2025-11-06T19:39:13.022Z"
+    },
+    {
+      "problem": "Failed to fill cover_letter: No resume file available - user must generate a resume before applying to jobs",
+      "timestamp": "2025-11-06T19:39:13.022Z"
+    },
+    {
+      "problem": "Dropdown \"unnamed_13\" failed: Failed to fill custom dropdown \"unnamed_13\" after 3 attempts. AI provided: \"Yes\". Error: Failed to select: No options found in dropdown. Available options: none",
+      "timestamp": "2025-11-06T19:39:13.022Z"
+    },
+    {
+      "problem": "Dropdown \"unnamed_15\" failed: Failed to fill custom dropdown \"unnamed_15\" after 3 attempts. AI provided: \"Yes\". Error: Failed to select: No options found in dropdown. Available options: none",
+      "timestamp": "2025-11-06T19:39:13.022Z"
+    },
+    {
+      "problem": "Dropdown \"unnamed_19\" failed: Failed to fill custom dropdown \"unnamed_19\" after 3 attempts. AI provided: \"Yes\". Error: Failed to select: No options found in dropdown. Available options: none",
+      "timestamp": "2025-11-06T19:39:13.022Z"
+    },
+    {
+      "problem": "Dropdown \"unnamed_21\" failed: Failed to fill custom dropdown \"unnamed_21\" after 3 attempts. AI provided: \"Yes\". Error: Failed to select: No options found in dropdown. Available options: none",
+      "timestamp": "2025-11-06T19:39:13.022Z"
+    }
+  ],
+  "patterns": {
+    "commonQuestions": [
+      {
+        "label": "What's the name you'd prefer us to use throughout the interview process?",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What is your GitLab username?",
+        "type": "text",
+        "category": "other"
+      }
+    ],
+    "fieldNamingConventions": {
+      "camelCase": 0,
+      "snake_case": 19,
+      "kebabCase": 1,
+      "standard": 5
+    },
+    "formLayout": {
+      "totalFields": 25,
+      "visibleFields": 25,
+      "requiredFields": 5,
+      "optionalFields": 20
+    }
+  }
+}

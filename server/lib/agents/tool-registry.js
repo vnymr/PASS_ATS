@@ -75,7 +75,7 @@ const TOOLS = {
 
   generate_resume_preview: {
     name: 'generate_resume_preview',
-    description: 'Generate a tailored resume preview for a specific job',
+    description: 'Generate a tailored resume preview for a specific job. You can provide either jobUrl, jobDescription, or jobId.',
     schema: {
       type: 'object',
       properties: {
@@ -84,9 +84,28 @@ const TOOLS = {
           description: 'URL of the job posting',
           pattern: '^https?://.+',
           maxLength: 500
+        },
+        jobDescription: {
+          type: 'string',
+          description: 'Job description text (can be used instead of jobUrl)',
+          maxLength: 5000
+        },
+        jobTitle: {
+          type: 'string',
+          description: 'Job title',
+          maxLength: 200
+        },
+        company: {
+          type: 'string',
+          description: 'Company name',
+          maxLength: 200
+        },
+        jobId: {
+          type: 'string',
+          description: 'Internal job ID from search results (can be used instead of jobUrl)',
+          maxLength: 100
         }
       },
-      required: ['jobUrl'],
       additionalProperties: false
     }
   },
@@ -409,20 +428,40 @@ export function validate(name, input) {
   const tool = TOOLS[name];
 
   if (!tool) {
-    throw new Error(`Unknown tool: ${name}`);
+    logger.error({ toolName: name, availableTools: Object.keys(TOOLS) }, 'Unknown tool requested');
+    throw new Error(`Unknown tool: ${name}. Available tools: ${Object.keys(TOOLS).join(', ')}`);
   }
 
   if (!input || typeof input !== 'object') {
-    throw new Error(`Tool input must be an object`);
+    logger.error({ toolName: name, inputType: typeof input }, 'Invalid tool input type');
+    throw new Error(`Tool ${name} input must be an object, got ${typeof input}`);
   }
 
   const { schema } = tool;
 
-  // Check required fields
+  // Check required fields (with special handling for generate_resume_preview)
   if (schema.required) {
-    for (const field of schema.required) {
-      if (!(field in input)) {
-        throw new Error(`Missing required field: ${field}`);
+    // Special case: generate_resume_preview needs either jobUrl OR jobDescription
+    if (name === 'generate_resume_preview') {
+      if (!input.jobUrl && !input.jobDescription && !input.jobId) {
+        logger.error({
+          toolName: name,
+          providedFields: Object.keys(input)
+        }, 'Missing required field: need jobUrl, jobDescription, or jobId');
+        throw new Error(`Tool ${name} requires at least one of: jobUrl, jobDescription, or jobId`);
+      }
+    } else {
+      // Standard required field validation
+      for (const field of schema.required) {
+        if (!(field in input)) {
+          logger.error({
+            toolName: name,
+            missingField: field,
+            providedFields: Object.keys(input),
+            requiredFields: schema.required
+          }, 'Missing required field');
+          throw new Error(`Tool ${name} missing required field: ${field}. Provided fields: ${Object.keys(input).join(', ')}`);
+        }
       }
     }
   }

@@ -15,22 +15,49 @@
 import { prisma } from './prisma-client.js';
 import logger from './logger.js';
 import cacheManager from './cache-manager.js';
+import { extractAllSkillsFromProfile } from './profile-skill-extractor.js';
 
 class JobRecommendationEngine {
   constructor() {
-    // Weight factors for ranking (based on LinkedIn research)
+    // Weight factors for ranking (ATS best practices + LinkedIn/Indeed research 2024-2025)
+    // 99.7% of recruiters use keyword filters, LinkedIn uses GBDT with contextual features
     this.weights = {
-      skillsMatch: 0.35,          // Heavily weighted (LinkedIn assigns highest weight to skills)
-      experienceMatch: 0.15,
-      jobLevelMatch: 0.15,
-      descriptionSimilarity: 0.10,
-      locationMatch: 0.10,
-      recencyBoost: 0.10,
-      userInteractions: 0.05      // Online learning component
+      keywordMatch: 0.30,           // Primary factor (99.7% of recruiters use this)
+      requiredSkillsMatch: 0.25,    // Must-haves are critical (Boolean logic)
+      preferredSkillsMatch: 0.10,   // Nice-to-haves boost score
+      experienceMatch: 0.15,        // Experience level + years
+      descriptionSimilarity: 0.05,  // Contextual similarity
+      locationMatch: 0.08,          // Location preference
+      recencyBoost: 0.04,           // Newer jobs preferred
+      userInteractions: 0.03        // Engagement signals (clicks, saves, applications)
     };
 
     // User interaction decay (interactions lose weight over time)
     this.interactionDecayDays = 30;
+
+    // Skill synonyms for semantic matching (expanding over time)
+    this.skillSynonyms = {
+      'react': ['react.js', 'reactjs', 'react native'],
+      'javascript': ['js', 'ecmascript', 'es6', 'es2015'],
+      'typescript': ['ts'],
+      'node': ['node.js', 'nodejs'],
+      'python': ['py'],
+      'backend': ['server-side', 'api', 'backend development'],
+      'frontend': ['front-end', 'client-side', 'ui development'],
+      'fullstack': ['full-stack', 'full stack'],
+      'devops': ['dev-ops', 'site reliability'],
+      'kubernetes': ['k8s'],
+      'docker': ['containerization', 'containers'],
+      'aws': ['amazon web services'],
+      'gcp': ['google cloud platform'],
+      'azure': ['microsoft azure'],
+      'sql': ['mysql', 'postgresql', 'postgres', 'database'],
+      'nosql': ['mongodb', 'dynamodb', 'cassandra'],
+      'ci/cd': ['continuous integration', 'continuous deployment'],
+      'agile': ['scrum', 'kanban'],
+      'machine learning': ['ml', 'artificial intelligence', 'ai'],
+      'data science': ['data analysis', 'analytics']
+    };
   }
 
   /**
@@ -47,7 +74,25 @@ class JobRecommendationEngine {
       atsType,
       company,
       source,
-      search
+      search,
+      // New filters (ATS best practices 2024-2025)
+      experienceLevel,        // ['entry', 'junior', 'mid', 'senior', 'lead']
+      minYearsExperience,
+      maxYearsExperience,
+      minSalary,
+      maxSalary,
+      locations,              // Array of location strings
+      workType,               // ['remote', 'hybrid', 'onsite']
+      jobType,                // ['full-time', 'part-time', 'contract', 'internship']
+      postedWithin,           // '24h', '7d', '14d', '30d'
+      requiredSkills,         // Array - Must have ALL (Boolean AND)
+      preferredSkills,        // Array - Nice to have (boost score)
+      excludeSkills,          // Array - Must NOT have (Boolean NOT)
+      companySize,            // ['1-10', '11-50', '51-200', '201-500', '501-1000', '1000+']
+      industries,             // Array of industry strings
+      benefits,               // Array of benefits
+      aiApplyable,            // Boolean filter
+      applicationComplexity   // ['easy', 'medium', 'hard']
     } = options;
 
     try {
@@ -61,23 +106,130 @@ class JobRecommendationEngine {
       // 2. Get user interaction history
       const userInteractions = await this.getUserInteractions(userId);
 
-      // 3. Fetch candidate jobs
+      // 3. Build advanced filter query (ATS best practices)
       const where = { isActive: true };
+      const AND = [];
 
-      if (filter === 'ai_applyable') {
+      // Basic filters
+      if (filter === 'ai_applyable' || aiApplyable === true) {
         where.aiApplyable = true;
-      } else if (filter === 'manual') {
+      } else if (filter === 'manual' || aiApplyable === false) {
         where.aiApplyable = false;
       }
       if (atsType) where.atsType = atsType;
       if (company) where.company = { contains: company, mode: 'insensitive' };
       if (source) where.source = source;
+
+      // Salary range filter (critical for job seekers)
+      if (minSalary || maxSalary) {
+        const salaryFilter = {};
+        if (minSalary) {
+          salaryFilter.gte = parseInt(minSalary);
+        }
+        if (maxSalary) {
+          salaryFilter.lte = parseInt(maxSalary);
+        }
+        // Handle salary stored as string "80000-120000" or "$80k-$120k"
+        AND.push({
+          OR: [
+            { salary: salaryFilter },
+            { salary: { contains: String(minSalary || ''), mode: 'insensitive' } }
+          ]
+        });
+      }
+
+      // Location filter (includes remote, hybrid, onsite)
+      if (locations && locations.length > 0) {
+        const locationFilters = locations.map(loc => ({
+          location: { contains: loc, mode: 'insensitive' }
+        }));
+        AND.push({ OR: locationFilters });
+      }
+
+      // Work type filter
+      if (workType && workType.length > 0) {
+        const workTypeFilters = workType.map(type => ({
+          location: { contains: type, mode: 'insensitive' }
+        }));
+        AND.push({ OR: workTypeFilters });
+      }
+
+      // Posted within filter (recency)
+      if (postedWithin) {
+        const now = new Date();
+        const daysMap = { '24h': 1, '7d': 7, '14d': 14, '30d': 30 };
+        const days = daysMap[postedWithin] || 30;
+        const cutoffDate = new Date(now.getTime() - (days * 24 * 60 * 60 * 1000));
+        where.postedDate = { gte: cutoffDate };
+      }
+
+      // Required skills filter (Boolean AND - must have ALL)
+      // This is a KNOCKOUT filter - jobs without ALL required skills are excluded
+      if (requiredSkills && requiredSkills.length > 0) {
+        const requiredSkillFilters = requiredSkills.map(skill => {
+          const synonyms = this.getSkillSynonyms(skill);
+          const skillPatterns = [skill, ...synonyms].map(s => ({
+            OR: [
+              { extractedSkills: { has: s } },
+              { description: { contains: s, mode: 'insensitive' } },
+              { requirements: { contains: s, mode: 'insensitive' } },
+              { title: { contains: s, mode: 'insensitive' } }
+            ]
+          }));
+          return { OR: skillPatterns };
+        });
+        // Must have ALL required skills (AND logic)
+        AND.push(...requiredSkillFilters);
+      }
+
+      // Exclude skills filter (Boolean NOT - must NOT have ANY)
+      if (excludeSkills && excludeSkills.length > 0) {
+        excludeSkills.forEach(skill => {
+          const synonyms = this.getSkillSynonyms(skill);
+          const excludePatterns = [skill, ...synonyms];
+          excludePatterns.forEach(s => {
+            AND.push({
+              AND: [
+                { NOT: { extractedSkills: { has: s } } },
+                { NOT: { description: { contains: s, mode: 'insensitive' } } },
+                { NOT: { requirements: { contains: s, mode: 'insensitive' } } },
+                { NOT: { title: { contains: s, mode: 'insensitive' } } }
+              ]
+            });
+          });
+        });
+      }
+
+      // Experience level filter
+      if (experienceLevel && experienceLevel.length > 0) {
+        const expFilters = experienceLevel.map(level => ({
+          OR: [
+            { extractedJobLevel: { contains: level, mode: 'insensitive' } },
+            { title: { contains: level, mode: 'insensitive' } },
+            { extractedExperience: { contains: level, mode: 'insensitive' } }
+          ]
+        }));
+        AND.push({ OR: expFilters });
+      }
+
+      // Application complexity filter
+      if (applicationComplexity && applicationComplexity.length > 0) {
+        AND.push({ atsComplexity: { in: applicationComplexity } });
+      }
+
+      // Search query (keyword search across multiple fields)
       if (search) {
         where.OR = [
           { title: { contains: search, mode: 'insensitive' } },
           { description: { contains: search, mode: 'insensitive' } },
-          { company: { contains: search, mode: 'insensitive' } }
+          { company: { contains: search, mode: 'insensitive' } },
+          { extractedSkills: { has: search } }
         ];
+      }
+
+      // Apply all AND conditions
+      if (AND.length > 0) {
+        where.AND = AND;
       }
 
       // PERFORMANCE FIX: Only fetch a reasonable batch to score
@@ -116,12 +268,34 @@ class JobRecommendationEngine {
         }
       });
 
-      // 4. Calculate relevance scores for each job
-      const scoredJobs = jobs.map(job => ({
-        ...job,
-        relevanceScore: this.calculateRelevanceScore(job, userProfile, userInteractions),
-        scoreBreakdown: this.getScoreBreakdown(job, userProfile, userInteractions)
-      }));
+      // 4. Calculate relevance scores for each job with contextual boosting
+      const scoredJobs = jobs.map(job => {
+        const baseScore = this.calculateRelevanceScore(job, userProfile, userInteractions, {
+          requiredSkills,
+          preferredSkills,
+          excludeSkills
+        });
+
+        // Apply contextual boosting (LinkedIn GBDT approach)
+        const contextualBoost = this.calculateContextualBoost(job, userProfile, {
+          minSalary,
+          maxSalary,
+          locations,
+          industries
+        });
+
+        const finalScore = Math.min(baseScore + contextualBoost, 1.0);
+
+        return {
+          ...job,
+          relevanceScore: finalScore,
+          scoreBreakdown: this.getScoreBreakdown(job, userProfile, userInteractions, {
+            requiredSkills,
+            preferredSkills,
+            excludeSkills
+          })
+        };
+      });
 
       // 5. Sort by relevance score (highest first)
       scoredJobs.sort((a, b) => b.relevanceScore - a.relevanceScore);
@@ -142,45 +316,310 @@ class JobRecommendationEngine {
   }
 
   /**
-   * Calculate overall relevance score for a job
+   * Calculate overall relevance score for a job (ATS best practices 2024-2025)
+   * Uses keyword matching (99.7% of recruiters use this) + Boolean skill logic
+   * Enhanced with comprehensive skill extraction from user profile
    */
-  calculateRelevanceScore(job, userProfile, userInteractions) {
-    const skillsScore = this.calculateSkillsMatch(job.extractedSkills, userProfile.skills);
-    const experienceScore = this.calculateExperienceMatch(job.extractedExperience, userProfile.experience);
-    const jobLevelScore = this.calculateJobLevelMatch(job.extractedJobLevel, userProfile.jobLevel);
+  calculateRelevanceScore(job, userProfile, userInteractions, filterOptions = {}) {
+    const { requiredSkills = [], preferredSkills = [], excludeSkills = [] } = filterOptions;
+
+    // 1. Keyword match (primary factor - 99.7% of recruiters use this)
+    // Now uses ALL skills from comprehensive profile analysis
+    const keywordScore = this.calculateKeywordMatch(job, userProfile);
+
+    // 2. Required skills match - check if user has what job needs
+    // Use all user skills (comprehensive extraction) instead of just explicit skills
+    const userSkillsToMatch = userProfile.allSkills || userProfile.skills || [];
+    const requiredSkillsScore = this.calculateRequiredSkillsMatch(job, userSkillsToMatch);
+
+    // 3. Preferred skills (nice to have - boosts score)
+    const preferredSkillsScore = preferredSkills.length > 0
+      ? this.calculatePreferredSkillsMatch(job, preferredSkills)
+      : 0.5; // Neutral if no preferred skills
+
+    // 4. Experience matching - enhanced with total years
+    const experienceScore = this.calculateExperienceMatchEnhanced(
+      job.extractedExperience,
+      userProfile.experience,
+      userProfile.totalYears || 0
+    );
+
+    // 5. Description similarity (contextual)
     const descriptionScore = this.calculateDescriptionSimilarity(job, userProfile);
+
+    // 6. Location match
     const locationScore = this.calculateLocationMatch(job.location, userProfile.preferredLocations);
+
+    // 7. Recency boost (newer jobs preferred)
     const recencyScore = this.calculateRecencyBoost(job.postedDate);
+
+    // 8. User interaction score (engagement signals)
     const interactionScore = this.calculateInteractionScore(job.id, userInteractions);
 
+    // Calculate weighted total using ATS-backed weights
     const totalScore =
-      (skillsScore * this.weights.skillsMatch) +
+      (keywordScore * this.weights.keywordMatch) +
+      (requiredSkillsScore * this.weights.requiredSkillsMatch) +
+      (preferredSkillsScore * this.weights.preferredSkillsMatch) +
       (experienceScore * this.weights.experienceMatch) +
-      (jobLevelScore * this.weights.jobLevelMatch) +
       (descriptionScore * this.weights.descriptionSimilarity) +
       (locationScore * this.weights.locationMatch) +
       (recencyScore * this.weights.recencyBoost) +
       (interactionScore * this.weights.userInteractions);
 
-    // Confidence boost: jobs with high extraction confidence get bonus
-    const confidenceBoost = (job.extractionConfidence || 0.5) * 0.1;
-
-    return Math.min(totalScore + confidenceBoost, 1.0);
+    return Math.min(totalScore, 1.0);
   }
 
   /**
    * Get detailed score breakdown (for debugging/transparency)
    */
-  getScoreBreakdown(job, userProfile, userInteractions) {
+  getScoreBreakdown(job, userProfile, userInteractions, filterOptions = {}) {
+    const { requiredSkills = [], preferredSkills = [] } = filterOptions;
+    const userSkillsToMatch = userProfile.allSkills || userProfile.skills || [];
+
     return {
-      skillsMatch: this.calculateSkillsMatch(job.extractedSkills, userProfile.skills),
-      experienceMatch: this.calculateExperienceMatch(job.extractedExperience, userProfile.experience),
-      jobLevelMatch: this.calculateJobLevelMatch(job.extractedJobLevel, userProfile.jobLevel),
+      keywordMatch: this.calculateKeywordMatch(job, userProfile),
+      requiredSkillsMatch: this.calculateRequiredSkillsMatch(job, userSkillsToMatch),
+      preferredSkillsMatch: preferredSkills.length > 0
+        ? this.calculatePreferredSkillsMatch(job, preferredSkills)
+        : 0.5,
+      experienceMatch: this.calculateExperienceMatchEnhanced(
+        job.extractedExperience,
+        userProfile.experience,
+        userProfile.totalYears || 0
+      ),
       descriptionSimilarity: this.calculateDescriptionSimilarity(job, userProfile),
       locationMatch: this.calculateLocationMatch(job.location, userProfile.preferredLocations),
       recencyBoost: this.calculateRecencyBoost(job.postedDate),
       interactionScore: this.calculateInteractionScore(job.id, userInteractions)
     };
+  }
+
+  /**
+   * Calculate keyword match (primary ATS factor)
+   * Uses ALL skills from comprehensive profile analysis
+   * Keywords in title > description > requirements
+   */
+  calculateKeywordMatch(job, userProfile) {
+    const jobText = `${job.title || ''} ${job.description || ''} ${job.requirements || ''}`.toLowerCase();
+    const jobTitle = (job.title || '').toLowerCase();
+
+    // Use ALL skills from comprehensive analysis
+    const userSkills = userProfile.allSkills || userProfile.skills || [];
+    const userKeywords = [
+      ...userSkills,
+      ...(userProfile.desiredKeywords || []),
+      ...(userProfile.domains || [])
+    ].map(k => k.toLowerCase());
+
+    if (userKeywords.length === 0) {
+      return 0.5;
+    }
+
+    let matchCount = 0;
+    let titleMatchCount = 0;
+    let weightedScore = 0;
+
+    // Track unique matches to avoid double counting
+    const matchedSkills = new Set();
+
+    userKeywords.forEach(keyword => {
+      const synonyms = this.getSkillSynonyms(keyword);
+      const allVariants = [keyword, ...synonyms];
+
+      let keywordMatched = false;
+      allVariants.forEach(variant => {
+        if (jobText.includes(variant) && !matchedSkills.has(variant)) {
+          matchedSkills.add(variant);
+          keywordMatched = true;
+
+          // Weight matches by skill experience
+          const yearsExp = userProfile.skillsWithExperience?.[keyword] || 0;
+          const experienceWeight = Math.min(yearsExp / 5, 1.0); // Max weight at 5+ years
+
+          // Title matches are weighted MUCH higher (3x)
+          if (jobTitle.includes(variant)) {
+            titleMatchCount++;
+            weightedScore += 3.0 * (1 + experienceWeight);
+          } else {
+            weightedScore += 1.0 * (1 + experienceWeight);
+          }
+        }
+      });
+
+      if (keywordMatched) {
+        matchCount++;
+      }
+    });
+
+    // Calculate base score with weighted matches
+    const baseScore = Math.min(matchCount / Math.max(userKeywords.length, 1), 1.0);
+    const weightedMatchScore = Math.min(weightedScore / (userKeywords.length * 2), 1.0);
+
+    // Combine base score with weighted score
+    const finalScore = (baseScore * 0.4) + (weightedMatchScore * 0.6);
+
+    return Math.min(finalScore, 1.0);
+  }
+
+  /**
+   * Calculate required skills match (Boolean AND logic)
+   * Checks if user has skills that match job requirements
+   * Uses comprehensive skill extraction from user profile
+   */
+  calculateRequiredSkillsMatch(job, userSkills) {
+    if (!userSkills || userSkills.length === 0) {
+      return 0.5; // Neutral if no user skills provided
+    }
+
+    const jobText = `${job.title || ''} ${job.description || ''} ${job.requirements || ''}`.toLowerCase();
+    const jobSkills = (job.extractedSkills || []).map(s => s.toLowerCase());
+    const jobKeywords = (job.extractedKeywords || []).map(k => k.toLowerCase());
+
+    // Combine all job skill indicators
+    const allJobSkills = [...jobSkills, ...jobKeywords];
+
+    let matchCount = 0;
+    let totalJobSkills = Math.max(allJobSkills.length, 1);
+
+    // For each job skill, check if user has it
+    allJobSkills.forEach(jobSkill => {
+      const synonyms = this.getSkillSynonyms(jobSkill);
+      const allVariants = [jobSkill, ...synonyms];
+
+      // Check if user has this skill (with variations)
+      const userHasSkill = userSkills.some(userSkill => {
+        const userSkillLower = userSkill.toLowerCase();
+        const userSynonyms = this.getSkillSynonyms(userSkillLower);
+
+        return allVariants.some(variant =>
+          userSkillLower === variant ||
+          userSynonyms.includes(variant) ||
+          variant.includes(userSkillLower) ||
+          userSkillLower.includes(variant)
+        );
+      });
+
+      if (userHasSkill) {
+        matchCount++;
+      }
+    });
+
+    // Score based on how many job requirements user meets
+    const matchRatio = matchCount / totalJobSkills;
+
+    // Boost score if user has many of the required skills
+    if (matchRatio > 0.7) {
+      return Math.min(matchRatio + 0.2, 1.0); // Strong match bonus
+    }
+
+    return matchRatio;
+  }
+
+  /**
+   * Calculate preferred skills match (nice to have - boosts score)
+   */
+  calculatePreferredSkillsMatch(job, preferredSkills) {
+    if (!preferredSkills || preferredSkills.length === 0) {
+      return 0.5;
+    }
+
+    const jobText = `${job.title || ''} ${job.description || ''} ${job.requirements || ''}`.toLowerCase();
+    const jobSkills = (job.extractedSkills || []).map(s => s.toLowerCase());
+
+    let matchCount = 0;
+
+    preferredSkills.forEach(skill => {
+      const synonyms = this.getSkillSynonyms(skill.toLowerCase());
+      const allVariants = [skill.toLowerCase(), ...synonyms];
+
+      const hasSkill = allVariants.some(variant =>
+        jobSkills.includes(variant) || jobText.includes(variant)
+      );
+
+      if (hasSkill) {
+        matchCount++;
+      }
+    });
+
+    // Lenient scoring: any matches are bonus
+    return Math.min((matchCount / preferredSkills.length) + 0.3, 1.0);
+  }
+
+  /**
+   * Calculate contextual boost based on user preferences (LinkedIn GBDT approach)
+   */
+  calculateContextualBoost(job, userProfile, filterOptions = {}) {
+    const { minSalary, maxSalary, locations, industries } = filterOptions;
+    let boost = 0;
+
+    // Salary match boost (+10%)
+    if (minSalary || maxSalary) {
+      const jobSalary = this.extractSalaryFromString(job.salary);
+      if (jobSalary) {
+        const inRange = (!minSalary || jobSalary >= minSalary) &&
+                       (!maxSalary || jobSalary <= maxSalary);
+        if (inRange) {
+          boost += 0.10;
+        }
+      }
+    }
+
+    // Location match boost (+12%)
+    if (locations && locations.length > 0) {
+      const jobLoc = (job.location || '').toLowerCase();
+      const matchesLocation = locations.some(loc =>
+        jobLoc.includes(loc.toLowerCase())
+      );
+      if (matchesLocation) {
+        boost += 0.12;
+      }
+    }
+
+    // Industry match boost (+8%)
+    // TODO: Need to add industry field to job schema
+    // For now, check description for industry keywords
+    if (industries && industries.length > 0) {
+      const jobText = `${job.description || ''} ${job.company || ''}`.toLowerCase();
+      const matchesIndustry = industries.some(ind =>
+        jobText.includes(ind.toLowerCase())
+      );
+      if (matchesIndustry) {
+        boost += 0.08;
+      }
+    }
+
+    return boost;
+  }
+
+  /**
+   * Get skill synonyms for semantic matching
+   */
+  getSkillSynonyms(skill) {
+    const normalized = skill.toLowerCase().trim();
+    return this.skillSynonyms[normalized] || [];
+  }
+
+  /**
+   * Extract numeric salary from string (handles various formats)
+   */
+  extractSalaryFromString(salaryStr) {
+    if (!salaryStr) return null;
+
+    // Remove currency symbols and commas
+    const cleaned = salaryStr.replace(/[$,]/g, '');
+
+    // Extract numbers
+    const matches = cleaned.match(/\d+/g);
+    if (!matches) return null;
+
+    // Handle "80k-120k" format
+    if (salaryStr.toLowerCase().includes('k')) {
+      return parseInt(matches[0]) * 1000;
+    }
+
+    // Handle "80000-120000" format
+    return parseInt(matches[0]);
   }
 
   /**
@@ -246,6 +685,52 @@ class JobRecommendationEngine {
     if (diff === 1) return 0.7;
     if (diff === 2) return 0.4;
     return 0.2;
+  }
+
+  /**
+   * Enhanced experience matching that considers both level and years
+   */
+  calculateExperienceMatchEnhanced(jobExperience, userExperience, userTotalYears) {
+    if (!jobExperience || !userExperience) {
+      return 0.5; // Neutral if unknown
+    }
+
+    // 1. Level-based matching
+    const levelScore = this.calculateExperienceMatch(jobExperience, userExperience);
+
+    // 2. Years-based matching
+    // Extract years from job requirement (e.g., "3+ years", "5-7 years")
+    const jobYearsMatch = jobExperience.match(/(\d+)\s*\+?\s*years?/i);
+    let yearsScore = 0.5; // Default neutral
+
+    if (jobYearsMatch && userTotalYears > 0) {
+      const jobMinYears = parseInt(jobYearsMatch[1]);
+
+      // User has exact or more years than required = perfect
+      if (userTotalYears >= jobMinYears) {
+        yearsScore = 1.0;
+      }
+      // User has 80% of required years = good match
+      else if (userTotalYears >= jobMinYears * 0.8) {
+        yearsScore = 0.8;
+      }
+      // User has 60% of required years = acceptable
+      else if (userTotalYears >= jobMinYears * 0.6) {
+        yearsScore = 0.6;
+      }
+      // User has less than 60% = lower score
+      else {
+        yearsScore = 0.3;
+      }
+
+      // Bonus if user is overqualified (but not too much to avoid overqualification penalty)
+      if (userTotalYears > jobMinYears && userTotalYears <= jobMinYears * 1.5) {
+        yearsScore = Math.min(yearsScore + 0.1, 1.0);
+      }
+    }
+
+    // Combine level score (60%) and years score (40%)
+    return (levelScore * 0.6) + (yearsScore * 0.4);
   }
 
   extractExperienceLevel(experienceText, levels) {
@@ -385,7 +870,7 @@ class JobRecommendationEngine {
   }
 
   /**
-   * Get user profile with skills, experience, etc.
+   * Get user profile with comprehensive skill extraction
    */
   async getUserProfile(userId) {
     try {
@@ -404,64 +889,53 @@ class JobRecommendationEngine {
         return null;
       }
 
-      // Extract relevant fields from profile JSON
       const data = profile.data;
 
-      // Derive experience level from experiences array if not explicitly set
-      let experienceLevel = data.experience || data.yearsOfExperience || 'mid';
-      if (!data.experience && data.experiences && Array.isArray(data.experiences)) {
-        // Count years of experience from experiences array
-        const yearCount = data.experiences.length; // Rough estimate: 1 job = ~2 years
-        if (yearCount === 0) experienceLevel = 'entry';
-        else if (yearCount === 1) experienceLevel = 'junior';
-        else if (yearCount === 2) experienceLevel = 'mid';
-        else if (yearCount === 3) experienceLevel = 'senior';
-        else experienceLevel = 'senior'; // 4+ experiences = senior
-      }
-
-      // Extract skills from resume text if skills array is empty
-      let skills = data.skills || [];
-      if (skills.length === 0 && data.resumeText) {
-        // Extract common tech skills from resume
-        const techSkills = ['JavaScript', 'Python', 'Java', 'TypeScript', 'React', 'Node.js', 'AWS', 'Docker', 'SQL', 'MongoDB', 'Kubernetes', 'Go', 'Ruby', 'PHP', 'C++', 'Swift', 'Kotlin'];
-        const resumeLower = data.resumeText.toLowerCase();
-        skills = techSkills.filter(skill => resumeLower.includes(skill.toLowerCase()));
-      }
+      // COMPREHENSIVE SKILL EXTRACTION using LLM
+      // This analyzes ALL parts of the profile: experiences, education, projects, etc.
+      const skillAnalysis = await extractAllSkillsFromProfile(data);
 
       // Build preferred locations array
       let preferredLocations = data.preferredLocations || data.locations || [];
       if (preferredLocations.length === 0 && data.location) {
-        // Use singular location if available
         preferredLocations = [data.location];
       }
 
-      // Extract keywords from summary and resume if not explicitly set
-      let desiredKeywords = data.desiredKeywords || data.keywords || [];
-      if (desiredKeywords.length === 0) {
-        // Use skills as keywords
-        desiredKeywords = skills;
-
-        // Add keywords from summary
-        if (data.summary) {
-          const summaryKeywords = data.summary.toLowerCase().match(/\b(backend|frontend|full.?stack|devops|data|machine learning|ai|api|cloud|mobile|web|senior|lead)\b/g) || [];
-          desiredKeywords = [...desiredKeywords, ...summaryKeywords];
-        }
-      }
+      // Use comprehensive skill list as keywords
+      const desiredKeywords = data.desiredKeywords || data.keywords || skillAnalysis.allSkills;
 
       const userProfile = {
-        skills: skills,
-        experience: experienceLevel,
+        // Core technical skills (high confidence)
+        skills: skillAnalysis.coreSkills,
+        // ALL skills including soft skills
+        allSkills: skillAnalysis.allSkills,
+        // Skills with years of experience
+        skillsWithExperience: skillAnalysis.skillsWithExperience,
+        // Domain expertise
+        domains: skillAnalysis.domains,
+        // Soft skills
+        softSkills: skillAnalysis.softSkills,
+        // Experience level (from comprehensive analysis)
+        experience: skillAnalysis.seniorityLevel,
+        // Total years of experience
+        totalYears: skillAnalysis.totalYearsExperience,
         jobLevel: data.jobLevel || data.desiredRole || 'individual_contributor',
         preferredLocations: preferredLocations,
         desiredKeywords: desiredKeywords,
         education: Array.isArray(data.education) ? data.education[0]?.degree || '' : (data.education || ''),
         resumeText: data.resumeText || '',
-        summary: data.summary || ''
+        summary: data.summary || '',
+        // Store raw experiences for context
+        experiences: data.experiences || []
       };
 
       // Cache the profile for 15 minutes
       await cacheManager.setUserProfile(userId, userProfile);
-      logger.debug({ userId }, 'User profile cached');
+      logger.debug({
+        userId,
+        skillsCount: skillAnalysis.allSkills.length,
+        coreSkillsCount: skillAnalysis.coreSkills.length
+      }, 'User profile with comprehensive skills cached');
 
       return userProfile;
     } catch (error) {

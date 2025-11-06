@@ -10,7 +10,6 @@
  */
 
 import Queue from 'bull';
-import recipeEngine from './recipe-engine.js';
 import { prisma } from './prisma-client.js';
 import logger from './logger.js';
 import OptimizedAutoApply from './optimized-auto-apply.js';
@@ -21,9 +20,6 @@ const optimizedEngine = new OptimizedAutoApply({
   maxPagesPerBrowser: parseInt(process.env.MAX_PAGES_PER_BROWSER) || 5,
   cacheSize: parseInt(process.env.CACHE_SIZE) || 1000
 });
-
-// Strategy selector
-const APPLY_STRATEGY = process.env.APPLY_STRATEGY || 'AI_FIRST';
 
 /**
  * Apply to job using optimized AI engine
@@ -55,25 +51,21 @@ async function applyWithOptimizedAI(jobUrl, user, jobData) {
         success: false,
         error: result.errors.join('; '),
         method: 'OPTIMIZED_AUTO',
-        cost: result.cost,
         details: result
       };
     }
 
     logger.info(`✅ Optimized application successful!`);
     logger.info(`   Duration: ${result.duration}ms`);
-    logger.info(`   Cost: $${result.cost.toFixed(4)}`);
     logger.info(`   Cache hit rate: ${result.cacheStats?.hitRate || 'N/A'}`);
 
     return {
       success: true,
       method: 'OPTIMIZED_AUTO',
-      cost: result.cost,
       screenshot: result.screenshot,
       confirmationData: {
         fieldsExtracted: result.fieldsExtracted,
         fieldsFilled: result.fieldsFilled,
-        aiCost: result.cost,
         complexity: result.complexity,
         duration: result.duration,
         cacheStats: result.cacheStats
@@ -86,8 +78,7 @@ async function applyWithOptimizedAI(jobUrl, user, jobData) {
     return {
       success: false,
       error: error.message,
-      method: 'OPTIMIZED_AUTO',
-      cost: 0
+      method: 'OPTIMIZED_AUTO'
     };
   }
 }
@@ -150,28 +141,9 @@ autoApplyQueue.process(parseInt(process.env.CONCURRENCY) || 6, async (job) => {
     // Apply using optimized AI engine
     let result;
 
-    if (APPLY_STRATEGY === 'AI_FIRST' || APPLY_STRATEGY === 'AI_ONLY') {
-      // Try optimized AI first
-      result = await applyWithOptimizedAI(jobUrl, user, job.data);
-
-      // Fallback to recipes if AI fails and in AI_FIRST mode
-      if (!result.success && APPLY_STRATEGY === 'AI_FIRST') {
-        logger.warn('Optimized AI failed, falling back to recipe engine...');
-        result = await recipeEngine.applyToJob(
-          jobUrl,
-          atsType,
-          user.profile.data
-        );
-      }
-    } else {
-      // RECIPE_ONLY mode
-      logger.info('📜 Using recipe engine...');
-      result = await recipeEngine.applyToJob(
-        jobUrl,
-        atsType,
-        user.profile.data
-      );
-    }
+    // Apply using optimized AI (only supported method)
+    logger.info('🚀 Using optimized AI engine...');
+    result = await applyWithOptimizedAI(jobUrl, user, job.data);
 
     if (result.success) {
       // Success!
@@ -193,14 +165,12 @@ autoApplyQueue.process(parseInt(process.env.CONCURRENCY) || 6, async (job) => {
       logger.info({
         applicationId,
         method: result.method,
-        cost: result.cost,
         duration: result.confirmationData?.duration
       }, '✅ Application submitted successfully (optimized)');
 
       return {
         success: true,
         applicationId,
-        cost: result.cost,
         method: result.method
       };
 
@@ -208,7 +178,6 @@ autoApplyQueue.process(parseInt(process.env.CONCURRENCY) || 6, async (job) => {
       // Failed
       const errorType = result.needsConfiguration ? 'CONFIGURATION_ERROR' :
                        result.needsInstall ? 'DEPENDENCY_ERROR' :
-                       result.needsRecording ? 'NO_RECIPE' :
                        result.needsManualIntervention ? 'MANUAL_REQUIRED' :
                        'APPLICATION_ERROR';
 
@@ -219,7 +188,6 @@ autoApplyQueue.process(parseInt(process.env.CONCURRENCY) || 6, async (job) => {
           error: result.error,
           errorType,
           completedAt: new Date(),
-          cost: result.cost || 0,
           retryCount: job.attemptsMade
         }
       });

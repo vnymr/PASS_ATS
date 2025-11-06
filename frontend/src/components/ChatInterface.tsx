@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LayoutGrid } from 'lucide-react';
+import { LayoutGrid, Briefcase } from 'lucide-react';
 import { UserButton } from '@clerk/clerk-react';
 import MinimalNav from './MinimalNav';
 import { ProcessingStep } from './happy/ProcessingStep';
@@ -11,6 +11,7 @@ import { RoutineCard } from './happy/RoutineCard';
 import { ProgressCard } from './happy/ProgressCard';
 import { ApplicationCard } from './happy/ApplicationCard';
 import { RoutinesPanel } from './happy/RoutinesPanel';
+import { DashboardPanel } from './happy/DashboardPanel';
 
 export type ContentType = 'jobs' | 'routines' | 'progress' | 'actions' | 'applications' | 'overview' | 'resume' | 'general';
 
@@ -63,6 +64,7 @@ export default function ChatInterface({
   const [isLoading, setIsLoading] = useState(false);
   const [currentProcessing, setCurrentProcessing] = useState<ProcessingTool[]>([]);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
+  const [isDashboardPanelOpen, setIsDashboardPanelOpen] = useState(false);
   const [streamingMessageIndex, setStreamingMessageIndex] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -325,26 +327,48 @@ export default function ChatInterface({
       {/* Minimal Left Navigation */}
       <MinimalNav />
 
-      {/* Top Right - User Button and Dashboard Button */}
+      {/* Top Right - User Button and Panel Buttons */}
       <div className="fixed top-6 right-6 md:top-8 md:right-8 z-40 flex items-center gap-3">
         {showDashboard && (
-          <motion.button
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.2 }}
-            onClick={(e) => {
-              e.stopPropagation();
-              setIsPanelOpen(true);
-            }}
-            className="p-3 bg-card rounded-[12px] shadow-[0_2px_12px_rgba(0,0,0,0.08)] hover:shadow-[0_4px_20px_rgba(0,0,0,0.12)] transition-all duration-200 cursor-pointer"
-            style={{
-              color: 'var(--text-900)'
-            }}
-            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--background-100)'}
-            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'var(--card)'}
-          >
-            <LayoutGrid className="w-5 h-5" />
-          </motion.button>
+          <>
+            <motion.button
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.2 }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsPanelOpen(true);
+              }}
+              className="p-3 bg-card rounded-[12px] shadow-[0_2px_12px_rgba(0,0,0,0.08)] hover:shadow-[0_4px_20px_rgba(0,0,0,0.12)] transition-all duration-200 cursor-pointer"
+              style={{
+                color: 'var(--text-900)'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--background-100)'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'var(--card)'}
+              title="Routines"
+            >
+              <LayoutGrid className="w-5 h-5" />
+            </motion.button>
+
+            <motion.button
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.25 }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsDashboardPanelOpen(true);
+              }}
+              className="p-3 bg-card rounded-[12px] shadow-[0_2px_12px_rgba(0,0,0,0.08)] hover:shadow-[0_4px_20px_rgba(0,0,0,0.12)] transition-all duration-200 cursor-pointer"
+              style={{
+                color: 'var(--text-900)'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--background-100)'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'var(--card)'}
+              title="Applications Dashboard"
+            >
+              <Briefcase className="w-5 h-5" />
+            </motion.button>
+          </>
         )}
 
         <motion.div
@@ -409,7 +433,8 @@ export default function ChatInterface({
                       fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif',
                       color: 'var(--text-900, #1a1a1a)',
                       fontSize: '16px',
-                      lineHeight: '1.6'
+                      lineHeight: '1.6',
+                      fontWeight: 600
                     }}
                   >
                     {message.content}
@@ -630,7 +655,7 @@ export default function ChatInterface({
                 }}
                 autoComplete="off"
                 spellCheck="false"
-                placeholder={isLoading ? 'AI is thinking...' : placeholder}
+                placeholder={placeholder}
               />
               {!input && !isTyping && messages.length === 0 && !placeholder && (
                 <motion.div
@@ -658,6 +683,18 @@ export default function ChatInterface({
             <RoutinesPanel
               isOpen={isPanelOpen}
               onClose={() => setIsPanelOpen(false)}
+            />
+          )}
+        </AnimatePresence>
+      )}
+
+      {/* Dashboard Panel */}
+      {showDashboard && (
+        <AnimatePresence>
+          {isDashboardPanelOpen && (
+            <DashboardPanel
+              isOpen={isDashboardPanelOpen}
+              onClose={() => setIsDashboardPanelOpen(false)}
             />
           )}
         </AnimatePresence>

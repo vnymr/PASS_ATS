@@ -27,7 +27,7 @@ class RecipeEngine {
     if (recipe) {
       logger.info({ recipeId: recipe.id, platform: recipe.platform }, 'Found existing recipe, replaying...');
 
-      // Try Puppeteer replay (cheap!)
+      // Try Playwright replay (cheap!)
       const result = await this.replayRecipe(recipe, jobUrl, userData);
 
       if (result.success) {
@@ -35,12 +35,12 @@ class RecipeEngine {
         await this.trackExecution(recipe.id, true, 'REPLAY', result.cost);
         await this.updateRecipeStats(recipe.id, true);
 
-        logger.info('✅ Applied using Puppeteer replay - cost $0.05');
+        logger.info('✅ Applied using Playwright replay - cost $0.05');
         return result;
       }
 
       // Replay failed, fall back to BrowserUse
-      logger.warn({ error: result.error }, 'Puppeteer replay failed, falling back to BrowserUse');
+      logger.warn({ error: result.error }, 'Playwright replay failed, falling back to BrowserUse');
     }
 
     // Step 2: No recipe or replay failed → Use BrowserUse

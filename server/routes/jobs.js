@@ -52,7 +52,25 @@ router.get('/jobs', async (req, res) => {
       search,                   // Search in title/description
       personalized = 'false',   // Use personalized recommendations
       limit = '50',
-      cursor                    // Cursor for pagination (job ID)
+      cursor,                   // Cursor for pagination (job ID)
+      // New filters (ATS best practices 2024-2025)
+      experienceLevel,          // Comma-separated: 'entry,mid,senior'
+      minYearsExperience,
+      maxYearsExperience,
+      minSalary,
+      maxSalary,
+      locations,                // Comma-separated: 'remote,San Francisco,New York'
+      workType,                 // Comma-separated: 'remote,hybrid,onsite'
+      jobType,                  // Comma-separated: 'full-time,contract'
+      postedWithin,             // '24h', '7d', '14d', '30d'
+      requiredSkills,           // Comma-separated: 'React,TypeScript'
+      preferredSkills,          // Comma-separated: 'Next.js,GraphQL'
+      excludeSkills,            // Comma-separated: 'PHP,jQuery'
+      companySize,              // Comma-separated: '11-50,51-200'
+      industries,               // Comma-separated: 'fintech,healthcare'
+      benefits,                 // Comma-separated: '401k,remote'
+      aiApplyable,              // 'true' or 'false'
+      applicationComplexity     // Comma-separated: 'easy,medium'
     } = req.query;
 
     // Check if personalized recommendations requested
@@ -72,7 +90,10 @@ router.get('/jobs', async (req, res) => {
         });
       }
 
-      // Use recommendation engine
+      // Parse array parameters (comma-separated strings)
+      const parseArray = (str) => str ? str.split(',').map(s => s.trim()).filter(Boolean) : undefined;
+
+      // Use recommendation engine with all new filters
       const result = await jobRecommendationEngine.getRecommendations(req.userId, {
         filter,
         atsType,
@@ -80,7 +101,25 @@ router.get('/jobs', async (req, res) => {
         source,
         search,
         limit: parseInt(limit),
-        cursor
+        cursor,
+        // New filters
+        experienceLevel: parseArray(experienceLevel),
+        minYearsExperience: minYearsExperience ? parseInt(minYearsExperience) : undefined,
+        maxYearsExperience: maxYearsExperience ? parseInt(maxYearsExperience) : undefined,
+        minSalary: minSalary ? parseInt(minSalary) : undefined,
+        maxSalary: maxSalary ? parseInt(maxSalary) : undefined,
+        locations: parseArray(locations),
+        workType: parseArray(workType),
+        jobType: parseArray(jobType),
+        postedWithin,
+        requiredSkills: parseArray(requiredSkills),
+        preferredSkills: parseArray(preferredSkills),
+        excludeSkills: parseArray(excludeSkills),
+        companySize: parseArray(companySize),
+        industries: parseArray(industries),
+        benefits: parseArray(benefits),
+        aiApplyable: aiApplyable === 'true' ? true : aiApplyable === 'false' ? false : undefined,
+        applicationComplexity: parseArray(applicationComplexity)
       });
 
       // Cache the result
@@ -102,8 +141,16 @@ router.get('/jobs', async (req, res) => {
 
     // Otherwise, use default (chronological) listing
     const where = { isActive: true };
+    const AND = [];
 
-    // Apply filters
+    // Filter out aggregator sources (only show direct job postings)
+    const aggregatorSources = ['remotive', 'remote.co', 'weworkremotely', 'remoteok', 'flexjobs'];
+    where.source = { notIn: aggregatorSources };
+
+    // Parse array parameters (comma-separated strings)
+    const parseArray = (str) => str ? str.split(',').map(s => s.trim()).filter(Boolean) : undefined;
+
+    // Apply basic filters
     if (filter === 'ai_applyable') {
       where.aiApplyable = true;
     } else if (filter === 'manual') {
@@ -122,6 +169,7 @@ router.get('/jobs', async (req, res) => {
     }
 
     if (source) {
+      // Override the aggregator filter if user explicitly requests a specific source
       where.source = source;
     }
 
@@ -133,8 +181,137 @@ router.get('/jobs', async (req, res) => {
       ];
     }
 
-    // Create cache key from parameters
-    const cacheKey = `${filter}-${atsType || 'all'}-${company || 'all'}-${source || 'all'}-${search || 'all'}-${limit}-${cursor || 'start'}`;
+    // Apply advanced filters
+    // aiApplyable filter (only if filter param doesn't already set it)
+    if (filter !== 'ai_applyable' && filter !== 'manual') {
+      if (aiApplyable === 'true') {
+        where.aiApplyable = true;
+      } else if (aiApplyable === 'false') {
+        where.aiApplyable = false;
+      }
+    }
+
+    // Experience level filter (check extractedJobLevel)
+    const experienceLevels = parseArray(experienceLevel);
+    if (experienceLevels && experienceLevels.length > 0) {
+      const levelFilters = experienceLevels.map(level => ({
+        extractedJobLevel: { contains: level, mode: 'insensitive' }
+      }));
+      AND.push({ OR: levelFilters });
+    }
+
+    // Salary range filter
+    if (minSalary || maxSalary) {
+      const salaryFilter = {};
+      if (minSalary) {
+        salaryFilter.gte = parseInt(minSalary);
+      }
+      if (maxSalary) {
+        salaryFilter.lte = parseInt(maxSalary);
+      }
+      // Handle salary stored as string "80000-120000" or "$80k-$120k"
+      AND.push({
+        OR: [
+          { salary: salaryFilter },
+          { salary: { contains: String(minSalary || maxSalary || ''), mode: 'insensitive' } }
+        ]
+      });
+    }
+
+    // Location filter (includes remote, hybrid, onsite)
+    const locationsArray = parseArray(locations);
+    if (locationsArray && locationsArray.length > 0) {
+      const locationFilters = locationsArray.map(loc => ({
+        location: { contains: loc, mode: 'insensitive' }
+      }));
+      AND.push({ OR: locationFilters });
+    }
+
+    // Work type filter (remote, hybrid, onsite)
+    const workTypes = parseArray(workType);
+    if (workTypes && workTypes.length > 0) {
+      const workTypeFilters = workTypes.map(type => ({
+        location: { contains: type, mode: 'insensitive' }
+      }));
+      AND.push({ OR: workTypeFilters });
+    }
+
+    // Posted within filter (recency)
+    if (postedWithin) {
+      const now = new Date();
+      let daysAgo = 30; // default
+      if (postedWithin === '24h') daysAgo = 1;
+      else if (postedWithin === '7d') daysAgo = 7;
+      else if (postedWithin === '14d') daysAgo = 14;
+      else if (postedWithin === '30d') daysAgo = 30;
+
+      const sinceDate = new Date(now);
+      sinceDate.setDate(sinceDate.getDate() - daysAgo);
+      AND.push({ postedDate: { gte: sinceDate } });
+    }
+
+    // Required skills filter (must have ALL)
+    const requiredSkillsArray = parseArray(requiredSkills);
+    if (requiredSkillsArray && requiredSkillsArray.length > 0) {
+      const skillFilters = requiredSkillsArray.map(skill => ({
+        OR: [
+          { extractedSkills: { contains: skill, mode: 'insensitive' } },
+          { description: { contains: skill, mode: 'insensitive' } },
+          { requirements: { contains: skill, mode: 'insensitive' } }
+        ]
+      }));
+      // All skills must be present (AND condition)
+      AND.push(...skillFilters);
+    }
+
+    // Exclude skills filter (must NOT have)
+    const excludeSkillsArray = parseArray(excludeSkills);
+    if (excludeSkillsArray && excludeSkillsArray.length > 0) {
+      const excludeFilters = excludeSkillsArray.map(skill => ({
+        AND: [
+          { NOT: { extractedSkills: { contains: skill, mode: 'insensitive' } } },
+          { NOT: { description: { contains: skill, mode: 'insensitive' } } },
+          { NOT: { requirements: { contains: skill, mode: 'insensitive' } } }
+        ]
+      }));
+      AND.push(...excludeFilters);
+    }
+
+    // Application complexity filter
+    const complexityArray = parseArray(applicationComplexity);
+    if (complexityArray && complexityArray.length > 0) {
+      const complexityFilters = complexityArray.map(comp => ({
+        atsComplexity: { contains: comp, mode: 'insensitive' }
+      }));
+      AND.push({ OR: complexityFilters });
+    }
+
+    // Combine all AND conditions
+    if (AND.length > 0) {
+      where.AND = AND;
+    }
+
+    // Create cache key from parameters (include all filters)
+    const filterKey = [
+      filter,
+      atsType || 'all',
+      company || 'all',
+      source || 'all',
+      search || 'all',
+      experienceLevel || 'all',
+      minSalary || 'all',
+      maxSalary || 'all',
+      locations || 'all',
+      workType || 'all',
+      postedWithin || 'all',
+      requiredSkills || 'all',
+      excludeSkills || 'all',
+      aiApplyable || 'all',
+      applicationComplexity || 'all',
+      limit,
+      cursor || 'start'
+    ].join('-');
+    const cacheKey = filterKey;
 
     // Try cache first
     const cached = await cacheManager.getJobList(cacheKey);

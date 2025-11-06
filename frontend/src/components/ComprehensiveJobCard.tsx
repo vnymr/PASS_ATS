@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { MapPin, Briefcase, DollarSign, Clock, Users, ExternalLink, Sparkles, Zap, X, Heart, TrendingUp, AlertCircle, CheckCircle2, Building, Calendar } from 'lucide-react';
+import { MapPin, Briefcase, DollarSign, Clock, Users, ExternalLink, Sparkles, Zap, X, Heart, TrendingUp, AlertCircle, CheckCircle2, Building, Calendar, Lightbulb } from 'lucide-react';
 import { Job } from '../services/api';
 import { htmlToPlainText } from '../utils/htmlCleaner';
 import CompanyLogo from './CompanyLogo';
@@ -403,7 +403,10 @@ export default function ComprehensiveJobCard({
                       lineHeight: '1.5',
                     }}
                   >
-                    💡 Generate an optimized resume highlighting relevant skills to increase your match score
+                    <span className="flex items-center gap-1">
+                      <Lightbulb className="w-3 h-3" />
+                      Generate an optimized resume highlighting relevant skills to increase your match score
+                    </span>
                   </p>
                 </div>
               </div>

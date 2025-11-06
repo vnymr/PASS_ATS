@@ -1,0 +1,133 @@
+{
+  "metadata": {
+    "url": "https://job-boards.greenhouse.io/gitlab/jobs/8195921002",
+    "domain": "job-boards.greenhouse.io",
+    "company": "Not found",
+    "jobTitle": "Director of Engineering, Security Risk Management",
+    "timestamp": "2025-11-06T19:46:42.681Z",
+    "success": true
+  },
+  "formStructure": {
+    "totalFields": 25,
+    "fieldTypes": {
+      "text": 22,
+      "tel": 1,
+      "file": 2
+    },
+    "requiredFields": [
+      {
+        "name": "unnamed_7",
+        "type": "text",
+        "label": ""
+      },
+      {
+        "name": "unnamed_13",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_15",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_19",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_21",
+        "type": "text",
+        "label": "Select..."
+      }
+    ]
+  },
+  "aiResponses": {
+    "first_name": "Sarah",
+    "last_name": "Martinez",
+    "email": "sarah.martinez@example.com",
+    "country": "United States",
+    "phone": "+1 (555) 345-6789",
+    "candidate-location": "Austin, TX",
+    "unnamed_7": "I am a Senior Software Engineer with six years of full‑stack engineering experience and a strong focus on cloud-native systems and secure development practices. In my current role at TechCorp (2020–Present) I have led cross-functional initiatives to integrate security into the CI/CD lifecycle, introduced automated dependency and container scanning, and partnered with infrastructure teams to harden Kubernetes clusters and IAM policies on AWS. These efforts improved deployment confidence and reduced the time to detect and remediate security issues in production environments.\n\nBeyond hands-on technical work, I regularly mentor junior engineers, run security-focused brown-bag sessions, and collaborate with product and QA to drive a risk-based approach to engineering decisions. My technical toolkit includes Python, TypeScript, Node.js, React, Docker, Kubernetes, AWS, PostgreSQL, and CI/CD toolchains—skills that I have applied to build resilient, observable systems. I am excited by the opportunity to bring this combination of technical depth and cross-team leadership to a Director of Engineering, Security Risk Management role, where I can help define strategy, grow capability, and operationalize DevSecOps across an organization.",
+    "resume": "Sarah_Martinez_Resume.pdf",
+    "cover_letter": "Sarah_Martinez_CoverLetter.pdf",
+    "question_33402662002": "https://linkedin.com/in/sarahmartinez",
+    "question_33402663002": "Sarah",
+    "question_33402664002": "United States",
+    "unnamed_13": "Yes",
+    "question_33402665002": "No",
+    "unnamed_15": "No",
+    "question_33402666002": "I do not require accommodations for a standard interview format; however, I appreciate inclusive scheduling and accessible materials. I am based in Austin, TX (Central Time) and prefer interview slots that are considerate of that time zone. If interviews involve whiteboarding or live coding, having the prompt or high-level problem statement in advance helps me prepare and demonstrate my best work.\n\nFor video interviews, captions or a brief agenda are helpful to ensure clarity and alignment. If any technical assessments require use of particular tools or environments, advance notice of those requirements will allow me to ensure my environment is compatible and reduce technical friction. I'm committed to an accessible, collaborative interview experience and happy to discuss any specific adjustments that would be helpful.",
+    "question_33402667002": "sarahmartinez",
+    "question_33402668002": "No",
+    "unnamed_19": "No",
+    "question_33402669002": "No",
+    "unnamed_21": "No",
+    "gender": "Female",
+    "hispanic_ethnicity": "Yes",
+    "veteran_status": "Not a veteran",
+    "disability_status": "No"
+  },
+  "problemsSolved": [
+    {
+      "problem": "Dropdown \"unnamed_7\" failed: Failed to fill custom dropdown \"unnamed_7\" after 3 attempts. AI provided: \"I am a Senior Software Engineer with six years of full‑stack engineering experience and a strong focus on cloud-native systems and secure development practices. In my current role at TechCorp (2020–Present) I have led cross-functional initiatives to integrate security into the CI/CD lifecycle, introduced automated dependency and container scanning, and partnered with infrastructure teams to harden Kubernetes clusters and IAM policies on AWS. These efforts improved deployment confidence and reduced the time to detect and remediate security issues in production environments.\n\nBeyond hands-on technical work, I regularly mentor junior engineers, run security-focused brown-bag sessions, and collaborate with product and QA to drive a risk-based approach to engineering decisions. My technical toolkit includes Python, TypeScript, Node.js, React, Docker, Kubernetes, AWS, PostgreSQL, and CI/CD toolchains—skills that I have applied to build resilient, observable systems. I am excited by the opportunity to bring this combination of technical depth and cross-team leadership to a Director of Engineering, Security Risk Management role, where I can help define strategy, grow capability, and operationalize DevSecOps across an organization.\". Error: Failed to select: No options found in dropdown. Available options: none",
+      "solution": {
+        "issue": "Failed to analyze screenshot",
+        "solution": "Manual intervention required",
+        "needsManualIntervention": true
+      },
+      "timestamp": "2025-11-06T19:46:42.682Z"
+    },
+    {
+      "problem": "Failed to fill resume: No resume file available - user must generate a resume before applying to jobs",
+      "timestamp": "2025-11-06T19:46:42.682Z"
+    },
+    {
+      "problem": "Failed to fill cover_letter: No resume file available - user must generate a resume before applying to jobs",
+      "timestamp": "2025-11-06T19:46:42.682Z"
+    },
+    {
+      "problem": "Dropdown \"unnamed_13\" failed: Failed to fill custom dropdown \"unnamed_13\" after 3 attempts. AI provided: \"Yes\". Error: Failed to select: No options found in dropdown. Available options: none",
+      "timestamp": "2025-11-06T19:46:42.682Z"
+    },
+    {
+      "problem": "Dropdown \"unnamed_15\" failed: Failed to fill custom dropdown \"unnamed_15\" after 3 attempts. AI provided: \"No\". Error: Failed to select: No options found in dropdown. Available options: none",
+      "timestamp": "2025-11-06T19:46:42.682Z"
+    },
+    {
+      "problem": "Dropdown \"unnamed_19\" failed: Failed to fill custom dropdown \"unnamed_19\" after 3 attempts. AI provided: \"No\". Error: Failed to select: No options found in dropdown. Available options: none",
+      "timestamp": "2025-11-06T19:46:42.682Z"
+    },
+    {
+      "problem": "Dropdown \"unnamed_21\" failed: Failed to fill custom dropdown \"unnamed_21\" after 3 attempts. AI provided: \"No\". Error: Failed to select: No options found in dropdown. Available options: none",
+      "timestamp": "2025-11-06T19:46:42.682Z"
+    }
+  ],
+  "patterns": {
+    "commonQuestions": [
+      {
+        "label": "What's the name you'd prefer us to use throughout the interview process?",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What is your GitLab username?",
+        "type": "text",
+        "category": "other"
+      }
+    ],
+    "fieldNamingConventions": {
+      "camelCase": 0,
+      "snake_case": 19,
+      "kebabCase": 1,
+      "standard": 5
+    },
+    "formLayout": {
+      "totalFields": 25,
+      "visibleFields": 25,
+      "requiredFields": 5,
+      "optionalFields": 20
+    }
+  }
+}

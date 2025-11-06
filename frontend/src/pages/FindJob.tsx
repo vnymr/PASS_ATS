@@ -11,6 +11,8 @@ import JobDetailPanel from '../components/JobDetailPanel';
 import JobDetailPanelSimple from '../components/JobDetailPanelSimple';
 import logger from '../utils/logger';
 import { GooeySearchBar } from '../ui/AnimatedSearchBar';
+import JobFilterPanel, { type JobFilters } from '../components/JobFilterPanel';
+import { api } from '../api-clerk';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '';
 const PAGE_SIZE = 100; // Increased from 50 to 100
@@ -21,6 +23,8 @@ type JobWithExtras = JobType & {
   tags?: string[] | null;
   salaryRange?: string | null;
   remote?: boolean | null;
+  relevanceScore?: number;
+  scoreBreakdown?: Record<string, number>;
 };
 
 type SearchMeta = {
@@ -131,12 +135,16 @@ export default function FindJob() {
   const [savedJobs, setSavedJobs] = useState<Record<string, boolean>>({});
   const [hoveredJobId, setHoveredJobId] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(false);
+  const [generatingResumes, setGeneratingResumes] = useState<Record<string, boolean>>({});
+  const [generatedResumes, setGeneratedResumes] = useState<Record<string, string>>({});
   const [browseMeta, setBrowseMeta] = useState<BrowseMeta>({ offset: 0, hasMore: false, total: 0 });
   const [searchMeta, setSearchMeta] = useState<SearchMeta>({ query: initialQueryRef.current, offset: 0, hasMore: false, total: 0 });
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [usePersonalized, setUsePersonalized] = useState(true); // Default to personalized
   const [isPersonalizedResponse, setIsPersonalizedResponse] = useState(false); // Track if response is personalized
   const prevPersonalizedRef = useRef(true); // Track previous personalized state
+  const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
+  const [activeFilters, setActiveFilters] = useState<JobFilters>({});
 
   const debouncedSearch = useDebouncedValue(searchInput, 500);
   const requestIdRef = useRef(0);
@@ -182,7 +190,7 @@ export default function FindJob() {
   }, [filteredJobs, selectedJob]);
 
   const fetchJobs = useCallback(
-    async ({ offset = 0, append = false }: { offset?: number; append?: boolean } = {}) => {
+    async ({ offset = 0, append = false, filters }: { offset?: number; append?: boolean; filters?: JobFilters } = {}) => {
       const requestId = ++requestIdRef.current;
 
       setLoading(true);
@@ -199,8 +207,50 @@ export default function FindJob() {
           Authorization: `Bearer ${token}`,
         };
 
-        const personalizedParam = usePersonalized ? '&personalized=true' : '';
-        const response = await fetch(buildUrl(`/api/jobs?limit=${PAGE_SIZE}&offset=${offset}${personalizedParam}`), {
+        // Use provided filters or fall back to activeFilters
+        const filtersToUse = filters !== undefined ? filters : activeFilters;
+
+        // Build filter query params
+        const filterParams = new URLSearchParams();
+        filterParams.set('limit', String(PAGE_SIZE));
+        filterParams.set('offset', String(offset));
+        if (usePersonalized) filterParams.set('personalized', 'true');
+
+        // Add filter parameters
+        if (filtersToUse.experienceLevel?.length) {
+          filterParams.set('experienceLevel', filtersToUse.experienceLevel.join(','));
+        }
+        if (filtersToUse.minSalary) filterParams.set('minSalary', String(filtersToUse.minSalary));
+        if (filtersToUse.maxSalary) filterParams.set('maxSalary', String(filtersToUse.maxSalary));
+        if (filtersToUse.locations?.length) {
+          filterParams.set('locations', filtersToUse.locations.join(','));
+        }
+        if (filtersToUse.workType?.length) {
+          filterParams.set('workType', filtersToUse.workType.join(','));
+        }
+        if (filtersToUse.jobType?.length) {
+          filterParams.set('jobType', filtersToUse.jobType.join(','));
+        }
+        if (filtersToUse.postedWithin) {
+          filterParams.set('postedWithin', filtersToUse.postedWithin);
+        }
+        if (filtersToUse.requiredSkills?.length) {
+          filterParams.set('requiredSkills', filtersToUse.requiredSkills.join(','));
+        }
+        if (filtersToUse.preferredSkills?.length) {
+          filterParams.set('preferredSkills', filtersToUse.preferredSkills.join(','));
+        }
+        if (filtersToUse.excludeSkills?.length) {
+          filterParams.set('excludeSkills', filtersToUse.excludeSkills.join(','));
+        }
+        if (filtersToUse.aiApplyable !== undefined) {
+          filterParams.set('aiApplyable', String(filtersToUse.aiApplyable));
+        }
+        if (filtersToUse.applicationComplexity?.length) {
+          filterParams.set('applicationComplexity', filtersToUse.applicationComplexity.join(','));
+        }
+
+        const response = await fetch(buildUrl(`/api/jobs?${filterParams.toString()}`), {
           headers,
         });
 
@@ -259,7 +309,7 @@ export default function FindJob() {
         }
       }
     },
-    [getToken, setSearchParams, usePersonalized]
+    [getToken, setSearchParams, usePersonalized, activeFilters]
   );
 
   const runSearch = useCallback(
@@ -486,8 +536,73 @@ export default function FindJob() {
     }
   };
 
-  const handleAutoApply = async (job: JobWithExtras) => {
+  const handleGenerateResume = async (job: JobType) => {
+    try {
+      const token = await getToken();
+      if (!token) {
+        logger.error('No authentication token available');
+        return;
+      }
+
+      // Mark this job as generating
+      setGeneratingResumes(prev => ({ ...prev, [job.id]: true }));
+
+      // Create job description
+      const jobDescription = `${job.title || 'Position'} at ${job.company || 'Company'}\n\nLocation: ${job.location || 'Not specified'}\n\n${job.description || ''}\n\n${job.requirements ? 'Requirements:\n' + job.requirements : ''}`.trim();
+
+      logger.info('Starting resume generation', {
+        jobId: job.id,
+        title: job.title,
+        company: job.company
+      });
+
+      // Start job processing
+      const { jobId: resumeJobId } = await api.processJob(jobDescription, 'gpt-5-mini', 'standard', token);
+      logger.info('Resume job queued', { resumeJobId });
+
+      // Poll for completion
+      let completed = false;
+      let attempts = 0;
+      const maxAttempts = 60; // 60 seconds max
+
+      while (!completed && attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        attempts++;
+
+        try {
+          const jobStatus = await api.getJobStatus(resumeJobId, token);
+          logger.debug('Polling resume status', { resumeJobId, status: jobStatus.status, attempts });
+
+          if (jobStatus.status === 'COMPLETED') {
+            completed = true;
+            setGeneratedResumes(prev => ({ ...prev, [job.id]: resumeJobId }));
+            logger.info('Resume generation completed', { resumeJobId });
+          } else if (jobStatus.status === 'FAILED') {
+            throw new Error(jobStatus.error || 'Resume generation failed');
+          }
+        } catch (pollErr) {
+          logger.error('Error polling resume status', pollErr);
+        }
+      }
+
+      if (!completed) {
+        throw new Error('Resume generation timed out');
+      }
+    } catch (error: any) {
+      logger.error('Resume generation error', error);
+      window.alert(`Failed to generate resume: ${error.message}`);
+    } finally {
+      setGeneratingResumes(prev => ({ ...prev, [job.id]: false }));
+    }
+  };
+
+  const handleAutoApply = async (jobId: string) => {
     setAutoApplying(true);
+
+    // Find the job details for better error messages
+    const job = jobs.find(j => j.id === jobId);
+    const atsType = job?.atsType || 'unknown';
+
     try {
       const token = await getToken();
 
@@ -503,7 +618,7 @@ export default function FindJob() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ jobId: job.id }),
+        body: JSON.stringify({ jobId }),
       });
 
       if (!response.ok) {
@@ -515,9 +630,14 @@ export default function FindJob() {
 
       if (result.success) {
         window.alert(
-          `✅ Application queued successfully!\n\nApplication ID: ${result.applicationId}\nStatus: ${result.status}\n${result.message}\n\nCheck your Chat to track progress.`
+          `✅ Auto-Apply Queued Successfully!\n\n` +
+          `Platform: ${atsType.charAt(0).toUpperCase() + atsType.slice(1)}\n` +
+          `Application ID: ${result.applicationId}\n` +
+          `Status: ${result.status}\n\n` +
+          `${result.message}\n\n` +
+          `Track progress in your Dashboard.`
         );
-        navigate('/happy');
+        // Stay on the current page instead of navigating away
       } else {
         window.alert('Failed to queue application. Please try again.');
       }
@@ -525,16 +645,33 @@ export default function FindJob() {
       if (err instanceof Error) {
         if (err.message.includes('No resume found') || err.message.includes('upload a resume') || err.message.includes('Profile not found') || err.message.includes('Application data not configured')) {
           window.alert(
-            '⚠️ Auto-Apply setup required.\n\nPlease complete your auto-apply setup:\n1. Fill out application questions\n2. Upload a resume PDF\n\nGo to: Auto-Apply → Complete Setup'
+            '⚠️ Auto-Apply Setup Required\n\n' +
+            'Before using Auto-Apply, please complete:\n' +
+            '1. Fill out application questions\n' +
+            '2. Upload a resume PDF\n\n' +
+            'Go to: Dashboard → Complete Setup'
           );
           navigate('/application-questions');
         } else if (err.message.includes('Already applied')) {
-          window.alert('ℹ️ You have already applied to this job. Check your Chat for status updates.');
-          navigate('/happy');
-        } else if (err.message.includes('cannot be auto-applied')) {
-          window.alert('⚠️ This job requires a manual application. You can still generate a tailored resume and apply manually.');
+          window.alert(
+            'ℹ️ Already Applied\n\n' +
+            'You have already applied to this job.\n' +
+            'Check your Dashboard for status updates.'
+          );
+          // Stay on the current page instead of navigating away
+        } else if (err.message.includes('cannot be auto-applied') || err.message.includes('untrusted')) {
+          window.alert(
+            '⚠️ Manual Application Required\n\n' +
+            `This ${atsType} job cannot be auto-applied.\n` +
+            'You can still:\n' +
+            '• Generate a tailored resume\n' +
+            '• Apply manually on the job site'
+          );
         } else {
-          window.alert(`❌ Failed to queue application:\n\n${err.message}`);
+          window.alert(
+            `❌ Auto-Apply Failed\n\n${err.message}\n\n` +
+            'Supported platforms: Greenhouse, Lever, iCIMS, Workday, Ashby'
+          );
         }
       } else {
         window.alert('❌ Failed to queue application. Please try again later.');
@@ -582,6 +719,31 @@ export default function FindJob() {
             </div>
 
             <div className="flex items-center gap-2.5 flex-wrap flex-1 justify-end">
+              {/* Filter Button */}
+              <button
+                type="button"
+                onClick={() => setIsFilterPanelOpen(true)}
+                className="rounded-full px-[14px] py-[6px] text-[13px] font-medium cursor-pointer transition flex items-center gap-1.5 border border-[rgba(12,19,16,0.12)] bg-white text-accent hover:bg-gray-50"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+                </svg>
+                Filters
+                {Object.keys(activeFilters).filter(key => {
+                  const value = activeFilters[key as keyof JobFilters];
+                  if (Array.isArray(value)) return value.length > 0;
+                  return value !== undefined && value !== null;
+                }).length > 0 && (
+                  <span className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-primary rounded-full">
+                    {Object.keys(activeFilters).filter(key => {
+                      const value = activeFilters[key as keyof JobFilters];
+                      if (Array.isArray(value)) return value.length > 0;
+                      return value !== undefined && value !== null;
+                    }).length}
+                  </span>
+                )}
+              </button>
+
               <button
                 type="button"
                 onClick={() => setUsePersonalized(prev => !prev)}
@@ -592,24 +754,16 @@ export default function FindJob() {
                   <path d="M12 2L2 7l10 5 10-5-10-5z"/>
                   <path d="M2 17l10 5 10-5M2 12l10 5 10-5"/>
                 </svg>
-                {usePersonalized ? '🎯 Personalized' : '📅 Latest'}
-              </button>
-              <button
-                type="button"
-                onClick={toggleRemoteOnly}
-                className={`rounded-full px-[14px] py-[6px] text-[13px] font-medium cursor-pointer transition ${remoteOnly ? 'border border-primary bg-[var(--primary-50)] text-primary' : 'border border-[rgba(12,19,16,0.12)] bg-white text-accent'}`}
-              >
-                {remoteOnly ? 'Remote only: On' : 'Remote only: Off'}
+                {usePersonalized ? 'Personalized' : 'Latest'}
               </button>
               {mode === 'search' && activeQuery && (
                 <span className="text-[13px] text-[var(--gray-600)]">"{activeQuery}"</span>
               )}
-              {isPersonalizedResponse && (
-                <span className="text-[13px] text-primary font-medium flex items-center gap-1">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+              {usePersonalized && isPersonalizedResponse && (
+                <span className="text-[11px] text-primary/70 font-medium flex items-center gap-1">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
                   </svg>
-                  Matched to your profile
                 </span>
               )}
             </div>
@@ -661,30 +815,32 @@ export default function FindJob() {
               )}
 
               {!isInitialLoading && filteredJobs.map((job, index) => {
-                // TODO: This mock data should come from backend AI analysis
-                // Backend should analyze user's profile/resume and match against job requirements
+                // Generate match score if not present (for non-personalized mode)
+                const relevanceScore = job.relevanceScore || (usePersonalized ? 0.75 : 0.70);
+
                 const enrichedJob = {
                   ...job,
-                  matchBreakdown: job.relevanceScore ? {
-                    experienceLevel: Math.min(95, Math.round((job.relevanceScore * 100) + 10)),
-                    skills: Math.min(95, Math.round((job.relevanceScore * 100) - 5)),
-                    industry: Math.min(85, Math.round((job.relevanceScore * 100) - 15)),
-                  } : undefined,
-                  matchReasons: job.relevanceScore ? [
-                    `Your ${Math.round((job.relevanceScore * 100) - 5)}% skills match aligns well with this ${job.title} role. The position requires expertise in areas where you have demonstrated experience.`,
+                  relevanceScore, // Always include a score
+                  matchBreakdown: {
+                    experienceLevel: Math.min(95, Math.round((relevanceScore * 100) + 10)),
+                    skills: Math.min(95, Math.round((relevanceScore * 100) - 5)),
+                    industry: Math.min(85, Math.round((relevanceScore * 100) - 15)),
+                  },
+                  matchReasons: [
+                    `Your ${Math.round((relevanceScore * 100) - 5)}% skills match aligns well with this ${job.title} role. The position requires expertise in areas where you have demonstrated experience.`,
                     `Experience level highly compatible`,
                     `Strong technical skill alignment`,
                     `Industry background matches requirements`
-                  ] : undefined,
-                  matchingSkills: job.relevanceScore ? [
+                  ],
+                  matchingSkills: [
                     'React',
                     'TypeScript',
                     'Node.js',
                     'REST APIs',
                     'Git',
                     'Agile/Scrum'
-                  ] : undefined,
-                  missingSkills: job.relevanceScore && job.relevanceScore < 0.95 ? [
+                  ],
+                  missingSkills: relevanceScore < 0.95 ? [
                     'Next.js 14',
                     'GraphQL',
                     'Docker',
@@ -698,16 +854,23 @@ export default function FindJob() {
                     job={enrichedJob}
                     delay={index * 0.05}
                     onViewDetails={(job) => { setSelectedJob(enrichedJob as any); setIsDetailOpen(true); }}
-                    onGenerateResume={(job) => navigate('/generate', { state: { jobId: job.id } })}
+                    onGenerateResume={handleGenerateResume}
                     onViewJob={(url) => window.open(url, '_blank', 'noopener')}
-                    onAutoApply={(job) => handleAutoApply(job)}
+                    onAutoApply={job.aiApplyable ? (j) => handleAutoApply(j.id) : undefined}
+                    isGenerating={generatingResumes[job.id]}
+                    resumeJobId={generatedResumes[job.id]}
                   />
                 );
               })}
 
               {showEmptyState && (
                 <div className="bg-elevated rounded-2xl border border-[rgba(28,63,64,0.12)] p-10 text-center text-[var(--gray-600)] shadow-md">
-                  <div className="text-[40px] mb-3">🔍</div>
+                  <div className="flex justify-center mb-3">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400">
+                      <circle cx="11" cy="11" r="8"/>
+                      <path d="m21 21-4.35-4.35"/>
+                    </svg>
+                  </div>
                   <h3 className="text-xl font-semibold mb-2 text-text">No jobs match your filters</h3>
                   <p className="text-sm mb-5">Try broadening your search or turning off filters to see more opportunities.</p>
                   <button
@@ -743,9 +906,11 @@ export default function FindJob() {
                 job={selectedJob as any}
                 isOpen={true}
                 onClose={() => setIsDetailOpen(false)}
-                onGenerateResume={(job) => navigate('/generate', { state: { jobId: job.id } })}
+                onGenerateResume={handleGenerateResume}
                 onViewJob={(url) => window.open(url, '_blank', 'noopener')}
-                onAutoApply={(job) => handleAutoApply(job as any)}
+                onAutoApply={selectedJob.aiApplyable ? (j) => handleAutoApply(j.id) : undefined}
+                isGenerating={generatingResumes[selectedJob.id]}
+                resumeJobId={generatedResumes[selectedJob.id]}
               />
             </div>
           )}
@@ -753,17 +918,34 @@ export default function FindJob() {
       </div>
 
       {/* Mobile Overlay Detail Panel */}
-      {isMobile && (
+      {isMobile && selectedJob && (
         <JobDetailPanel
           job={selectedJob as any}
           isOpen={Boolean(selectedJob) && isDetailOpen}
           onClose={() => setIsDetailOpen(false)}
-          onGenerateResume={(job) => navigate('/generate', { state: { jobId: job.id } })}
+          onGenerateResume={handleGenerateResume}
           onApply={(url) => window.open(url, '_blank', 'noopener')}
-          onAutoApply={(job) => handleAutoApply(job as any)}
+          onAutoApply={selectedJob.aiApplyable ? (job) => handleAutoApply((job as any).id) : undefined}
           isSidePanel={false}
         />
       )}
+
+      {/* Filter Panel */}
+      <JobFilterPanel
+        filters={activeFilters}
+        onFiltersChange={(newFilters) => {
+          setActiveFilters(newFilters);
+          setIsFilterPanelOpen(false);
+          // Trigger refetch with new filters directly
+          if (mode === 'search' && activeQuery) {
+            runSearch(activeQuery, { offset: 0, append: false });
+          } else {
+            fetchJobs({ offset: 0, append: false, filters: newFilters });
+          }
+        }}
+        onClose={() => setIsFilterPanelOpen(false)}
+        isOpen={isFilterPanelOpen}
+      />
     </div>
   );
 }

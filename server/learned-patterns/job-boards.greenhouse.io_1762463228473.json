@@ -1,0 +1,117 @@
+{
+  "metadata": {
+    "url": "https://job-boards.greenhouse.io/gitlab/jobs/8195921002",
+    "domain": "job-boards.greenhouse.io",
+    "company": "Not found",
+    "jobTitle": "Director of Engineering, Security Risk Management",
+    "timestamp": "2025-11-06T21:07:08.473Z",
+    "success": true
+  },
+  "formStructure": {
+    "totalFields": 25,
+    "fieldTypes": {
+      "text": 22,
+      "tel": 1,
+      "file": 2
+    },
+    "requiredFields": [
+      {
+        "name": "unnamed_7",
+        "type": "text",
+        "label": ""
+      },
+      {
+        "name": "unnamed_13",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_15",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_19",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_21",
+        "type": "text",
+        "label": "Select..."
+      }
+    ]
+  },
+  "aiResponses": {
+    "first_name": "Vinay",
+    "last_name": "Muthareddy",
+    "email": "i.vinaymr@gmail.com",
+    "country": "United States",
+    "phone": "+1 (945) 244-7733",
+    "candidate-location": "Dallas, TX",
+    "unnamed_7": "Senior Software Engineer, TechCorp (2020 - Present)",
+    "resume": "Vinay_Muthareddy_Resume.pdf",
+    "cover_letter": "Vinay_Muthareddy_CoverLetter.pdf",
+    "question_33402662002": "https://linkedin.com/in/vinaymuthareddy",
+    "question_33402663002": "Vinay",
+    "question_33402664002": "United States",
+    "unnamed_13": "Remote, US",
+    "question_33402665002": "No",
+    "unnamed_15": "U.S. work authorized (no sponsorship required)",
+    "question_33402666002": "I do not require specific accommodations to participate in the interview process. I am comfortable with phone, video, live coding and take-home assignments, and I can provide any required materials or links in advance. For scheduling, I am based in Dallas, TX (Central Time) and generally prefer morning interview slots, though I routinely coordinate across time zones and can be flexible.\n\nIf accommodations are helpful for other candidates or the interview team, I am fully supportive of adjustments such as providing written prompts in advance, offering asynchronous take-home technical exercises, or allowing extended time for coding tasks. In my role at TechCorp I coordinated distributed interviews and technical evaluations across US and EMEA teams using tools such as Zoom, GitHub, and CI/CD pipelines — I’ve found that clear written instructions and take-home exercises often lead to a better assessment of engineering and leadership skills.\n\nAs someone who collaborates closely with security and platform teams, I appreciate interview processes that enable candidates to demonstrate secure engineering practices (for example, discussions around secure CI/CD pipelines, container hardening, or architectural threat modeling). If you have any suggested formats or materials you’d like me to prepare in advance—for example, a short design or security risk assessment example based on my past work—I’m happy to provide those and to discuss any reasonable accommodations that help ensure an inclusive, high-quality interview experience.",
+    "question_33402667002": "vinaymuthareddy",
+    "question_33402668002": "No",
+    "unnamed_19": "Central Time (US & Canada)",
+    "question_33402669002": "No",
+    "unnamed_21": "2 weeks notice",
+    "gender": "Male",
+    "hispanic_ethnicity": "No",
+    "veteran_status": "Not a veteran",
+    "disability_status": "No disability"
+  },
+  "problemsSolved": [
+    {
+      "problem": "Failed to fill resume: No resume file available - user must generate a resume before applying to jobs",
+      "solution": {
+        "issue": "Failed to analyze screenshot",
+        "solution": "Manual intervention required",
+        "needsManualIntervention": true
+      },
+      "timestamp": "2025-11-06T21:07:08.473Z"
+    },
+    {
+      "problem": "Failed to fill cover_letter: No resume file available - user must generate a resume before applying to jobs",
+      "timestamp": "2025-11-06T21:07:08.473Z"
+    },
+    {
+      "problem": "Failed to fill unnamed_21: Field not found with any selector strategy: unnamed_21",
+      "timestamp": "2025-11-06T21:07:08.473Z"
+    }
+  ],
+  "patterns": {
+    "commonQuestions": [
+      {
+        "label": "What's the name you'd prefer us to use throughout the interview process?",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What is your GitLab username?",
+        "type": "text",
+        "category": "other"
+      }
+    ],
+    "fieldNamingConventions": {
+      "camelCase": 0,
+      "snake_case": 19,
+      "kebabCase": 1,
+      "standard": 5
+    },
+    "formLayout": {
+      "totalFields": 25,
+      "visibleFields": 25,
+      "requiredFields": 5,
+      "optionalFields": 20
+    }
+  }
+}

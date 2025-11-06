@@ -1,5 +1,7 @@
 # 🏗️ Auto-Apply System Architecture
 
+> **Note:** Recipe Replay System has been temporarily disabled (archived to `lib/archived/`) to focus on stable AI-powered direct application. The system currently uses Playwright + AI for all job applications. Recipe system may be re-enabled per-job in the future.
+
 ## System Overview
 
 ```
@@ -16,24 +18,24 @@
     ┌──────────────────────┐           ┌──────────────────────┐
     │   JOB AGGREGATION    │           │   AUTO-APPLY ENGINE  │
     │                      │           │                      │
-    │  • Greenhouse API    │           │  • Recipe Engine     │
-    │  • Lever API         │           │  • Puppeteer         │
-    │  • Adzuna API        │────data───▶  • BrowserUse        │
+    │  • Greenhouse API    │           │  • AI Form Filler    │
+    │  • Lever API         │           │  • Playwright        │
+    │  • Adzuna API        │────data───▶  • CAPTCHA Solver    │
     │  • Remotive API      │           │  • Queue System      │
     │                      │           │                      │
-    │  Every 6 hours       │           │  Cost: $0.05/app     │
+    │  Every 6 hours       │           │  Direct AI Apply     │
     └──────────────────────┘           └──────────────────────┘
                 │                                   │
                 │                                   │
                 ▼                                   ▼
 
     ┌──────────────────────┐           ┌──────────────────────┐
-    │   ATS DETECTION      │           │   RECIPE STORAGE     │
+    │   ATS DETECTION      │           │   FORM ANALYSIS      │
     │                      │           │                      │
-    │  • 25+ Platforms     │           │  • Greenhouse (10)   │
-    │  • URL Patterns      │           │  • Lever (9)         │
-    │  • 99% Accuracy      │           │  • Ashby (7)         │
-    │  • AI-Applyable Flag │           │  • Custom Recipes    │
+    │  • 25+ Platforms     │           │  • Field Detection   │
+    │  • URL Patterns      │           │  • Smart Mapping     │
+    │  • 99% Accuracy      │           │  • Auto-fill         │
+    │  • AI-Applyable Flag │           │  • AI Intelligence   │
     │                      │           │                      │
     └──────────────────────┘           └──────────────────────┘
                 │                                   │
@@ -83,10 +85,10 @@ User Request          Recipe Loading          Form Filling           Submission
 ────────────          ──────────────          ────────────           ──────────
 
 Apply to Job    ──▶  Load Recipe       ──▶  Execute Steps   ──▶  Submit Form
-                     from Database          (Puppeteer)
+                     from Database          (Playwright)
                                            • Type fields          • Screenshot
 Check Recipe    ──▶  Found? ✅             • Upload resume        • Confirmation
-Exists?              Use Puppeteer          • Select options       • Track stats
+Exists?              Use Playwright         • Select options       • Track stats
                      ($0.05)                • Click submit
                                                                    Cost: $0.05 ✅
                      Not Found? ❌    ──▶  Use BrowserUse    ──▶  Submit + Record
@@ -124,7 +126,7 @@ Exists?              Use Puppeteer          • Select options       • Track s
             │                             │
             ▼                             ▼
     ┌───────────────────┐         ┌───────────────────┐
-    │  PUPPETEER REPLAY │         │  BROWSERUSE       │
+    │  PLAYWRIGHT REPLAY│         │  BROWSERUSE       │
     │                   │         │  RECORDING        │
     │  1. Launch browser│         │                   │
     │  2. Navigate URL  │         │  1. AI navigates  │
@@ -458,7 +460,7 @@ User-Level Metrics:
 
 Scenario 1: Selector Not Found
 ───────────────────────────────
-  Puppeteer: "Cannot find input[name='first_name']"
+  Playwright: "Cannot find input[name='first_name']"
 
   Action:
     1. Log error with recipe ID
@@ -474,7 +476,7 @@ Scenario 1: Selector Not Found
 
 Scenario 2: New Required Field
 ───────────────────────────────
-  Puppeteer: Submits form but server rejects
+  Playwright: Submits form but server rejects
   Error: "GitHub URL is required"
 
   Action:
@@ -507,7 +509,7 @@ Scenario 3: Success Rate Drops
 
 Scenario 4: CAPTCHA Detected
 ─────────────────────────────
-  Puppeteer: Blocked by reCAPTCHA
+  Playwright: Blocked by reCAPTCHA
 
   Action:
     1. Mark job as "requires_manual_apply"
@@ -540,7 +542,7 @@ Recipe Execution:
   Current: Sequential (one at a time)
   Scaling: Bull queue with 10 concurrent workers
   Throughput: ~600 applications/hour (10 workers × 6 apps/min)
-  Bottleneck: Puppeteer memory (browser instances)
+  Bottleneck: Playwright memory (browser instances)
   Solution: Browser pooling, docker containers
 
 Database:

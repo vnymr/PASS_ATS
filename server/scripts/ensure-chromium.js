@@ -3,27 +3,28 @@
  * Verify Chromium Installation
  * Runs during npm postinstall to verify browser is available
  * Note: Chromium is installed via Dockerfile (apk add chromium)
+ * Uses Playwright for browser automation
  */
 
 import { execSync } from 'child_process';
 
 function verifyChromium() {
-  console.log('🔍 Verifying Chromium installation...');
+  console.log('🔍 Verifying Chromium installation for Playwright...');
 
-  // Check if PUPPETEER_EXECUTABLE_PATH is set
-  if (process.env.PUPPETEER_EXECUTABLE_PATH) {
-    console.log(`✅ Chromium path configured: ${process.env.PUPPETEER_EXECUTABLE_PATH}`);
+  // Check if PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH is set
+  if (process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH) {
+    console.log(`✅ Chromium path configured: ${process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH}`);
 
     // Verify the executable exists
     try {
-      execSync(`test -f ${process.env.PUPPETEER_EXECUTABLE_PATH}`, { encoding: 'utf8' });
+      execSync(`test -f ${process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH}`, { encoding: 'utf8' });
       console.log('✅ Chromium executable found');
     } catch (error) {
-      console.log(`⚠️  Chromium not found at ${process.env.PUPPETEER_EXECUTABLE_PATH}`);
+      console.log(`⚠️  Chromium not found at ${process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH}`);
       console.log('⚠️  Will fall back to system search');
     }
   } else {
-    console.log('⚠️  PUPPETEER_EXECUTABLE_PATH not set');
+    console.log('⚠️  PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH not set');
     console.log('ℹ️  Browser launcher will search for Chromium automatically');
   }
 

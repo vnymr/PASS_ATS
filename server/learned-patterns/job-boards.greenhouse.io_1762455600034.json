@@ -1,0 +1,167 @@
+{
+  "metadata": {
+    "url": "https://job-boards.greenhouse.io/gitlab/jobs/8195921002",
+    "domain": "job-boards.greenhouse.io",
+    "timestamp": "2025-11-06T19:00:00.034Z",
+    "success": true
+  },
+  "formStructure": {
+    "totalFields": 25,
+    "fieldTypes": {
+      "text": 22,
+      "tel": 1,
+      "file": 2
+    },
+    "requiredFields": [
+      {
+        "name": "unnamed_7",
+        "type": "text",
+        "label": ""
+      },
+      {
+        "name": "unnamed_13",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_15",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_19",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_21",
+        "type": "text",
+        "label": "Select..."
+      }
+    ]
+  },
+  "aiResponses": {
+    "first_name": "VINAY",
+    "last_name": "MUTHAREDDY",
+    "email": "ivinaymr@gmail.com",
+    "country": "United States",
+    "phone": "9452447733",
+    "candidate-location": "Dallas, TX",
+    "unnamed_7": "Product Manager",
+    "resume": "https://vinay.portfolio/resume.pdf",
+    "cover_letter": "https://vinay.portfolio/cover_letter.pdf",
+    "question_33402662002": "https://linkedin.com/in/ivinaymr",
+    "question_33402663002": "Vinay",
+    "question_33402664002": "United States",
+    "unnamed_13": "No",
+    "question_33402665002": "No",
+    "unnamed_15": "No",
+    "question_33402666002": "I do not require any specific accommodations at this time. I work from Dallas, TX (Central Time Zone), and I appreciate interview scheduling that takes CT into account. If possible, I value receiving an agenda and any technical prompts or take-home exercises 24–48 hours in advance so I can prepare thoughtful and thorough responses.\n\nIn previous roles at SYNYCS TECHNOLOGIES and theworkgallery.com I frequently collaborated with distributed teams across time zones and found that having clear agendas, expected timeframes for each interview segment, and access to shared documents ahead of time improved outcomes for everyone. If an accommodation becomes necessary (for example, captioning or alternative format materials), I will communicate that promptly and appreciate the team’s support.",
+    "question_33402667002": "N/A",
+    "question_33402668002": "No",
+    "unnamed_19": "No",
+    "question_33402669002": "No",
+    "unnamed_21": "Yes",
+    "gender": "Male",
+    "hispanic_ethnicity": "No",
+    "veteran_status": "Not a veteran",
+    "disability_status": "No disability"
+  },
+  "problemsSolved": [
+    {
+      "problem": "Failed to fill country: Failed to fill custom dropdown \"country\": Cannot read properties of undefined (reading 'click')",
+      "solution": {
+        "issue": "Failed to analyze screenshot",
+        "solution": "Manual intervention required",
+        "needsManualIntervention": true
+      },
+      "timestamp": "2025-11-06T19:00:00.034Z"
+    },
+    {
+      "problem": "Failed to fill phone: Failed to fill custom dropdown \"phone\": Cannot read properties of undefined (reading 'click')",
+      "timestamp": "2025-11-06T19:00:00.034Z"
+    },
+    {
+      "problem": "Failed to fill candidate-location: Failed to fill custom dropdown \"candidate-location\": Cannot read properties of undefined (reading 'click')",
+      "timestamp": "2025-11-06T19:00:00.034Z"
+    },
+    {
+      "problem": "Failed to fill unnamed_7: Failed to fill custom dropdown \"unnamed_7\": Cannot read properties of undefined (reading 'click')",
+      "timestamp": "2025-11-06T19:00:00.034Z"
+    },
+    {
+      "problem": "Failed to fill question_33402664002: Failed to fill custom dropdown \"question_33402664002\": Cannot read properties of undefined (reading 'click')",
+      "timestamp": "2025-11-06T19:00:00.034Z"
+    },
+    {
+      "problem": "Failed to fill unnamed_13: Failed to fill custom dropdown \"unnamed_13\": Cannot read properties of undefined (reading 'click')",
+      "timestamp": "2025-11-06T19:00:00.034Z"
+    },
+    {
+      "problem": "Failed to fill question_33402665002: Failed to fill custom dropdown \"question_33402665002\": Cannot read properties of undefined (reading 'click')",
+      "timestamp": "2025-11-06T19:00:00.034Z"
+    },
+    {
+      "problem": "Failed to fill unnamed_15: Failed to fill custom dropdown \"unnamed_15\": Cannot read properties of undefined (reading 'click')",
+      "timestamp": "2025-11-06T19:00:00.034Z"
+    },
+    {
+      "problem": "Failed to fill question_33402668002: Failed to fill custom dropdown \"question_33402668002\": Cannot read properties of undefined (reading 'click')",
+      "timestamp": "2025-11-06T19:00:00.034Z"
+    },
+    {
+      "problem": "Failed to fill unnamed_19: Failed to fill custom dropdown \"unnamed_19\": Cannot read properties of undefined (reading 'click')",
+      "timestamp": "2025-11-06T19:00:00.034Z"
+    },
+    {
+      "problem": "Failed to fill question_33402669002: Failed to fill custom dropdown \"question_33402669002\": Cannot read properties of undefined (reading 'click')",
+      "timestamp": "2025-11-06T19:00:00.034Z"
+    },
+    {
+      "problem": "Failed to fill unnamed_21: Failed to fill custom dropdown \"unnamed_21\": Cannot read properties of undefined (reading 'click')",
+      "timestamp": "2025-11-06T19:00:00.034Z"
+    },
+    {
+      "problem": "Failed to fill gender: Failed to fill custom dropdown \"gender\": Cannot read properties of undefined (reading 'click')",
+      "timestamp": "2025-11-06T19:00:00.034Z"
+    },
+    {
+      "problem": "Failed to fill hispanic_ethnicity: Failed to fill custom dropdown \"hispanic_ethnicity\": Cannot read properties of undefined (reading 'click')",
+      "timestamp": "2025-11-06T19:00:00.034Z"
+    },
+    {
+      "problem": "Failed to fill veteran_status: Failed to fill custom dropdown \"veteran_status\": Cannot read properties of undefined (reading 'click')",
+      "timestamp": "2025-11-06T19:00:00.034Z"
+    },
+    {
+      "problem": "Failed to fill disability_status: Failed to fill custom dropdown \"disability_status\": Cannot read properties of undefined (reading 'click')",
+      "timestamp": "2025-11-06T19:00:00.034Z"
+    }
+  ],
+  "patterns": {
+    "commonQuestions": [
+      {
+        "label": "What's the name you'd prefer us to use throughout the interview process?",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What is your GitLab username?",
+        "type": "text",
+        "category": "other"
+      }
+    ],
+    "fieldNamingConventions": {
+      "camelCase": 0,
+      "snake_case": 19,
+      "kebabCase": 1,
+      "standard": 5
+    },
+    "formLayout": {
+      "totalFields": 25,
+      "visibleFields": 25,
+      "requiredFields": 5,
+      "optionalFields": 20
+    }
+  }
+}

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@clerk/clerk-react';
 import { api, type ResumeEntry } from '../api-clerk';
 import Icons from '../components/ui/icons';
@@ -13,6 +13,7 @@ import { Button } from '../ui/Button';
 
 export default function GenerateResume() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { getToken } = useAuth();
   const [resumeText, setResumeText] = useState('');
   const [jobDescription, setJobDescription] = useState('');
@@ -26,6 +27,19 @@ export default function GenerateResume() {
   const [loadingResumes, setLoadingResumes] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filter, setFilter] = useState<'all' | 'recent' | 'week'>('all');
+
+  // Load job description from navigation state if available
+  useEffect(() => {
+    const state = location.state as { jobDescription?: string; jobTitle?: string; company?: string } | null;
+    if (state?.jobDescription) {
+      setJobDescription(state.jobDescription);
+      logger.info('Loaded job description from navigation', {
+        title: state.jobTitle,
+        company: state.company,
+        length: state.jobDescription.length
+      });
+    }
+  }, [location]);
 
   // Load user's resume text from profile
   useEffect(() => {

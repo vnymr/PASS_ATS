@@ -9,6 +9,7 @@ import { getUserProfile, getProfileContext } from './profile-manager.js';
 import { extractAndUpdateProfile, quickExtract } from './memory-extractor.js';
 import { saveConversationSummary } from '../memory/summary-store.js';
 import { generateEmbedding, createConversationSummary, generateSummaryId } from '../memory/embedding-utils.js';
+import { prisma } from '../prisma-client.js';
 import logger from '../logger.js';
 
 /**
@@ -21,6 +22,7 @@ import logger from '../logger.js';
  * @returns {AsyncGenerator<string>} - Yields SSE-formatted event strings
  */
 export async function* handleMessage({ conversationId, userId, message, metadata = {} }) {
+  const requestStartTime = Date.now();
   try {
     logger.info({ conversationId, userId, messageLength: message.length }, 'Handling message with persona');
 
@@ -34,13 +36,23 @@ export async function* handleMessage({ conversationId, userId, message, metadata
     const appendPromise = appendMessage(conversationId, { role: 'user', content: message });
 
     // PARALLEL EXECUTION: Load profile, history, and plan in parallel
+    // Increased history limit to 20 messages for better context retention
+    const profileLoadStart = Date.now();
     const [profile, history] = await Promise.all([
       getUserProfile(userId),
-      getConversation(conversationId)
+      getConversation(conversationId, 20)
     ]);
+    const profileLoadDuration = Date.now() - profileLoadStart;
 
     const profileContext = getProfileContext(profile);
-    logger.info({ userId, hasProfile: !!profile, profileContext: profileContext.substring(0, 100) }, 'Loaded user profile');
+    const hasProfileData = profileContext !== 'No profile information yet';
+    logger.info({
+      userId,
+      hasProfile: !!profile,
+      hasProfileData,
+      profileLoadMs: profileLoadDuration,
+      profileSummary: hasProfileData ? profileContext.substring(0, 100) + '...' : 'Empty profile - user needs to complete profile'
+    }, 'Loaded user profile');
 
     // Ensure user message append completed
     await appendPromise;
@@ -124,8 +136,16 @@ export async function* handleMessage({ conversationId, userId, message, metadata
             metadata
           };
 
-          // Execute tool with validation
+          // Execute tool with validation and track duration
+          const toolStartTime = Date.now();
           const result = await executeToolFromRegistry(action.name, action.input || {}, ctx);
+          const toolDuration = Date.now() - toolStartTime;
+
+          logger.info({
+            tool: action.name,
+            durationMs: toolDuration,
+            resultSize: JSON.stringify(result).length
+          }, 'Tool executed successfully');
 
           // Stream tool result as action event
           yield JSON.stringify({
@@ -395,6 +415,26 @@ export async function* handleMessage({ conversationId, userId, message, metadata
         .catch(err => logger.error({ error: err.message, conversationId }, 'Failed to append assistant message (non-critical)'));
     }
 
+    // Auto-delete conversations after 20 messages to keep database clean
+    // This runs asynchronously and doesn't block the response
+    setImmediate(async () => {
+      try {
+        const messageCount = await prisma.message.count({
+          where: { conversationId }
+        });
+
+        if (messageCount >= 20) {
+          logger.info({ conversationId, messageCount }, 'Auto-deleting conversation (reached 20 messages)');
+          await prisma.conversation.delete({
+            where: { id: conversationId }
+          });
+        }
+      } catch (deleteError) {
+        // Non-critical error, just log it
+        logger.error({ error: deleteError.message, conversationId }, 'Failed to auto-delete conversation (non-critical)');
+      }
+    });
+
     // Extract and update profile from conversation (async, don't wait)
     // Do this after streaming completes so we don't slow down the response
     setImmediate(async () => {
@@ -441,8 +481,25 @@ export async function* handleMessage({ conversationId, userId, message, metadata
       }
     });
 
+    // Log total request duration
+    const totalDuration = Date.now() - requestStartTime;
+    logger.info({
+      conversationId,
+      userId,
+      totalDurationMs: totalDuration,
+      planningTimeMs: planningTime,
+      profileLoadMs: profileLoadDuration
+    }, 'Request completed successfully');
+
   } catch (error) {
-    logger.error({ error: error.message, conversationId, userId }, 'Error in handleMessage');
+    const totalDuration = Date.now() - requestStartTime;
+    logger.error({
+      error: error.message,
+      stack: error.stack,
+      conversationId,
+      userId,
+      totalDurationMs: totalDuration
+    }, 'Error in handleMessage');
 
     yield JSON.stringify({
       type: 'error',
@@ -463,6 +520,15 @@ function formatToolResult(toolName, result) {
       const count = result.items?.length || 0;
       const total = result.paging?.total || 0;
       const role = result.role ? ` (${result.role})` : '';
+
+      // Include detailed job information in conversation history for context
+      if (count > 0) {
+        const jobDetails = result.items.slice(0, 3).map((job, idx) => {
+          return `\n${idx + 1}. ${job.title} at ${job.company} (ID: ${job.id})\n   Location: ${job.location}\n   ${job.snippet}`;
+        }).join('');
+
+        return `Found ${count} of ${total} jobs${role}:${jobDetails}${count > 3 ? '\n... and more' : ''}`;
+      }
       return `Found ${count} of ${total} jobs${role}`;
 
     case 'generate_resume_preview':

@@ -69,7 +69,10 @@ export const authLogger = {
   },
 
   success: (userId, method) => {
-    logger.info({ userId, method, type: 'auth_success' }, 'Authentication successful');
+    // Only log auth success in development to reduce log noise
+    if (!isProduction) {
+      logger.debug({ userId, method, type: 'auth_success' }, 'Authentication successful');
+    }
   },
 
   failure: (reason, method) => {

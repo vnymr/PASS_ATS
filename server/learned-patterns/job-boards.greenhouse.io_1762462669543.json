@@ -1,0 +1,117 @@
+{
+  "metadata": {
+    "url": "https://job-boards.greenhouse.io/gitlab/jobs/8195921002",
+    "domain": "job-boards.greenhouse.io",
+    "company": "Not found",
+    "jobTitle": "Director of Engineering, Security Risk Management",
+    "timestamp": "2025-11-06T20:57:49.543Z",
+    "success": true
+  },
+  "formStructure": {
+    "totalFields": 25,
+    "fieldTypes": {
+      "text": 22,
+      "tel": 1,
+      "file": 2
+    },
+    "requiredFields": [
+      {
+        "name": "unnamed_7",
+        "type": "text",
+        "label": ""
+      },
+      {
+        "name": "unnamed_13",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_15",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_19",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_21",
+        "type": "text",
+        "label": "Select..."
+      }
+    ]
+  },
+  "aiResponses": {
+    "first_name": "Sarah",
+    "last_name": "Martinez",
+    "email": "sarah.martinez@example.com",
+    "country": "United States",
+    "phone": "+1 (555) 345-6789",
+    "candidate-location": "Austin, TX",
+    "unnamed_7": "Senior Software Engineer, TechCorp (2020-Present) — Austin, TX. Experienced in architecting scalable cloud-native systems with a strong focus on secure CI/CD, containerization (Docker, Kubernetes), and infrastructure automation on AWS.",
+    "resume": "https://sarahmartinez.dev/resume.pdf",
+    "cover_letter": "https://sarahmartinez.dev/cover_letter_GitLab_Director_Engineering_Security_Risk_Management.pdf",
+    "question_33402662002": "https://linkedin.com/in/sarahmartinez",
+    "question_33402663002": "Sarah",
+    "question_33402664002": "United States",
+    "unnamed_13": "Not applicable",
+    "question_33402665002": "No",
+    "unnamed_15": "Not applicable",
+    "question_33402666002": "I do not require any specific accommodations at this time. I am happy to participate in standard remote interviews (video calls, take-home exercises, and live technical screens). If necessary, I appreciate scheduling flexibility to accommodate different time zones, advance access to technical test requirements or rubrics, and the option for captioning on video calls.\n\nIn previous roles at TechCorp and StartupXYZ I regularly collaborated with distributed teams across multiple time zones and coordinated hiring and interview processes that included candidates with varied accessibility needs. To ensure an inclusive experience, I’m happy to accept calendar invites in multiple time zones, receive materials in advance in accessible formats (e.g., text-based or screen-reader friendly), or arrange alternative formats for timed exercises if that would better demonstrate a candidate’s abilities.",
+    "question_33402667002": "sarahmartinez",
+    "question_33402668002": "No",
+    "unnamed_19": "Not applicable",
+    "question_33402669002": "No",
+    "unnamed_21": "Not applicable",
+    "gender": "Female",
+    "hispanic_ethnicity": "Yes",
+    "veteran_status": "Not a veteran",
+    "disability_status": "No disability"
+  },
+  "problemsSolved": [
+    {
+      "problem": "Failed to fill resume: No resume file available - user must generate a resume before applying to jobs",
+      "solution": {
+        "issue": "Failed to analyze screenshot",
+        "solution": "Manual intervention required",
+        "needsManualIntervention": true
+      },
+      "timestamp": "2025-11-06T20:57:49.543Z"
+    },
+    {
+      "problem": "Failed to fill cover_letter: No resume file available - user must generate a resume before applying to jobs",
+      "timestamp": "2025-11-06T20:57:49.543Z"
+    },
+    {
+      "problem": "Failed to fill unnamed_21: Field not found with any selector strategy: unnamed_21",
+      "timestamp": "2025-11-06T20:57:49.543Z"
+    }
+  ],
+  "patterns": {
+    "commonQuestions": [
+      {
+        "label": "What's the name you'd prefer us to use throughout the interview process?",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What is your GitLab username?",
+        "type": "text",
+        "category": "other"
+      }
+    ],
+    "fieldNamingConventions": {
+      "camelCase": 0,
+      "snake_case": 19,
+      "kebabCase": 1,
+      "standard": 5
+    },
+    "formLayout": {
+      "totalFields": 25,
+      "visibleFields": 25,
+      "requiredFields": 5,
+      "optionalFields": 20
+    }
+  }
+}

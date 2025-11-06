@@ -198,7 +198,7 @@ class CaptchaSolver {
 
   /**
    * Detect CAPTCHA type on page
-   * @param {Page} page - Puppeteer page object
+   * @param {Page} page - Playwright page object
    * @returns {Promise<Object>} CAPTCHA info {type, siteKey, found}
    */
   async detectCaptcha(page) {
@@ -264,7 +264,7 @@ class CaptchaSolver {
 
   /**
    * Solve and inject CAPTCHA solution into page
-   * @param {Page} page - Puppeteer page object
+   * @param {Page} page - Playwright page object
    * @returns {Promise<boolean>} Success status
    */
   async solveAndInject(page) {

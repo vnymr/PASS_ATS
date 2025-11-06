@@ -162,7 +162,7 @@ IMPORTANT: Return ONLY valid JSON matching the structure provided. No markdown f
     logger.info('HTML generated');
 
     // Currently returning HTML and JSON only (PDF generation disabled due to system constraints)
-    // To enable PDF: install puppeteer when disk space is available
+    // To enable PDF: install additional libraries when disk space is available
     logger.info('Returning HTML and JSON response');
 
     return {

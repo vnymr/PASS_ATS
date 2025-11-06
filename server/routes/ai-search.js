@@ -245,8 +245,12 @@ Output: {
  * Build Prisma where clause from parsed query
  */
 function buildWhereClause(parsedQuery) {
+  // Filter out aggregator sources (only show direct job postings)
+  const aggregatorSources = ['remotive', 'remote.co', 'weworkremotely', 'remoteok', 'flexjobs'];
+
   const where = {
     isActive: true,
+    source: { notIn: aggregatorSources },
     AND: []
   };
 

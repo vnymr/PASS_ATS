@@ -4,16 +4,64 @@ import logger from './logger.js';
 // Create a single instance of PrismaClient to be shared across the application
 const globalForPrisma = global;
 
-// Prisma Client configuration
-// Note: Using Railway PostgreSQL database
-// Prisma manages its own connection pool internally
+/**
+ * Configure DATABASE_URL with connection pool parameters
+ *
+ * Connection Pool Configuration:
+ * - connection_limit: 30 (up from default 10)
+ *   - API server: ~10 connections
+ *   - Background workers (auto-apply, resume generation): ~15 connections
+ *   - Cron jobs: ~5 connections
+ * - pool_timeout: 20 seconds (prevents deadlocks)
+ * - connect_timeout: 10 seconds (faster failure detection)
+ */
+function configureDatabaseUrl() {
+  const baseUrl = process.env.DATABASE_URL;
+
+  if (!baseUrl) {
+    logger.error('DATABASE_URL not set');
+    return baseUrl;
+  }
+
+  try {
+    const url = new URL(baseUrl);
+
+    // Add connection pool parameters if not already present
+    if (!url.searchParams.has('connection_limit')) {
+      url.searchParams.set('connection_limit', '30');
+    }
+    if (!url.searchParams.has('pool_timeout')) {
+      url.searchParams.set('pool_timeout', '20');
+    }
+    if (!url.searchParams.has('connect_timeout')) {
+      url.searchParams.set('connect_timeout', '10');
+    }
+
+    const configuredUrl = url.toString();
+    logger.info({
+      connectionLimit: url.searchParams.get('connection_limit'),
+      poolTimeout: url.searchParams.get('pool_timeout'),
+      connectTimeout: url.searchParams.get('connect_timeout')
+    }, 'Database connection pool configured');
+
+    return configuredUrl;
+  } catch (error) {
+    logger.warn({ error: error.message }, 'Failed to parse DATABASE_URL, using as-is');
+    return baseUrl;
+  }
+}
+
+// Prisma Client with configured connection pooling
 export const prisma =
   globalForPrisma.prisma ||
   new PrismaClient({
     log: process.env.NODE_ENV === 'production' ? ['error'] : ['error', 'warn'],
     errorFormat: 'minimal',
-    // Connection pool is managed by Prisma internally
-    // DATABASE_URL is provided by Railway environment variables
+    datasources: {
+      db: {
+        url: configureDatabaseUrl()
+      }
+    }
   });
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;

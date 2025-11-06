@@ -1,7 +1,8 @@
 import { motion } from 'framer-motion';
-import { MapPin, Clock, DollarSign, Briefcase, Bookmark, Sparkles, ExternalLink } from 'lucide-react';
+import { MapPin, DollarSign, Briefcase, Bookmark, Sparkles, ExternalLink, Loader2, Download } from 'lucide-react';
 import { Job } from '../services/api';
 import CompanyLogo from './CompanyLogo';
+import { api } from '../api-clerk';
 
 interface JobCardSimpleProps {
   job: Job & { relevanceScore?: number };
@@ -12,6 +13,8 @@ interface JobCardSimpleProps {
   onAutoApply?: (job: Job) => void;
   delay?: number;
   isBookmarked?: boolean;
+  isGenerating?: boolean;
+  resumeJobId?: string;
 }
 
 export default function JobCardSimple({
@@ -23,6 +26,8 @@ export default function JobCardSimple({
   onAutoApply,
   delay = 0,
   isBookmarked = false,
+  isGenerating = false,
+  resumeJobId,
 }: JobCardSimpleProps) {
   const formatDate = (dateString: string | null | undefined) => {
     if (!dateString) return '10 min ago';
@@ -40,14 +45,44 @@ export default function JobCardSimple({
     return `${weeks} week${weeks === 1 ? '' : 's'} ago`;
   };
 
-  const getIndustry = () => {
-    // Derive a generic industry label without using ATS metadata
-    const title = job.title?.toLowerCase() || '';
-    if (title.includes('engineer') || title.includes('developer')) return 'Technology';
-    if (title.includes('marketing')) return 'Marketing';
-    if (title.includes('sales')) return 'Sales';
-    if (title.includes('design')) return 'Design';
-    return 'General';
+  const getExperience = () => {
+    // Extract years from any field
+    const extractYears = (text: string) => {
+      if (!text) return null;
+      const lower = text.toLowerCase();
+
+      // Pattern 1: "5-7 years" or "3 to 5 years"
+      let match = lower.match(/(\d+)\s*(?:-|to)\s*(\d+)\s*(?:years?|yrs?)/i);
+      if (match) return `${match[1]}-${match[2]} yrs`;
+
+      // Pattern 2: "5+ years" or "5 years+"
+      match = lower.match(/(\d+)\+?\s*(?:years?|yrs?)/i);
+      if (match) return `${match[1]}+ yrs`;
+
+      return null;
+    };
+
+    // Check extractedExperience first (most specific)
+    if (job.extractedExperience) {
+      const years = extractYears(job.extractedExperience);
+      if (years) return years;
+    }
+
+    // Check description and requirements
+    const searchText = `${job.description || ''} ${job.requirements || ''}`;
+    const years = extractYears(searchText);
+    if (years) return years;
+
+    // Fallback to level-based labels from title
+    const title = (job.title || '').toLowerCase();
+    if (title.includes('senior') || title.includes('sr.') || title.includes('sr ')) return 'Senior';
+    if (title.includes('lead') || title.includes('architect')) return 'Lead';
+    if (title.includes('principal') || title.includes('staff')) return 'Principal';
+    if (title.includes('mid-level') || title.includes('intermediate')) return 'Mid';
+    if (title.includes('junior') || title.includes('jr.')) return 'Junior';
+    if (title.includes('entry') || title.includes('intern')) return 'Entry';
+
+    return 'Not specified';
   };
 
   const formatSalary = () => {
@@ -116,11 +151,7 @@ export default function JobCardSimple({
       <div className="flex flex-wrap items-center gap-3 mb-3 text-sm text-gray-600">
         <div className="flex items-center gap-1.5">
           <Briefcase className="w-4 h-4 text-gray-400" />
-          <span>{getIndustry()}</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <Clock className="w-4 h-4 text-gray-400" />
-          <span>Full time</span>
+          <span>{getExperience()}</span>
         </div>
         <div className="flex items-center gap-1.5">
           <DollarSign className="w-4 h-4 text-gray-400" />
@@ -138,12 +169,29 @@ export default function JobCardSimple({
           <button
             onClick={(e) => {
               e.stopPropagation();
-              onGenerateResume(job);
+              if (resumeJobId) {
+                // Download the generated resume
+                window.open(`${api.base}/api/job/${resumeJobId}/download/pdf`, '_blank');
+              } else if (!isGenerating) {
+                // Start generation
+                onGenerateResume(job);
+              }
             }}
-            className="w-9 h-9 flex items-center justify-center bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors"
-            title="Generate Resume"
+            disabled={isGenerating}
+            className={`w-9 h-9 flex items-center justify-center ${
+              resumeJobId
+                ? 'bg-green-600 hover:bg-green-700'
+                : 'bg-teal-600 hover:bg-teal-700'
+            } text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed`}
+            title={resumeJobId ? 'Download Resume' : isGenerating ? 'Generating...' : 'Generate Resume'}
           >
-            <Sparkles className="w-4 h-4" />
+            {isGenerating ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : resumeJobId ? (
+              <Download className="w-4 h-4" />
+            ) : (
+              <Sparkles className="w-4 h-4" />
+            )}
           </button>
         )}
         {onViewJob && (

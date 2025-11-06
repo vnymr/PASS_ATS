@@ -15,7 +15,7 @@ class ImprovedCaptchaHandler {
 
   /**
    * Check and solve CAPTCHA if present
-   * @param {Page|Frame} target - Puppeteer page or frame object
+   * @param {Page|Frame} target - Playwright page or frame object
    * @returns {Object} Result of CAPTCHA handling
    */
   async handleCaptcha(target) {
@@ -23,7 +23,6 @@ class ImprovedCaptchaHandler {
       captchaDetected: false,
       captchaSolved: false,
       captchaType: null,
-      cost: 0,
       error: null,
       attempts: 0
     };
@@ -60,7 +59,6 @@ class ImprovedCaptchaHandler {
 
           if (solved) {
             result.captchaSolved = true;
-            result.cost = 0.03; // Approximate cost per solve
             logger.info('✅ CAPTCHA solved successfully!');
 
             // Wait a bit for the page to process the CAPTCHA solution
@@ -266,7 +264,7 @@ class ImprovedCaptchaHandler {
 
   /**
    * Check if CAPTCHA solution was successful
-   * @param {Page|Frame} target - Puppeteer page or frame
+   * @param {Page|Frame} target - Playwright page or frame
    * @returns {Boolean} True if CAPTCHA is solved
    */
   async verifyCaptchaSolved(target) {

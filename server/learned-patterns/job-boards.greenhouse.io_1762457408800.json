@@ -1,0 +1,177 @@
+{
+  "metadata": {
+    "url": "https://job-boards.greenhouse.io/gitlab/jobs/8195921002",
+    "domain": "job-boards.greenhouse.io",
+    "company": "Not found",
+    "jobTitle": "Director of Engineering, Security Risk Management",
+    "timestamp": "2025-11-06T19:30:08.800Z",
+    "success": true
+  },
+  "formStructure": {
+    "totalFields": 25,
+    "fieldTypes": {
+      "text": 22,
+      "tel": 1,
+      "file": 2
+    },
+    "requiredFields": [
+      {
+        "name": "unnamed_7",
+        "type": "text",
+        "label": ""
+      },
+      {
+        "name": "unnamed_13",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_15",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_19",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_21",
+        "type": "text",
+        "label": "Select..."
+      }
+    ]
+  },
+  "aiResponses": {
+    "first_name": "Sarah",
+    "last_name": "Martinez",
+    "email": "sarah.martinez@example.com",
+    "country": "United States",
+    "phone": "+1 (555) 345-6789",
+    "candidate-location": "Austin, TX",
+    "unnamed_7": "I am a results-driven Senior Software Engineer with 6 years of experience building and scaling secure, cloud-native systems. At TechCorp I have led cross-functional initiatives to integrate security earlier in the development lifecycle by embedding automated dependency and container scanning into CI/CD pipelines, hardening Kubernetes deployments, and improving AWS IAM practices. I routinely collaborate with SRE and security teams to translate risk findings into prioritized engineering work and measurable remediation plans.\n\nOne representative effort involved partnering with security and product teams to create an automated pipeline that performed dependency scanning, container image scanning, and infrastructure-as-code checks during merge requests. I defined the acceptance criteria, implemented the pipeline using GitLab CI-style patterns, and worked with engineers to streamline remediation workflows. This initiative increased vulnerability detection earlier in development, improved developer turnaround on fixes, and reduced the number of high-severity issues reaching production.\n\nI am energized by the opportunity to lead an engineering team focused on Security Risk Management. My technical breadth (Node.js, Python, Kubernetes, Docker, AWS, CI/CD) combined with hands-on experience integrating security tooling and mentoring engineers makes me well-suited to drive scalable, developer-friendly security programs. I welcome a remote role that partners across time zones to embed security as a core part of the software delivery lifecycle.",
+    "resume": "Sarah_Martinez_Resume.pdf",
+    "cover_letter": "Sarah_Martinez_Cover_Letter.pdf",
+    "question_33402662002": "https://linkedin.com/in/sarahmartinez",
+    "question_33402663002": "Sarah",
+    "question_33402664002": "United States",
+    "unnamed_13": "Authorized to work in the United States without sponsorship; based in Austin, TX and available for remote roles across US/Canada/EMEA.",
+    "question_33402665002": "Yes",
+    "unnamed_15": "I am subject to standard employment agreements with my current employer, including confidentiality and IP-assignment clauses. I am not subject to any restrictive non-compete that would prevent me from taking a Director role in Security Risk Management.",
+    "question_33402666002": "I do not require adjustments at this time. If needed, I would appreciate the option for a short accommodation window before interviews (e.g., flexible scheduling or additional time for technical assessments).",
+    "question_33402667002": "N/A - I do not currently have a GitLab username",
+    "question_33402668002": "No",
+    "unnamed_19": "Open to fully remote work (US/Canada/EMEA); based in Central Time (Austin, TX) and able to provide overlap with US and EMEA teams.",
+    "question_33402669002": "No",
+    "unnamed_21": "Yes - available for interviews during regular CST business hours and can accommodate evening overlap for EMEA as needed.",
+    "gender": "Female",
+    "hispanic_ethnicity": "Yes",
+    "veteran_status": "Not a veteran",
+    "disability_status": "No disability"
+  },
+  "problemsSolved": [
+    {
+      "problem": "Failed to fill country: Failed to fill custom dropdown \"country\": Failed to select custom dropdown option. AI provided: \"United States\" but No matching option found. Available: unknown",
+      "solution": {
+        "issue": "Failed to analyze screenshot",
+        "solution": "Manual intervention required",
+        "needsManualIntervention": true
+      },
+      "timestamp": "2025-11-06T19:30:08.801Z"
+    },
+    {
+      "problem": "Failed to fill phone: Failed to fill custom dropdown \"phone\": Failed to select custom dropdown option. AI provided: \"+1 (555) 345-6789\" but No matching option found. Available: unknown",
+      "timestamp": "2025-11-06T19:30:08.801Z"
+    },
+    {
+      "problem": "Failed to fill candidate-location: Failed to fill custom dropdown \"candidate-location\": Failed to select custom dropdown option. AI provided: \"Austin, TX\" but No matching option found. Available: unknown",
+      "timestamp": "2025-11-06T19:30:08.801Z"
+    },
+    {
+      "problem": "Failed to fill unnamed_7: Failed to fill custom dropdown \"unnamed_7\": Failed to select custom dropdown option. AI provided: \"I am a results-driven Senior Software Engineer with 6 years of experience building and scaling secure, cloud-native systems. At TechCorp I have led cross-functional initiatives to integrate security earlier in the development lifecycle by embedding automated dependency and container scanning into CI/CD pipelines, hardening Kubernetes deployments, and improving AWS IAM practices. I routinely collaborate with SRE and security teams to translate risk findings into prioritized engineering work and measurable remediation plans.\n\nOne representative effort involved partnering with security and product teams to create an automated pipeline that performed dependency scanning, container image scanning, and infrastructure-as-code checks during merge requests. I defined the acceptance criteria, implemented the pipeline using GitLab CI-style patterns, and worked with engineers to streamline remediation workflows. This initiative increased vulnerability detection earlier in development, improved developer turnaround on fixes, and reduced the number of high-severity issues reaching production.\n\nI am energized by the opportunity to lead an engineering team focused on Security Risk Management. My technical breadth (Node.js, Python, Kubernetes, Docker, AWS, CI/CD) combined with hands-on experience integrating security tooling and mentoring engineers makes me well-suited to drive scalable, developer-friendly security programs. I welcome a remote role that partners across time zones to embed security as a core part of the software delivery lifecycle.\" but No matching option found. Available: unknown",
+      "timestamp": "2025-11-06T19:30:08.801Z"
+    },
+    {
+      "problem": "Failed to fill resume: No resume file available - user must generate a resume before applying to jobs",
+      "timestamp": "2025-11-06T19:30:08.801Z"
+    },
+    {
+      "problem": "Failed to fill cover_letter: No resume file available - user must generate a resume before applying to jobs",
+      "timestamp": "2025-11-06T19:30:08.801Z"
+    },
+    {
+      "problem": "Failed to fill question_33402664002: Failed to fill custom dropdown \"question_33402664002\": Failed to select custom dropdown option. AI provided: \"United States\" but No matching option found. Available: unknown",
+      "timestamp": "2025-11-06T19:30:08.801Z"
+    },
+    {
+      "problem": "Failed to fill unnamed_13: Failed to fill custom dropdown \"unnamed_13\": Failed to select custom dropdown option. AI provided: \"Authorized to work in the United States without sponsorship; based in Austin, TX and available for remote roles across US/Canada/EMEA.\" but No matching option found. Available: unknown",
+      "timestamp": "2025-11-06T19:30:08.801Z"
+    },
+    {
+      "problem": "Failed to fill question_33402665002: Failed to fill custom dropdown \"question_33402665002\": Failed to select custom dropdown option. AI provided: \"Yes\" but No matching option found. Available: unknown",
+      "timestamp": "2025-11-06T19:30:08.801Z"
+    },
+    {
+      "problem": "Failed to fill unnamed_15: Failed to fill custom dropdown \"unnamed_15\": Failed to select custom dropdown option. AI provided: \"I am subject to standard employment agreements with my current employer, including confidentiality and IP-assignment clauses. I am not subject to any restrictive non-compete that would prevent me from taking a Director role in Security Risk Management.\" but No matching option found. Available: unknown",
+      "timestamp": "2025-11-06T19:30:08.801Z"
+    },
+    {
+      "problem": "Failed to fill question_33402668002: Failed to fill custom dropdown \"question_33402668002\": Failed to select custom dropdown option. AI provided: \"No\" but No matching option found. Available: unknown",
+      "timestamp": "2025-11-06T19:30:08.801Z"
+    },
+    {
+      "problem": "Failed to fill unnamed_19: Failed to fill custom dropdown \"unnamed_19\": Failed to select custom dropdown option. AI provided: \"Open to fully remote work (US/Canada/EMEA); based in Central Time (Austin, TX) and able to provide overlap with US and EMEA teams.\" but No matching option found. Available: unknown",
+      "timestamp": "2025-11-06T19:30:08.801Z"
+    },
+    {
+      "problem": "Failed to fill question_33402669002: Failed to fill custom dropdown \"question_33402669002\": Failed to select custom dropdown option. AI provided: \"No\" but No matching option found. Available: unknown",
+      "timestamp": "2025-11-06T19:30:08.801Z"
+    },
+    {
+      "problem": "Failed to fill unnamed_21: Failed to fill custom dropdown \"unnamed_21\": Failed to select custom dropdown option. AI provided: \"Yes - available for interviews during regular CST business hours and can accommodate evening overlap for EMEA as needed.\" but No matching option found. Available: unknown",
+      "timestamp": "2025-11-06T19:30:08.801Z"
+    },
+    {
+      "problem": "Failed to fill gender: Failed to fill custom dropdown \"gender\": Failed to select custom dropdown option. AI provided: \"Female\" but No matching option found. Available: unknown",
+      "timestamp": "2025-11-06T19:30:08.801Z"
+    },
+    {
+      "problem": "Failed to fill hispanic_ethnicity: Failed to fill custom dropdown \"hispanic_ethnicity\": Failed to select custom dropdown option. AI provided: \"Yes\" but No matching option found. Available: unknown",
+      "timestamp": "2025-11-06T19:30:08.801Z"
+    },
+    {
+      "problem": "Failed to fill veteran_status: Failed to fill custom dropdown \"veteran_status\": Failed to select custom dropdown option. AI provided: \"Not a veteran\" but No matching option found. Available: unknown",
+      "timestamp": "2025-11-06T19:30:08.801Z"
+    },
+    {
+      "problem": "Failed to fill disability_status: Failed to fill custom dropdown \"disability_status\": Failed to select custom dropdown option. AI provided: \"No disability\" but No matching option found. Available: unknown",
+      "timestamp": "2025-11-06T19:30:08.801Z"
+    }
+  ],
+  "patterns": {
+    "commonQuestions": [
+      {
+        "label": "What's the name you'd prefer us to use throughout the interview process?",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What is your GitLab username?",
+        "type": "text",
+        "category": "other"
+      }
+    ],
+    "fieldNamingConventions": {
+      "camelCase": 0,
+      "snake_case": 19,
+      "kebabCase": 1,
+      "standard": 5
+    },
+    "formLayout": {
+      "totalFields": 25,
+      "visibleFields": 25,
+      "requiredFields": 5,
+      "optionalFields": 20
+    }
+  }
+}

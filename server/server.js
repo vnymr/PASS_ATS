@@ -2785,6 +2785,7 @@ import migrateDatabaseRouter from './routes/migrate-database.js';
 import chatRouter from './routes/chat.js';
 import profileRouter from './routes/profile.js';
 import goalsRouter from './routes/goals.js';
+import healthRouter from './routes/health.js';
 
 app.post('/api/generate-ai', authenticateToken, generateResumeEndpoint);
 app.get('/api/check-compilers', authenticateToken, checkCompilersEndpoint);
@@ -2792,14 +2793,26 @@ app.get('/api/check-compilers', authenticateToken, checkCompilersEndpoint);
 // Job extraction endpoint for Chrome extension
 app.post('/api/extract-job', authenticateToken, extractJobHandler);
 
+// Health check endpoints - NO authentication required (used by load balancers)
+app.use('/', healthRouter);
+
 // Mount new routers - MUST be before static file serving!
-app.use('/api', authenticateToken, jobsRouter);
-app.use('/api', authenticateToken, aiSearchRouter);
-app.use('/api', authenticateToken, autoApplyRouter);
-app.use('/api', authenticateToken, diagnosticsRouter);
-app.use('/api', authenticateToken, chatRouter);
-app.use('/api', authenticateToken, profileRouter);
-app.use('/api', authenticateToken, goalsRouter);
+// Apply auth middleware once for all /api routes except health and migration
+const apiRouter = express.Router();
+apiRouter.use(authenticateToken); // Apply auth once to all API routes
+
+// Mount protected routers
+apiRouter.use(jobsRouter);
+apiRouter.use(aiSearchRouter);
+apiRouter.use(autoApplyRouter);
+apiRouter.use(diagnosticsRouter);
+apiRouter.use(chatRouter);
+apiRouter.use(profileRouter);
+apiRouter.use(goalsRouter);
+
+// Mount the API router
+app.use('/api', apiRouter);
+
 // Migration endpoint (protected by secret key, no auth token needed)
 app.use('/api', migrateDatabaseRouter);
 

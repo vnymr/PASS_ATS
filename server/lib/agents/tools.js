@@ -144,7 +144,12 @@ async function searchJobs(args, ctx = {}) {
       role: role || null
     };
   } catch (error) {
-    logger.error({ error: error.message, args }, 'search_jobs failed');
+    logger.error({
+      error: error.message,
+      stack: error.stack,
+      args,
+      userId: ctx.userId
+    }, 'search_jobs failed');
     throw new Error(`Failed to search jobs: ${error.message}`);
   }
 }
@@ -193,7 +198,7 @@ async function generateResumePreview(args, ctx = {}) {
     // Generate resume using AI
     const generator = new AIResumeGenerator(process.env.OPENAI_API_KEY);
     const result = await generator.generateAndCompile(profile, targetJobDescription, {
-      model: 'gpt-4'
+      model: 'gpt-4o-mini'  // 128k context window, no token limit issues
     });
 
     // Store the generated resume (create a job entry for it)
@@ -756,29 +761,43 @@ function calculateNextRun(frequency, schedule) {
  * @returns {Promise<object>}
  */
 async function createRoutine(args, ctx = {}) {
-  const { title, description, type, frequency, schedule, config } = args;
   const { userId } = ctx;
 
-  logger.info({ userId, title, type, frequency }, 'Creating routine');
+  // Validate and provide defaults
+  const type = args.type || 'SEARCH_JOBS';
+  const frequency = args.frequency || 'DAILY';
+  const schedule = args.schedule || args.time || '09:00'; // Support both schedule and time
+
+  // Generate title if not provided
+  const title = args.title || `Daily ${type.replace(/_/g, ' ').toLowerCase()} routine`;
+  const description = args.description || `Automated ${type.replace(/_/g, ' ').toLowerCase()}`;
+  const config = args.config || args.parameters || null; // Support both config and parameters
+
+  logger.info({ userId, title, type, frequency, schedule }, 'Creating routine');
+
+  // Validate required field
+  if (!title || title.trim() === '') {
+    throw new Error('Missing required field: title. Please provide a title for the routine.');
+  }
 
   try {
-    const nextRun = calculateNextRun(frequency || 'DAILY', schedule || '09:00');
+    const nextRun = calculateNextRun(frequency, schedule);
 
     const routine = await prisma.routine.create({
       data: {
         userId: parseInt(userId),
         title,
-        description: description || null,
-        type: type || 'SEARCH_JOBS',
-        frequency: frequency || 'DAILY',
-        schedule: schedule || '09:00',
-        config: config || null,
+        description,
+        type,
+        frequency,
+        schedule,
+        config,
         isActive: true,
         nextRun
       }
     });
 
-    logger.info({ routineId: routine.id, userId, nextRun }, 'Routine created successfully');
+    logger.info({ routineId: routine.id, userId, nextRun, type }, 'Routine created successfully');
 
     return {
       routineId: routine.id,
@@ -790,7 +809,14 @@ async function createRoutine(args, ctx = {}) {
       message: `Routine created: ${routine.title}. Next run at ${routine.nextRun.toISOString()}`
     };
   } catch (error) {
-    logger.error({ error: error.message, userId }, 'Failed to create routine');
+    logger.error({
+      error: error.message,
+      stack: error.stack,
+      userId,
+      args,
+      type: args.type,
+      title: args.title
+    }, 'Failed to create routine');
     throw new Error(`Failed to create routine: ${error.message}`);
   }
 }

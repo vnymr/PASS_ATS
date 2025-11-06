@@ -8,8 +8,14 @@ import express from 'express';
 import { prisma } from '../lib/prisma-client.js';
 import logger from '../lib/logger.js';
 import { queueAutoApply, getQueueStats, getJobStatus } from '../lib/auto-apply-queue.js';
+import { rateLimitMiddleware } from '../lib/rate-limiter.js';
+import { validateJobUrl } from '../lib/url-validator.js';
 
 const router = express.Router();
+
+// Rate limiter for auto-apply endpoints to prevent abuse
+// Limits both AI usage costs and CAPTCHA credit depletion
+const autoApplyLimiter = rateLimitMiddleware();
 
 function respondWithAutoApplyError(res, error, fallbackMessage) {
   if (error?.code === 'P2021') {
@@ -40,8 +46,13 @@ function respondWithAutoApplyError(res, error, fallbackMessage) {
 /**
  * POST /api/auto-apply
  * Submit auto-apply for a job
+ *
+ * Rate limited to prevent:
+ * - Excessive AI API costs
+ * - CAPTCHA credit depletion
+ * - System abuse
  */
-router.post('/auto-apply', async (req, res) => {
+router.post('/auto-apply', autoApplyLimiter, async (req, res) => {
   try {
     const { jobId } = req.body;
     const userId = req.userId;
@@ -55,6 +66,23 @@ router.post('/auto-apply', async (req, res) => {
 
     if (!job) {
       return res.status(404).json({ error: 'Job not found' });
+    }
+
+    // Validate job URL for security
+    const urlValidation = validateJobUrl(job.applyUrl);
+    if (!urlValidation.valid) {
+      logger.warn({
+        userId,
+        jobId,
+        url: job.applyUrl,
+        error: urlValidation.error
+      }, 'Job URL validation failed');
+
+      return res.status(400).json({
+        error: 'Invalid or untrusted job URL',
+        reason: urlValidation.error,
+        domain: urlValidation.domain
+      });
     }
 
     if (!job.aiApplyable) {

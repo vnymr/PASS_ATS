@@ -26,23 +26,16 @@ export function RoutinesPanel({ isOpen, onClose }: RoutinesPanelProps) {
 
   return (
     <>
-      {/* Backdrop */}
-      {isOpen && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={onClose}
-          className="fixed inset-0 bg-black/20 z-40"
-        />
-      )}
-
       {/* Panel */}
       <motion.div
         initial={{ x: '100%' }}
         animate={{ x: isOpen ? 0 : '100%' }}
         transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-        className="fixed top-0 right-0 h-full w-full md:w-[440px] bg-background shadow-2xl z-50 overflow-y-auto"
+        className="fixed right-0 w-full md:w-[440px] bg-background shadow-2xl z-50 overflow-y-auto"
+        style={{
+          top: '72px',
+          height: 'calc(100vh - 72px)'
+        }}
       >
         <div className="p-6">
           {/* Header */}

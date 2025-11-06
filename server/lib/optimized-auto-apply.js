@@ -73,7 +73,7 @@ class OptimizedAutoApply {
       // Step 2: Navigate to application page (2-4s)
       logger.info('🌐 Navigating to job application page...');
       await page.goto(jobUrl, {
-        waitUntil: 'networkidle2',
+        waitUntil: 'networkidle',  // Playwright uses 'networkidle' not 'networkidle2'
         timeout: 30000
       });
 

@@ -1,0 +1,169 @@
+{
+  "metadata": {
+    "url": "https://job-boards.greenhouse.io/gitlab/jobs/8195921002",
+    "domain": "job-boards.greenhouse.io",
+    "company": "Not found",
+    "jobTitle": "Director of Engineering, Security Risk Management",
+    "timestamp": "2025-11-06T20:19:07.655Z",
+    "success": true
+  },
+  "formStructure": {
+    "totalFields": 25,
+    "fieldTypes": {
+      "text": 22,
+      "tel": 1,
+      "file": 2
+    },
+    "requiredFields": [
+      {
+        "name": "unnamed_7",
+        "type": "text",
+        "label": ""
+      },
+      {
+        "name": "unnamed_13",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_15",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_19",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_21",
+        "type": "text",
+        "label": "Select..."
+      }
+    ]
+  },
+  "aiResponses": {
+    "first_name": "Sarah",
+    "last_name": "Martinez",
+    "email": "sarah.martinez@example.com",
+    "country": "United States",
+    "phone": "+1 (555) 345-6789",
+    "candidate-location": "Austin, TX",
+    "unnamed_7": "Senior Software Engineer at TechCorp (2020-Present)",
+    "resume": "https://sarahmartinez.dev/resume.pdf",
+    "cover_letter": "https://sarahmartinez.dev/cover_letter_gi_director_security_risk_management.pdf",
+    "question_33402662002": "https://linkedin.com/in/sarahmartinez",
+    "question_33402663002": "Sarah",
+    "question_33402664002": "United States",
+    "unnamed_13": "Remote, US",
+    "question_33402665002": "No",
+    "unnamed_15": "Yes",
+    "question_33402666002": "Thank you for prioritizing an accessible and inclusive interview experience. I do not require any ongoing accommodations for interviews by default, and I am comfortable participating via video conferencing (Zoom, Google Meet) or by phone. I work on Central Time (UTC-6/UTC-5 as applicable) and am available for interviews on weekdays between 9:00 AM and 4:00 PM CT; if needed I can occasionally make myself available earlier or later with advance notice.\n\nWhen helpful, I appreciate having an agenda and any technical instructions in writing ahead of time (e.g., systems to access, repos or sample code to review). In prior roles at TechCorp and StartupXYZ I collaborated with globally distributed teams across the US and EMEA; providing written prompts or sample artifacts in advance improved the efficiency and fairness of technical discussions. If any live coding exercises are required, I am happy to do them in a shared document or in an environment where a copy of the prompt is available in text form.\n\nIf additional accommodations become necessary at any stage (for example, preference for closed captions, transcripts of recorded sessions, or extended time for a take-home assignment), I will request them promptly. I value GitLab's emphasis on accessibility and collaboration and am committed to working with your team to ensure a smooth, inclusive process for everyone involved.",
+    "question_33402667002": "sarahmartinez",
+    "question_33402668002": "No",
+    "unnamed_19": "No",
+    "question_33402669002": "No",
+    "unnamed_21": "LinkedIn",
+    "gender": "Female",
+    "hispanic_ethnicity": "Yes",
+    "veteran_status": "Not a veteran",
+    "disability_status": "No"
+  },
+  "problemsSolved": [
+    {
+      "problem": "Dropdown \"country\" failed: Failed to fill custom dropdown \"country\" after 3 attempts. AI provided: \"United States\". Error: Failed to select: No options found in dropdown. Available options: none",
+      "solution": {
+        "issue": "Failed to analyze screenshot",
+        "solution": "Manual intervention required",
+        "needsManualIntervention": true
+      },
+      "timestamp": "2025-11-06T20:19:07.655Z"
+    },
+    {
+      "problem": "Dropdown \"unnamed_7\" failed: Failed to fill custom dropdown \"unnamed_7\" after 3 attempts. AI provided: \"Senior Software Engineer at TechCorp (2020-Present)\". Error: Failed to select: No options found in dropdown. Available options: none",
+      "timestamp": "2025-11-06T20:19:07.655Z"
+    },
+    {
+      "problem": "Failed to fill resume: No resume file available - user must generate a resume before applying to jobs",
+      "timestamp": "2025-11-06T20:19:07.655Z"
+    },
+    {
+      "problem": "Failed to fill cover_letter: No resume file available - user must generate a resume before applying to jobs",
+      "timestamp": "2025-11-06T20:19:07.655Z"
+    },
+    {
+      "problem": "Dropdown \"question_33402664002\" failed: Failed to fill custom dropdown \"question_33402664002\" after 3 attempts. AI provided: \"United States\". Error: Failed to select: No options found in dropdown. Available options: none",
+      "timestamp": "2025-11-06T20:19:07.655Z"
+    },
+    {
+      "problem": "Dropdown \"unnamed_13\" failed: Failed to fill custom dropdown \"unnamed_13\" after 3 attempts. AI provided: \"Remote, US\". Error: Failed to select: No options found in dropdown. Available options: none",
+      "timestamp": "2025-11-06T20:19:07.655Z"
+    },
+    {
+      "problem": "Dropdown \"question_33402665002\" failed: Failed to fill custom dropdown \"question_33402665002\" after 3 attempts. AI provided: \"No\". Error: Failed to select: No options found in dropdown. Available options: none",
+      "timestamp": "2025-11-06T20:19:07.655Z"
+    },
+    {
+      "problem": "Dropdown \"unnamed_15\" failed: Failed to fill custom dropdown \"unnamed_15\" after 3 attempts. AI provided: \"Yes\". Error: Failed to select: No options found in dropdown. Available options: none",
+      "timestamp": "2025-11-06T20:19:07.655Z"
+    },
+    {
+      "problem": "Dropdown \"question_33402668002\" failed: Failed to fill custom dropdown \"question_33402668002\" after 3 attempts. AI provided: \"No\". Error: Failed to select: No options found in dropdown. Available options: none",
+      "timestamp": "2025-11-06T20:19:07.655Z"
+    },
+    {
+      "problem": "Dropdown \"unnamed_19\" failed: Failed to fill custom dropdown \"unnamed_19\" after 3 attempts. AI provided: \"No\". Error: Failed to select: No options found in dropdown. Available options: none",
+      "timestamp": "2025-11-06T20:19:07.655Z"
+    },
+    {
+      "problem": "Dropdown \"question_33402669002\" failed: Failed to fill custom dropdown \"question_33402669002\" after 3 attempts. AI provided: \"No\". Error: Failed to select: No options found in dropdown. Available options: none",
+      "timestamp": "2025-11-06T20:19:07.655Z"
+    },
+    {
+      "problem": "Dropdown \"unnamed_21\" failed: Failed to fill custom dropdown \"unnamed_21\" after 3 attempts. AI provided: \"LinkedIn\". Error: Failed to select: No options found in dropdown. Available options: none",
+      "timestamp": "2025-11-06T20:19:07.655Z"
+    },
+    {
+      "problem": "Dropdown \"gender\" failed: Failed to fill custom dropdown \"gender\" after 3 attempts. AI provided: \"Female\". Error: Failed to select: No options found in dropdown. Available options: none",
+      "timestamp": "2025-11-06T20:19:07.655Z"
+    },
+    {
+      "problem": "Dropdown \"hispanic_ethnicity\" failed: Failed to fill custom dropdown \"hispanic_ethnicity\" after 3 attempts. AI provided: \"Yes\". Error: Failed to select: No options found in dropdown. Available options: none",
+      "timestamp": "2025-11-06T20:19:07.655Z"
+    },
+    {
+      "problem": "Dropdown \"veteran_status\" failed: Failed to fill custom dropdown \"veteran_status\" after 3 attempts. AI provided: \"Not a veteran\". Error: Failed to select: No options found in dropdown. Available options: none",
+      "timestamp": "2025-11-06T20:19:07.655Z"
+    },
+    {
+      "problem": "Dropdown \"disability_status\" failed: Failed to fill custom dropdown \"disability_status\" after 3 attempts. AI provided: \"No\". Error: Failed to select: No options found in dropdown. Available options: none",
+      "timestamp": "2025-11-06T20:19:07.655Z"
+    }
+  ],
+  "patterns": {
+    "commonQuestions": [
+      {
+        "label": "What's the name you'd prefer us to use throughout the interview process?",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What is your GitLab username?",
+        "type": "text",
+        "category": "other"
+      }
+    ],
+    "fieldNamingConventions": {
+      "camelCase": 0,
+      "snake_case": 19,
+      "kebabCase": 1,
+      "standard": 5
+    },
+    "formLayout": {
+      "totalFields": 25,
+      "visibleFields": 25,
+      "requiredFields": 5,
+      "optionalFields": 20
+    }
+  }
+}

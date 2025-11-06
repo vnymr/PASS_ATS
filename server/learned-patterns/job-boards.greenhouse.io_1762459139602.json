@@ -1,0 +1,133 @@
+{
+  "metadata": {
+    "url": "https://job-boards.greenhouse.io/gitlab/jobs/8195921002",
+    "domain": "job-boards.greenhouse.io",
+    "company": "Not found",
+    "jobTitle": "Director of Engineering, Security Risk Management",
+    "timestamp": "2025-11-06T19:58:59.602Z",
+    "success": true
+  },
+  "formStructure": {
+    "totalFields": 25,
+    "fieldTypes": {
+      "text": 22,
+      "tel": 1,
+      "file": 2
+    },
+    "requiredFields": [
+      {
+        "name": "unnamed_7",
+        "type": "text",
+        "label": ""
+      },
+      {
+        "name": "unnamed_13",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_15",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_19",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_21",
+        "type": "text",
+        "label": "Select..."
+      }
+    ]
+  },
+  "aiResponses": {
+    "first_name": "Sarah",
+    "last_name": "Martinez",
+    "email": "sarah.martinez@example.com",
+    "country": "United States",
+    "phone": "+1 (555) 345-6789",
+    "candidate-location": "Austin",
+    "unnamed_7": "I am a results-driven engineering leader and hands-on software engineer with six years of experience building secure, scalable platforms. In my current role as Senior Software Engineer at TechCorp (2020–Present), I led initiatives to harden our CI/CD pipelines and container deployments, introducing automated dependency scanning, image vulnerability checks, and runtime monitoring across our AWS-hosted services. These efforts reduced the number of production security incidents by measurable margins and accelerated our mean-time-to-detect while preserving developer velocity.\n\nPrior to TechCorp, at StartupXYZ (2018–2020) I built and shipped backend services using Node.js and Python, architected authentication and authorization flows, and implemented logging and observability that supported rapid incident investigation. I routinely worked with Docker, Kubernetes, Terraform, and Git-driven CI/CD; my practical experience, combined with certifications like AWS Certified Solutions Architect and Certified Kubernetes Administrator (CKA), gives me the technical depth to partner effectively with security, infra, and product teams.\n\nI am excited by the Director of Engineering, Security Risk Management role because it aligns with my experience improving platform security at scale and mentoring engineers to build secure systems by default. I bring a pragmatic balance of strategic vision and hands-on execution: designing risk-reduction programs, deploying automation to embed security in the SDLC, and coaching teams to adopt best practices. I’m enthusiastic about GitLab’s DevSecOps mission and AI-first productivity approach, and I’m eager to help scale security programs that enable engineering teams to move quickly and safely.",
+    "resume": "Sarah_Martinez_Resume.pdf",
+    "cover_letter": "Sarah_Martinez_Cover_Letter.pdf",
+    "question_33402662002": "https://linkedin.com/in/sarahmartinez",
+    "question_33402663002": "Sarah",
+    "question_33402664002": "United States",
+    "unnamed_13": "Texas",
+    "question_33402665002": "No",
+    "unnamed_15": "Yes",
+    "question_33402666002": "I do not require any interview adjustments at this time. I appreciate inclusive interview practices and am happy to request accommodations if needed for a particular interview stage.\n\nIf an accommodation is helpful, I may request things like captioning for recorded interviews, a shared agenda in advance, or a short break during longer interview sessions. I am flexible and will communicate promptly if any adjustments are needed.",
+    "question_33402667002": "sarahmartinez",
+    "question_33402668002": "No",
+    "unnamed_19": "No",
+    "question_33402669002": "No",
+    "unnamed_21": "No",
+    "gender": "Female",
+    "hispanic_ethnicity": "Yes",
+    "veteran_status": "Not a veteran",
+    "disability_status": "No"
+  },
+  "problemsSolved": [
+    {
+      "problem": "Dropdown \"unnamed_7\" failed: Failed to fill custom dropdown \"unnamed_7\" after 3 attempts. AI provided: \"I am a results-driven engineering leader and hands-on software engineer with six years of experience building secure, scalable platforms. In my current role as Senior Software Engineer at TechCorp (2020–Present), I led initiatives to harden our CI/CD pipelines and container deployments, introducing automated dependency scanning, image vulnerability checks, and runtime monitoring across our AWS-hosted services. These efforts reduced the number of production security incidents by measurable margins and accelerated our mean-time-to-detect while preserving developer velocity.\n\nPrior to TechCorp, at StartupXYZ (2018–2020) I built and shipped backend services using Node.js and Python, architected authentication and authorization flows, and implemented logging and observability that supported rapid incident investigation. I routinely worked with Docker, Kubernetes, Terraform, and Git-driven CI/CD; my practical experience, combined with certifications like AWS Certified Solutions Architect and Certified Kubernetes Administrator (CKA), gives me the technical depth to partner effectively with security, infra, and product teams.\n\nI am excited by the Director of Engineering, Security Risk Management role because it aligns with my experience improving platform security at scale and mentoring engineers to build secure systems by default. I bring a pragmatic balance of strategic vision and hands-on execution: designing risk-reduction programs, deploying automation to embed security in the SDLC, and coaching teams to adopt best practices. I’m enthusiastic about GitLab’s DevSecOps mission and AI-first productivity approach, and I’m eager to help scale security programs that enable engineering teams to move quickly and safely.\". Error: Failed to select: No options found in dropdown. Available options: none",
+      "solution": {
+        "issue": "Failed to analyze screenshot",
+        "solution": "Manual intervention required",
+        "needsManualIntervention": true
+      },
+      "timestamp": "2025-11-06T19:58:59.603Z"
+    },
+    {
+      "problem": "Failed to fill resume: No resume file available - user must generate a resume before applying to jobs",
+      "timestamp": "2025-11-06T19:58:59.603Z"
+    },
+    {
+      "problem": "Failed to fill cover_letter: No resume file available - user must generate a resume before applying to jobs",
+      "timestamp": "2025-11-06T19:58:59.603Z"
+    },
+    {
+      "problem": "Dropdown \"unnamed_13\" failed: Failed to fill custom dropdown \"unnamed_13\" after 3 attempts. AI provided: \"Texas\". Error: Failed to select: No options found in dropdown. Available options: none",
+      "timestamp": "2025-11-06T19:58:59.603Z"
+    },
+    {
+      "problem": "Dropdown \"unnamed_15\" failed: Failed to fill custom dropdown \"unnamed_15\" after 3 attempts. AI provided: \"Yes\". Error: Failed to select: No options found in dropdown. Available options: none",
+      "timestamp": "2025-11-06T19:58:59.603Z"
+    },
+    {
+      "problem": "Dropdown \"unnamed_19\" failed: Failed to fill custom dropdown \"unnamed_19\" after 3 attempts. AI provided: \"No\". Error: Failed to select: No options found in dropdown. Available options: none",
+      "timestamp": "2025-11-06T19:58:59.603Z"
+    },
+    {
+      "problem": "Failed to fill unnamed_21: Field not found with any selector strategy: unnamed_21",
+      "timestamp": "2025-11-06T19:58:59.603Z"
+    }
+  ],
+  "patterns": {
+    "commonQuestions": [
+      {
+        "label": "What's the name you'd prefer us to use throughout the interview process?",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What is your GitLab username?",
+        "type": "text",
+        "category": "other"
+      }
+    ],
+    "fieldNamingConventions": {
+      "camelCase": 0,
+      "snake_case": 19,
+      "kebabCase": 1,
+      "standard": 5
+    },
+    "formLayout": {
+      "totalFields": 25,
+      "visibleFields": 25,
+      "requiredFields": 5,
+      "optionalFields": 20
+    }
+  }
+}

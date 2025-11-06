@@ -25,7 +25,7 @@ class AIFormExtractor {
   /**
    * Detect and extract options from custom dropdown fields
    * Many modern sites (like Greenhouse) use custom dropdowns instead of native <select>
-   * @param {Page} page - Puppeteer page object
+   * @param {Page} page - Playwright page object
    * @param {Array} fields - Fields extracted from page
    * @returns {Array} Fields with updated custom dropdown info
    */
@@ -96,7 +96,7 @@ class AIFormExtractor {
 
   /**
    * Extract options from a single custom dropdown by clicking it
-   * @param {Page} page - Puppeteer page object
+   * @param {Page} page - Playwright page object
    * @param {Object} field - Field metadata
    * @returns {Array} Dropdown options
    */
@@ -193,7 +193,7 @@ class AIFormExtractor {
 
   /**
    * Extract all form fields from the current page
-   * @param {Page} page - Puppeteer page object
+   * @param {Page} page - Playwright page object
    * @returns {Object} Extracted form data with fields and context
    */
   async extractFormFields(page) {
@@ -338,7 +338,7 @@ class AIFormExtractor {
 
   /**
    * Extract page screenshot for AI vision analysis
-   * @param {Page} page - Puppeteer page object
+   * @param {Page} page - Playwright page object
    * @returns {String} Base64 encoded screenshot
    */
   async captureScreenshot(page) {
@@ -398,7 +398,7 @@ class AIFormExtractor {
 
   /**
    * Detect if page has CAPTCHA
-   * @param {Page} page - Puppeteer page object
+   * @param {Page} page - Playwright page object
    * @returns {Boolean} True if CAPTCHA detected
    */
   async detectCaptcha(page) {
@@ -423,7 +423,7 @@ class AIFormExtractor {
 
   /**
    * Find submit button
-   * @param {Page} page - Puppeteer page object
+   * @param {Page} page - Playwright page object
    * @returns {Object} Submit button info
    */
   async findSubmitButton(page) {
@@ -480,7 +480,7 @@ class AIFormExtractor {
 
   /**
    * Complete extraction with all metadata
-   * @param {Page} page - Puppeteer page object
+   * @param {Page} page - Playwright page object
    * @returns {Object} Complete form extraction
    */
   async extractComplete(page) {

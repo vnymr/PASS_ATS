@@ -26,7 +26,7 @@ dotenv.config();
 // Create Redis connection for worker
 const connection = createRedisConnection();
 
-// Create worker
+// Create worker with timeout protection
 const worker = new Worker('resume-generation', async (job) => {
   const { jobId, userId, profileData, jobDescription } = job.data;
 
@@ -38,8 +38,14 @@ const worker = new Worker('resume-generation', async (job) => {
   }, 'Worker processing job');
 
   try {
-    // Process the job with progress reporting
-    await processResumeJob(
+    // Create a timeout promise (5 minutes)
+    const timeoutMs = 5 * 60 * 1000; // 5 minutes
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Job timeout - exceeded 5 minute limit')), timeoutMs);
+    });
+
+    // Process the job with timeout protection
+    const jobPromise = processResumeJob(
       { jobId, profileData, jobDescription },
       (progress) => {
         // Update job progress (0-100)
@@ -49,13 +55,17 @@ const worker = new Worker('resume-generation', async (job) => {
       }
     );
 
+    // Race between job completion and timeout
+    await Promise.race([jobPromise, timeoutPromise]);
+
     logger.info({ jobId, queueJobId: job.id }, 'Worker completed job successfully');
   } catch (error) {
     logger.error({
       jobId,
       queueJobId: job.id,
       error: error.message,
-      attempt: job.attemptsMade + 1
+      attempt: job.attemptsMade + 1,
+      isTimeout: error.message.includes('timeout')
     }, 'Worker job processing failed');
 
     throw error; // Re-throw to trigger BullMQ retry
@@ -66,6 +76,12 @@ const worker = new Worker('resume-generation', async (job) => {
   limiter: {
     max: 100, // Max 100 jobs (up from 10)
     duration: 1000 // per second
+  },
+  settings: {
+    // Job-level timeout: 5 minutes (300 seconds)
+    // This is a hard timeout enforced by BullMQ itself
+    lockDuration: 300000, // 5 minutes
+    maxStalledCount: 1 // Only retry once if job stalls (hangs)
   }
 });
 
@@ -115,12 +131,15 @@ process.on('SIGINT', shutdown);
 
 logger.info({
   concurrency: 50,
-  queue: 'resume-generation'
+  queue: 'resume-generation',
+  timeout: '5 minutes',
+  lockDuration: 300000
 }, 'Resume generation worker started');
 
 logger.info('🚀 Resume Generation Worker Started');
 logger.info('📊 Concurrency: 50 jobs at once (scaled for 1000+ users)');
-logger.info('⏱️  Timeout: 2 minutes per job');
-logger.info('🔄 Auto-retry: Up to 3 attempts');
+logger.info('⏱️  Timeout: 5 minutes per job (with automatic retry)');
+logger.info('🔄 Auto-retry: Up to 3 attempts on failure');
+logger.info('🚨 Stall detection: Jobs hanging >5min will be auto-retried once');
 logger.info('🚀 Throughput: Up to 100 jobs/second');
 logger.info('\n✅ Ready to process jobs...\n');

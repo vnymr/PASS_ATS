@@ -1,0 +1,177 @@
+{
+  "metadata": {
+    "url": "https://job-boards.greenhouse.io/gitlab/jobs/8195921002",
+    "domain": "job-boards.greenhouse.io",
+    "company": "GitLab",
+    "jobTitle": "Backend Engineer",
+    "timestamp": "2025-11-06T19:13:22.102Z",
+    "success": true
+  },
+  "formStructure": {
+    "totalFields": 25,
+    "fieldTypes": {
+      "text": 22,
+      "tel": 1,
+      "file": 2
+    },
+    "requiredFields": [
+      {
+        "name": "unnamed_7",
+        "type": "text",
+        "label": ""
+      },
+      {
+        "name": "unnamed_13",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_15",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_19",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_21",
+        "type": "text",
+        "label": "Select..."
+      }
+    ]
+  },
+  "aiResponses": {
+    "first_name": "Alex",
+    "last_name": "Morgan",
+    "email": "user_334Xr9ZwjxobkaefcaFhOpk5hGI@clerk.user",
+    "country": "United States",
+    "phone": "+1 (415) 555-0134",
+    "candidate-location": "San Francisco, CA",
+    "unnamed_7": "Backend Engineer",
+    "resume": "resume.pdf",
+    "cover_letter": "cover_letter.pdf",
+    "question_33402662002": "https://www.linkedin.com/in/alex-morgan-backend",
+    "question_33402663002": "Alex",
+    "question_33402664002": "United States",
+    "unnamed_13": "Remote",
+    "question_33402665002": "No",
+    "unnamed_15": "Immediately available",
+    "question_33402666002": "I value an inclusive and accessible interview experience and am happy to share a few practical adjustments that help me perform at my best. In previous roles as a backend engineer at a mid-size SaaS company, I found scheduling flexibility and clear written instructions made the biggest difference. For example, when I participated in an architectural design interview that involved a whiteboard session, having the problem statement shared in advance and the option to prepare notes reduced cognitive load and resulted in a much stronger technical discussion.\n\nConcretely, useful accommodations include: (1) flexible scheduling across time zones and the option to record or summarize interviews, (2) providing written prompts for whiteboard or system-design exercises and allowing the candidate to use a text editor or collaborative doc during the session, and (3) the option for extra time on timed coding challenges or take-home assignments. In one prior interviewing process, I requested a short extension on a take-home task due to a scheduling conflict; with that accommodation I was able to deliver a more thoughtful solution that better demonstrated my API design and database optimization skills.\n\nI’m happy to work with the recruiting team to determine the best combination of adjustments. My goal is to demonstrate my fit for GitLab’s backend engineering role—showcasing experience building reliable APIs, optimizing database performance, and contributing to CI/CD pipelines—while ensuring the interview process is accessible and fair for both sides.",
+    "question_33402667002": "alexmorgan",
+    "question_33402668002": "No",
+    "unnamed_19": "Yes",
+    "question_33402669002": "No",
+    "unnamed_21": "LinkedIn",
+    "gender": "Prefer not to say",
+    "hispanic_ethnicity": "Prefer not to say",
+    "veteran_status": "Prefer not to say",
+    "disability_status": "Prefer not to say"
+  },
+  "problemsSolved": [
+    {
+      "problem": "Failed to fill country: Failed to fill custom dropdown \"country\": Too many arguments. If you need to pass more than 1 argument to the function wrap them in an object.",
+      "solution": {
+        "issue": "Failed to analyze screenshot",
+        "solution": "Manual intervention required",
+        "needsManualIntervention": true
+      },
+      "timestamp": "2025-11-06T19:13:22.102Z"
+    },
+    {
+      "problem": "Failed to fill phone: Failed to fill custom dropdown \"phone\": Too many arguments. If you need to pass more than 1 argument to the function wrap them in an object.",
+      "timestamp": "2025-11-06T19:13:22.102Z"
+    },
+    {
+      "problem": "Failed to fill candidate-location: Failed to fill custom dropdown \"candidate-location\": Too many arguments. If you need to pass more than 1 argument to the function wrap them in an object.",
+      "timestamp": "2025-11-06T19:13:22.102Z"
+    },
+    {
+      "problem": "Failed to fill unnamed_7: Failed to fill custom dropdown \"unnamed_7\": Too many arguments. If you need to pass more than 1 argument to the function wrap them in an object.",
+      "timestamp": "2025-11-06T19:13:22.102Z"
+    },
+    {
+      "problem": "Failed to fill resume: No resume file available - user must generate a resume before applying to jobs",
+      "timestamp": "2025-11-06T19:13:22.102Z"
+    },
+    {
+      "problem": "Failed to fill cover_letter: No resume file available - user must generate a resume before applying to jobs",
+      "timestamp": "2025-11-06T19:13:22.102Z"
+    },
+    {
+      "problem": "Failed to fill question_33402664002: Failed to fill custom dropdown \"question_33402664002\": Too many arguments. If you need to pass more than 1 argument to the function wrap them in an object.",
+      "timestamp": "2025-11-06T19:13:22.102Z"
+    },
+    {
+      "problem": "Failed to fill unnamed_13: Failed to fill custom dropdown \"unnamed_13\": Too many arguments. If you need to pass more than 1 argument to the function wrap them in an object.",
+      "timestamp": "2025-11-06T19:13:22.102Z"
+    },
+    {
+      "problem": "Failed to fill question_33402665002: Failed to fill custom dropdown \"question_33402665002\": Too many arguments. If you need to pass more than 1 argument to the function wrap them in an object.",
+      "timestamp": "2025-11-06T19:13:22.102Z"
+    },
+    {
+      "problem": "Failed to fill unnamed_15: Failed to fill custom dropdown \"unnamed_15\": Too many arguments. If you need to pass more than 1 argument to the function wrap them in an object.",
+      "timestamp": "2025-11-06T19:13:22.102Z"
+    },
+    {
+      "problem": "Failed to fill question_33402668002: Failed to fill custom dropdown \"question_33402668002\": Too many arguments. If you need to pass more than 1 argument to the function wrap them in an object.",
+      "timestamp": "2025-11-06T19:13:22.102Z"
+    },
+    {
+      "problem": "Failed to fill unnamed_19: Failed to fill custom dropdown \"unnamed_19\": Too many arguments. If you need to pass more than 1 argument to the function wrap them in an object.",
+      "timestamp": "2025-11-06T19:13:22.102Z"
+    },
+    {
+      "problem": "Failed to fill question_33402669002: Failed to fill custom dropdown \"question_33402669002\": Too many arguments. If you need to pass more than 1 argument to the function wrap them in an object.",
+      "timestamp": "2025-11-06T19:13:22.102Z"
+    },
+    {
+      "problem": "Failed to fill unnamed_21: Failed to fill custom dropdown \"unnamed_21\": Too many arguments. If you need to pass more than 1 argument to the function wrap them in an object.",
+      "timestamp": "2025-11-06T19:13:22.102Z"
+    },
+    {
+      "problem": "Failed to fill gender: Failed to fill custom dropdown \"gender\": Too many arguments. If you need to pass more than 1 argument to the function wrap them in an object.",
+      "timestamp": "2025-11-06T19:13:22.102Z"
+    },
+    {
+      "problem": "Failed to fill hispanic_ethnicity: Failed to fill custom dropdown \"hispanic_ethnicity\": Too many arguments. If you need to pass more than 1 argument to the function wrap them in an object.",
+      "timestamp": "2025-11-06T19:13:22.102Z"
+    },
+    {
+      "problem": "Failed to fill veteran_status: Failed to fill custom dropdown \"veteran_status\": Too many arguments. If you need to pass more than 1 argument to the function wrap them in an object.",
+      "timestamp": "2025-11-06T19:13:22.102Z"
+    },
+    {
+      "problem": "Failed to fill disability_status: Failed to fill custom dropdown \"disability_status\": Too many arguments. If you need to pass more than 1 argument to the function wrap them in an object.",
+      "timestamp": "2025-11-06T19:13:22.102Z"
+    }
+  ],
+  "patterns": {
+    "commonQuestions": [
+      {
+        "label": "What's the name you'd prefer us to use throughout the interview process?",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What is your GitLab username?",
+        "type": "text",
+        "category": "other"
+      }
+    ],
+    "fieldNamingConventions": {
+      "camelCase": 0,
+      "snake_case": 19,
+      "kebabCase": 1,
+      "standard": 5
+    },
+    "formLayout": {
+      "totalFields": 25,
+      "visibleFields": 25,
+      "requiredFields": 5,
+      "optionalFields": 20
+    }
+  }
+}

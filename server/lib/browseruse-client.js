@@ -2,7 +2,7 @@
  * BrowserUse Cloud API Client
  *
  * Interfaces with BrowserUse Cloud API to automate job applications
- * and record the actions for Puppeteer replay
+ * and record the actions for Playwright replay
  */
 
 import logger from './logger.js';

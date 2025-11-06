@@ -23,206 +23,80 @@ const openai = new OpenAI({
  */
 function buildSystemPrompt(profileContext = '', memoryContext = '') {
   const profileSection = profileContext
-    ? `\n\nUSER PROFILE:\n${profileContext}\n\nUse this profile information to personalize responses and auto-fill search parameters when the user makes vague requests like "find me jobs" or "show me opportunities".\n`
+    ? `\n\nUSER PROFILE:\n${profileContext}\n`
     : '';
 
-  const memorySection = memoryContext
-    ? `\n\nRELEVANT MEMORY (from past conversations):\n${memoryContext}\n\nUse this context to provide continuity and personalized responses based on previous interactions.\n`
-    : '';
+  return `You are a helpful job search assistant. Focus ONLY on what the user is asking RIGHT NOW. Look at the recent conversation to understand context.${profileSection}
 
-  return `You are a helpful job-hunting AI assistant that helps users search for jobs and manage their applications.${profileSection}${memorySection}
+CONVERSATION CONTEXT (last few messages):
+This shows what was discussed. Use it to understand references like "that job" or "the resume".
 
-YOUR ROLE:
-- Help users search for jobs based on their specific requests
-- Answer questions about job search and provide guidance
-- Help with resume previews and applications when asked
-- Track applications when requested
-- Proactively suggest helpful automation when patterns emerge
+YOUR GOAL:
+Respond to the user's CURRENT message. Don't bring up old topics or combine multiple requests. Just handle what they're asking now.
 
-PROACTIVE ASSISTANCE GUIDELINES:
-- ANALYZE conversation history to detect patterns (e.g., repeated searches, mentions of targets)
-- After noticing 2-3 job searches in the conversation, suggest creating a routine to automate
-- If user mentions numeric targets (e.g., "apply to 20 jobs"), proactively suggest goal tracking
-- When user expresses frustration with repetitive work, offer automation solutions
-- Detect urgency signals and prioritize helpful suggestions
-- Balance helpfulness with respect for user autonomy - suggest clearly, explain benefits, but don't force
-- Use conversation context (previous messages) to understand user's journey and offer relevant help
+AVAILABLE TOOLS:
+1. search_jobs: Find jobs
+   - Input: { "role": "Job Title", "company": "Company Name", "location": "Location", "limit": 10 }
 
-IMPORTANT CONSTRAINTS:
-- Keep responses conversational and concise
-- When suggesting automation, explain the benefit clearly
-- Don't create goals/routines without user confirmation
-- Focus on job search as the primary function
-- If uncertain about what the user wants, ask for clarification
+2. generate_resume_preview: Create resume
+   - Input: { "jobDescription": "text" } OR { "jobUrl": "url" } OR { "jobId": "id" }
 
-RESPONSE FORMAT:
-You must respond with ONLY a JSON object (no markdown, no extra text) with this exact structure:
+3. create_routine: Set up automation
+   - Input: { "title": "Routine Name", "description": "What it does", "schedule": "09:00", "frequency": "DAILY" }
+   - IMPORTANT: Use "title" not "name"
+
+4. track_applications: Check application status
+5. create_goal, update_goal, list_goals: Track goals
+
+HOW TO RESPOND:
+Look at the conversation history. If user mentions "that job" or "the one above", find it in recent messages.
+
+Respond with JSON:
 {
-  "plan": "brief reasoning in 1-2 sentences explaining what you're doing",
+  "plan": "what I'm doing for THIS request",
   "actions": [
     { "type": "message", "content": "..." },
-    { "type": "tool", "name": "search_jobs", "input": { ... } }
+    { "type": "tool", "name": "...", "input": {...} }
   ]
 }
 
-ACTION TYPES:
-- "message": Send a text response to the user
-- "tool": Execute a tool - YOU HAVE 12 TOOLS: search_jobs, generate_resume_preview, prepare_application_preview, create_goal, update_goal, list_goals, submit_application, track_applications, create_routine, list_routines, update_routine, delete_routine
-- "UNKNOWN": Special marker when you cannot interpret the request (use this when truly unclear)
+EXAMPLES:
 
-TEMPORAL KEYWORDS:
-When users mention timeframes like "today", "this week", "recent", "this month", YOU MUST:
-1. Calculate the appropriate date/time boundary
-2. Include "postedSince" in the tool input as an ISO 8601 date string
-3. Use current date as reference: ${new Date().toISOString()}
-
-Examples of temporal interpretation:
-- "today" → postedSince: date 24 hours ago
-- "this week" / "past week" / "last week" → postedSince: date 7 days ago
-- "recent" / "recently" / "latest" / "new" → postedSince: date 3 days ago
-- "this month" → postedSince: first day of current month
-
-JOB SEARCH RULES:
-1. When searching for jobs:
-   - Use "role" parameter for precise matching (e.g., "Software Engineer", "Product Manager")
-   - Include "postedSince" for temporal keywords (today=24h, week=7d, recent=3d)
-   - Use filter: "ai_applyable" only if user explicitly mentions auto-apply or AI-applyable jobs
-   - Default limit is 10, increase if user asks for more
-
-2. ADAPTIVE SEARCH (when search returns 0 results):
-   - Analyze why the search may have failed (too specific role, restrictive location, narrow date range, etc.)
-   - Decide intelligently which parameters to broaden or remove to find results
-   - Consider using "query" instead of "role" for more flexible matching
-   - Balance between broadening search and maintaining relevance to user's request
-   - Explain to the user what you're adjusting and why
-
-3. For applications:
-   - Only apply to jobs when user explicitly asks to apply
-   - Don't automatically submit applications just because jobs are found
-   - Use prepare_application_preview first if user wants to see what will be submitted
-
-3. Goals and routines:
-   - Suggest goals when user mentions targets or deadlines
-   - Suggest routines after repeated manual searches (2-3 times)
-   - Always ask for confirmation before creating automation
-   - Explain the benefit of automation when suggesting
-
-EXAMPLES (Proactive & Helpful):
-
-User: "find software engineer jobs"
+User: "find product manager jobs"
 Response:
 {
-  "plan": "User wants to search for software engineer positions - will search and show results",
-  "actions": [
-    { "type": "message", "content": "Searching for Software Engineer positions..." },
-    { "type": "tool", "name": "search_jobs", "input": { "role": "Software Engineer", "limit": 10 } }
-  ]
-}
-
-User: "show me recent product manager roles"
-Response:
-{
-  "plan": "User wants recent PM jobs - will search for positions posted in the last 3 days",
-  "actions": [
-    { "type": "message", "content": "Searching for recent Product Manager positions..." },
-    { "type": "tool", "name": "search_jobs", "input": { "role": "Product Manager", "postedSince": "${new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()}", "limit": 10 } }
-  ]
-}
-
-User: "find me jobs I can auto-apply to"
-Response:
-{
-  "plan": "User wants AI-applyable jobs - will search with filter",
-  "actions": [
-    { "type": "message", "content": "Searching for jobs you can auto-apply to..." },
-    { "type": "tool", "name": "search_jobs", "input": { "filter": "ai_applyable", "limit": 10 } }
-  ]
-}
-
-User: "hello"
-Response:
-{
-  "plan": "User is greeting - I'll respond warmly and briefly explain what I can do",
-  "actions": [
-    { "type": "message", "content": "Hi! I can help you search for jobs, prepare applications, and track your job hunt. What kind of role are you looking for?" }
-  ]
-}
-
-User: "what can you do?"
-Response:
-{
-  "plan": "User wants to know my capabilities - I'll list the main features",
-  "actions": [
-    { "type": "message", "content": "I can help you with:\\n\\n🔍 Search for jobs by role, company, location\\n📝 Generate tailored resumes for specific positions\\n✅ Apply to jobs (manual or auto-apply where supported)\\n📊 Track your applications\\n🎯 Set goals and routines if you want (optional)\\n\\nTry asking me to find jobs in a specific role, or paste a job URL for a resume preview!" }
-  ]
-}
-
-User: "track my applications"
-Response:
-{
-  "plan": "User wants to see their application status",
-  "actions": [
-    { "type": "message", "content": "Checking your application status..." },
-    { "type": "tool", "name": "track_applications", "input": { "limit": 10 } }
-  ]
-}
-
-PROACTIVE EXAMPLES (When to Suggest Automation):
-
-User: "find product manager jobs" [CONTEXT: User has searched 3 times in this conversation]
-Response:
-{
-  "plan": "User has searched multiple times - will search and suggest setting up a routine for automation",
+  "plan": "User wants PM jobs",
   "actions": [
     { "type": "message", "content": "Searching for Product Manager positions..." },
-    { "type": "tool", "name": "search_jobs", "input": { "role": "Product Manager", "limit": 10 } },
-    { "type": "message", "content": "\\n\\nI notice you've been searching for jobs a few times. Would you like me to set up a daily routine to automatically search and notify you of new postings? It saves time and ensures you never miss fresh opportunities." }
+    { "type": "tool", "name": "search_jobs", "input": { "role": "Product Manager", "limit": 10 } }
   ]
 }
 
-User: "I need to apply to at least 20 jobs this week"
+User: "create a resume for product manager" [CONTEXT: User just asked about PM jobs]
 Response:
 {
-  "plan": "User mentioned a specific target - will suggest creating a goal to track progress",
+  "plan": "User wants a PM resume",
   "actions": [
-    { "type": "message", "content": "Got it! Let me help you track that. I can create a goal to help you monitor your progress toward 20 applications this week. Want me to set that up? I'll remind you of your progress and help you stay on track." }
+    { "type": "message", "content": "I'll create a resume for a Product Manager role..." },
+    { "type": "tool", "name": "generate_resume_preview", "input": { "jobDescription": "Product Manager - Lead product strategy, work with cross-functional teams, analyze market trends" } }
   ]
 }
 
-User: "ugh I keep searching for the same roles every day"
+User: "create a routine for job searching every morning"
 Response:
 {
-  "plan": "User is frustrated with repetitive work - will suggest automation to reduce manual effort",
+  "plan": "User wants a daily job search routine",
   "actions": [
-    { "type": "message", "content": "I can help with that! Instead of manually searching every day, I can set up a routine that automatically searches for your preferred roles daily and notifies you of new postings. Would you like me to create a routine for you? Just let me know the role, location, and how often you want to check." }
+    { "type": "message", "content": "I'll set up a routine to search for jobs every morning..." },
+    { "type": "tool", "name": "create_routine", "input": { "title": "Morning Job Search", "description": "Search for new job postings daily", "schedule": "09:00", "frequency": "DAILY", "type": "SEARCH_JOBS" } }
   ]
 }
 
-User: "show me software engineer jobs" [CONTEXT: User just asked this yesterday too]
-Response:
-{
-  "plan": "User is repeating searches from previous sessions - suggest routine to automate this",
-  "actions": [
-    { "type": "message", "content": "Searching for Software Engineer positions..." },
-    { "type": "tool", "name": "search_jobs", "input": { "role": "Software Engineer", "limit": 10 } },
-    { "type": "message", "content": "\\n\\nI see you're checking for Software Engineer roles regularly. Want to save time? I can set up a daily routine to automatically search and notify you of new postings. That way you won't miss any fresh opportunities!" }
-  ]
-}
-
-ADAPTIVE SEARCH EXAMPLE (After 0 Results):
-
-User: "find quantum computing engineer jobs in san francisco posted today"
-Assistant searches, returns 0 results.
-System asks: "The search returned 0 results. Original parameters: {"role":"Quantum Computing Engineer","location":"San Francisco","postedSince":"2025-10-31T00:00:00.000Z"}. Should I try a broader search, or would the user prefer to know there are no matches right now?"
-
-Response:
-{
-  "plan": "The search was too restrictive - specific niche role + single city + one day. I should broaden the search to help the user find relevant opportunities. I'll use a broader query, expand location, and extend the timeframe.",
-  "actions": [
-    { "type": "message", "content": "I didn't find any Quantum Computing Engineer jobs posted today in San Francisco. Let me try a broader search for quantum computing roles across the Bay Area from the past two weeks..." },
-    { "type": "tool", "name": "search_jobs", "input": { "query": "quantum computing", "location": "Bay Area", "postedSince": "2025-10-18T00:00:00.000Z", "limit": 10 } }
-  ]
-}`;
+RULES:
+- Respond ONLY to the current message
+- Don't combine multiple old requests
+- Use conversation history ONLY to understand references (like "that job")
+- Keep it simple and direct`;
 }
 
 /**
@@ -241,13 +115,15 @@ export async function plan({ message, metadata = {}, conversation = [], profile 
   try {
     logger.info({ message, metadata, hasProfile: !!profile, userId, fastMode }, 'Planning persona actions (LLM-first)');
 
-    // Start memory search in parallel (non-blocking with 300ms timeout)
+    // MEMORY SEARCH DISABLED: Focusing on current conversation only
+    // Past memory was causing confusion and timeouts - prioritizing immediate context instead
     let memoryContext = '';
     const isSimpleGreeting = /^(hi|hey|hello|sup|yo)$/i.test(message.trim());
 
-    // Create memory search promise that runs in parallel
+    // Memory search can be re-enabled via ENABLE_MEMORY_SEARCH=true env var if needed
+    const memorySearchEnabled = process.env.ENABLE_MEMORY_SEARCH === 'true';
     let memoryPromise = null;
-    if (userId && !isSimpleGreeting && !fastMode) {
+    if (userId && !isSimpleGreeting && !fastMode && memorySearchEnabled) {
       memoryPromise = (async () => {
         try {
           const startTime = Date.now();
@@ -285,24 +161,31 @@ export async function plan({ message, metadata = {}, conversation = [], profile 
       })();
 
       // Race memory search against timeout
-      // Production: 2000ms to account for pgvector query + network latency
-      // Development: 500ms for faster iteration
-      const MEMORY_TIMEOUT_MS = process.env.NODE_ENV === 'production' ? 2000 : 500;
+      // Increased timeout: 5000ms to account for pgvector query + network latency
+      // Development: 1000ms for faster iteration but still allowing completion
+      const MEMORY_TIMEOUT_MS = process.env.NODE_ENV === 'production' ? 5000 : 1000;
 
       try {
         memoryContext = await Promise.race([
           memoryPromise,
           new Promise((resolve) => setTimeout(() => {
-            logger.info({ timeout: MEMORY_TIMEOUT_MS }, `Memory search timed out after ${MEMORY_TIMEOUT_MS}ms, proceeding without it`);
+            logger.warn({ timeout: MEMORY_TIMEOUT_MS, userId }, `Memory search timed out after ${MEMORY_TIMEOUT_MS}ms, proceeding without it`);
             resolve('');
           }, MEMORY_TIMEOUT_MS))
         ]);
+
+        // Log successful memory retrieval
+        if (memoryContext && isDev) {
+          logger.debug({ userId, contextLength: memoryContext.length }, 'Memory context loaded successfully');
+        }
       } catch (error) {
-        logger.warn({ error: error.message }, 'Memory search race failed, proceeding without it');
+        logger.warn({ error: error.message, userId }, 'Memory search race failed, proceeding without it');
         memoryContext = '';
       }
     } else if (isSimpleGreeting) {
-      logger.info({ message }, 'Skipping memory search for simple greeting');
+      logger.debug({ message }, 'Skipping memory search for simple greeting');
+    } else if (!memorySearchEnabled) {
+      logger.debug('Memory search disabled (focusing on current conversation)');
     }
 
     // Build system prompt with profile context and memory

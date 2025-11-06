@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { MapPin, Briefcase, DollarSign, Clock, Users, ExternalLink, Sparkles, Zap, X, Heart, TrendingUp, AlertCircle, CheckCircle2, Building, Calendar } from 'lucide-react';
+import { MapPin, Briefcase, DollarSign, Clock, Users, ExternalLink, Sparkles, Zap, X, Heart, TrendingUp, AlertCircle, CheckCircle2, Building, Calendar, Target, Rocket, FileText, Lightbulb } from 'lucide-react';
 import { Job } from '../services/api';
 import { htmlToPlainText } from '../utils/htmlCleaner';
 import CompanyLogo from './CompanyLogo';
@@ -194,6 +194,64 @@ export default function JobCard({
                     Full-time
                   </span>
                 </div>
+
+                {/* ATS Badge - Show which platform supports auto-apply */}
+                {job.atsType && (
+                  <div className="flex items-center gap-2">
+                    <Building className="w-4 h-4" style={{ color: 'var(--text-500)' }} />
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="px-2 py-0.5 rounded-md flex items-center gap-1"
+                        style={{
+                          backgroundColor: job.aiApplyable ? 'rgba(16, 185, 129, 0.1)' : 'rgba(107, 114, 128, 0.1)',
+                          color: job.aiApplyable ? '#059669' : '#6B7280',
+                          fontSize: '11px',
+                          fontWeight: 600,
+                        }}
+                      >
+                        <span className="flex items-center gap-1">
+                          {job.atsType === 'greenhouse' && (
+                            <>
+                              <Building className="w-3 h-3" />
+                              Greenhouse
+                            </>
+                          )}
+                          {job.atsType === 'lever' && (
+                            <>
+                              <Target className="w-3 h-3" />
+                              Lever
+                            </>
+                          )}
+                          {job.atsType === 'icims' && (
+                            <>
+                              <Zap className="w-3 h-3" />
+                              iCIMS
+                            </>
+                          )}
+                          {job.atsType === 'workday' && (
+                            <>
+                              <Briefcase className="w-3 h-3" />
+                              Workday
+                            </>
+                          )}
+                          {job.atsType === 'ashby' && (
+                            <>
+                              <Rocket className="w-3 h-3" />
+                              Ashby
+                            </>
+                          )}
+                          {!['greenhouse', 'lever', 'icims', 'workday', 'ashby'].includes(job.atsType) && (
+                            <>
+                              <FileText className="w-3 h-3" />
+                              {job.atsType}
+                            </>
+                          )}
+                          {job.aiApplyable && <Zap className="w-3 h-3 ml-0.5" />}
+                        </span>
+                      </span>
+                    </div>
+                  </div>
+                )}
 
                 {job.salary && (
                   <div className="flex items-center gap-2">
@@ -408,7 +466,10 @@ export default function JobCard({
                       lineHeight: '1.5',
                     }}
                   >
-                    💡 Generate an optimized resume highlighting relevant skills to increase your match score
+                    <span className="flex items-center gap-1">
+                      <Lightbulb className="w-3 h-3" />
+                      Generate an optimized resume highlighting relevant skills to increase your match score
+                    </span>
                   </p>
                 </div>
               </div>
@@ -449,9 +510,10 @@ export default function JobCard({
                   fontSize: '14px',
                   fontWeight: 600,
                 }}
+                title={`Auto-apply to this ${job.atsType} job`}
               >
                 <Zap className="w-4 h-4" />
-                Apply with Autofill
+                Auto-Apply
               </button>
             ) : (
               <button
@@ -467,9 +529,10 @@ export default function JobCard({
                   fontSize: '14px',
                   fontWeight: 600,
                 }}
+                title="Manual apply - open job page"
               >
                 <ExternalLink className="w-4 h-4" />
-                View Job
+                Manual Apply
               </button>
             )}
           </div>
