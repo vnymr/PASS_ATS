@@ -78,31 +78,8 @@ class ImprovedAutoApply {
       // Human-like delay
       await this.sleep(2000 + Math.random() * 2000);
 
-      // Step 3: Check for CAPTCHA on main page FIRST
-      logger.info('🔍 Checking for CAPTCHA on main page...');
-      const mainPageCaptcha = await this.captchaHandler.handleCaptcha(page);
-
-      if (mainPageCaptcha.captchaDetected) {
-        result.captchaDetected = true;
-        result.captchaType = mainPageCaptcha.captchaType;
-
-        if (mainPageCaptcha.captchaSolved) {
-          result.captchaSolved = true;
-          result.cost += mainPageCaptcha.cost;
-          logger.info('✅ Main page CAPTCHA solved');
-        } else {
-          result.errors.push(`CAPTCHA detected but not solved: ${mainPageCaptcha.error}`);
-          logger.error('❌ Failed to solve main page CAPTCHA');
-
-          // Take screenshot for debugging
-          const screenshot = await page.screenshot({ encoding: 'base64' });
-          result.screenshot = `data:image/png;base64,${screenshot}`;
-
-          return result;
-        }
-      }
-
-      // Step 4: Look for application form or Apply button
+      // Step 3: Look for application form or Apply button FIRST (before checking CAPTCHA)
+      // Many sites show CAPTCHA only AFTER clicking the Apply button
       logger.info('🔍 Looking for application form or Apply button...');
 
       // Check if form is already visible
@@ -128,22 +105,6 @@ class ImprovedAutoApply {
             logger.info(`🎯 Found application iframe: ${frameUrl}`);
             applicationFrame = frame;
             targetPage = frame;
-
-            // Check for CAPTCHA in the iframe
-            const iframeCaptcha = await this.captchaHandler.handleCaptcha(frame);
-            if (iframeCaptcha.captchaDetected) {
-              result.captchaDetected = true;
-
-              if (iframeCaptcha.captchaSolved) {
-                result.captchaSolved = true;
-                result.cost += iframeCaptcha.cost;
-                logger.info('✅ Iframe CAPTCHA solved');
-              } else {
-                result.errors.push(`Iframe CAPTCHA not solved: ${iframeCaptcha.error}`);
-                logger.error('❌ Failed to solve iframe CAPTCHA');
-                return result;
-              }
-            }
             break;
           }
         }
@@ -157,21 +118,6 @@ class ImprovedAutoApply {
             logger.info('✅ Apply button clicked, waiting for form...');
             await this.sleep(3000);
 
-            // Check for CAPTCHA after clicking Apply
-            const postClickCaptcha = await this.captchaHandler.handleCaptcha(page);
-            if (postClickCaptcha.captchaDetected) {
-              result.captchaDetected = true;
-
-              if (postClickCaptcha.captchaSolved) {
-                result.captchaSolved = true;
-                result.cost += postClickCaptcha.cost;
-                logger.info('✅ Post-click CAPTCHA solved');
-              } else {
-                result.errors.push(`Post-click CAPTCHA not solved: ${postClickCaptcha.error}`);
-                return result;
-              }
-            }
-
             // Re-check for iframes after clicking
             const postClickFrames = page.frames();
             for (const frame of postClickFrames) {
@@ -183,6 +129,31 @@ class ImprovedAutoApply {
               }
             }
           }
+        }
+      }
+
+      // Step 4: Now check for CAPTCHA (after finding the form/iframe)
+      // This catches CAPTCHAs that appear only after clicking Apply
+      logger.info('🔍 Checking for CAPTCHA on application form...');
+      const captchaResult = await this.captchaHandler.handleCaptcha(targetPage);
+
+      if (captchaResult.captchaDetected) {
+        result.captchaDetected = true;
+        result.captchaType = captchaResult.captchaType;
+
+        if (captchaResult.captchaSolved) {
+          result.captchaSolved = true;
+          result.cost += captchaResult.cost;
+          logger.info('✅ CAPTCHA solved on application form');
+        } else {
+          result.errors.push(`CAPTCHA detected but not solved: ${captchaResult.error}`);
+          logger.error('❌ Failed to solve CAPTCHA');
+
+          // Take screenshot for debugging
+          const screenshot = await page.screenshot({ encoding: 'base64' });
+          result.screenshot = `data:image/png;base64,${screenshot}`;
+
+          return result;
         }
       }
 

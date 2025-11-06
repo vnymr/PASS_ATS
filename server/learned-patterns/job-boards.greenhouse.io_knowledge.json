@@ -1,7 +1,7 @@
 {
   "domain": "job-boards.greenhouse.io",
   "firstSeen": "2025-10-30T01:35:58.308Z",
-  "lastUpdated": "2025-10-31T06:50:15.196Z",
+  "lastUpdated": "2025-11-06T00:09:28.740Z",
   "applications": [
     {
       "timestamp": "2025-10-30T01:35:58.303Z",
@@ -22,6 +22,30 @@
       "timestamp": "2025-10-31T06:50:15.193Z",
       "jobTitle": "Software Engineer",
       "fieldsCount": 16,
+      "problemsSolved": 2
+    },
+    {
+      "timestamp": "2025-11-05T23:45:38.042Z",
+      "jobTitle": "Software Engineer",
+      "fieldsCount": 28,
+      "problemsSolved": 2
+    },
+    {
+      "timestamp": "2025-11-05T23:58:55.033Z",
+      "jobTitle": "Software Engineer",
+      "fieldsCount": 28,
+      "problemsSolved": 2
+    },
+    {
+      "timestamp": "2025-11-06T00:06:49.129Z",
+      "jobTitle": "Software Engineer",
+      "fieldsCount": 28,
+      "problemsSolved": 2
+    },
+    {
+      "timestamp": "2025-11-06T00:09:28.736Z",
+      "jobTitle": "Software Engineer",
+      "fieldsCount": 28,
       "problemsSolved": 2
     }
   ],
@@ -49,7 +73,55 @@
         "name": "unnamed_12",
         "type": "text",
         "label": "Select...",
-        "count": 1
+        "count": 5
+      },
+      "unnamed_14": {
+        "name": "unnamed_14",
+        "type": "text",
+        "label": "Select...",
+        "count": 4
+      },
+      "unnamed_16": {
+        "name": "unnamed_16",
+        "type": "text",
+        "label": "Select...",
+        "count": 4
+      },
+      "unnamed_18": {
+        "name": "unnamed_18",
+        "type": "text",
+        "label": "Select...",
+        "count": 4
+      },
+      "unnamed_20": {
+        "name": "unnamed_20",
+        "type": "text",
+        "label": "Select...",
+        "count": 4
+      },
+      "unnamed_22": {
+        "name": "unnamed_22",
+        "type": "text",
+        "label": "Select...",
+        "count": 4
+      },
+      "unnamed_24": {
+        "name": "unnamed_24",
+        "type": "text",
+        "label": "Select...",
+        "count": 4
+      },
+      "unnamed_26": {
+        "name": "unnamed_26",
+        "type": "text",
+        "label": "Select...",
+        "count": 4
+      },
+      "unnamed_28": {
+        "name": "unnamed_28",
+        "type": "text",
+        "label": "Select...",
+        "count": 4
       }
     },
     "questionTypes": [
@@ -80,6 +152,46 @@
       },
       {
         "label": "Why would you like to work at Adyen?",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What is your salary expectation? *",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What's your nationality?*",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What is your salary expectation? *",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What's your nationality?*",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What is your salary expectation? *",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What's your nationality?*",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What is your salary expectation? *",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What's your nationality?*",
         "type": "text",
         "category": "other"
       }
@@ -136,6 +248,70 @@
       {
         "problem": "Failed to fill cover_letter: No resume file available - user must generate a resume before applying to jobs",
         "timestamp": "2025-10-31T06:50:15.193Z"
+      },
+      {
+        "problem": "Failed to fill resume: No resume file available - user must generate a resume before applying to jobs",
+        "solution": {
+          "issue": "Resume and cover letter files failed to upload.",
+          "solution": "Ensure that the resume and cover letter files are selected correctly from your device before submitting the application.",
+          "fieldToRetry": "resume",
+          "newValue": null,
+          "needsManualIntervention": true,
+          "learnedPattern": "Always verify file uploads before submission."
+        },
+        "timestamp": "2025-11-05T23:45:38.042Z"
+      },
+      {
+        "problem": "Failed to fill cover_letter: No resume file available - user must generate a resume before applying to jobs",
+        "timestamp": "2025-11-05T23:45:38.042Z"
+      },
+      {
+        "problem": "Failed to fill resume: No resume file available - user must generate a resume before applying to jobs",
+        "solution": {
+          "issue": "No resume file available - user must generate a resume before applying to jobs",
+          "solution": "Ensure the resume is correctly uploaded and recognized by the system.",
+          "fieldToRetry": "resume",
+          "newValue": null,
+          "needsManualIntervention": true,
+          "learnedPattern": "Always verify the file type and size are within acceptable limits before submission."
+        },
+        "timestamp": "2025-11-05T23:58:55.034Z"
+      },
+      {
+        "problem": "Failed to fill cover_letter: No resume file available - user must generate a resume before applying to jobs",
+        "timestamp": "2025-11-05T23:58:55.034Z"
+      },
+      {
+        "problem": "Failed to fill resume: No resume file available - user must generate a resume before applying to jobs",
+        "solution": {
+          "issue": "Failed to fill resume and cover_letter: No resume file available.",
+          "solution": "Upload the resume and cover letter using 'Attach', 'Dropbox', or 'Google Drive' options.",
+          "fieldToRetry": "resume",
+          "newValue": null,
+          "needsManualIntervention": true,
+          "learnedPattern": "Ensure resume and cover letter files are uploaded when prompted."
+        },
+        "timestamp": "2025-11-06T00:06:49.129Z"
+      },
+      {
+        "problem": "Failed to fill cover_letter: No resume file available - user must generate a resume before applying to jobs",
+        "timestamp": "2025-11-06T00:06:49.129Z"
+      },
+      {
+        "problem": "Failed to fill resume: No resume file available - user must generate a resume before applying to jobs",
+        "solution": {
+          "issue": "Failed to fill both 'resume' and 'cover_letter' fields because the resume file is missing.",
+          "solution": "Ensure that the resume file is uploaded in the 'resume' field and saved correctly before attempting submission.",
+          "fieldToRetry": "resume",
+          "newValue": null,
+          "needsManualIntervention": true,
+          "learnedPattern": "Check file fields for necessary uploads before submission."
+        },
+        "timestamp": "2025-11-06T00:09:28.736Z"
+      },
+      {
+        "problem": "Failed to fill cover_letter: No resume file available - user must generate a resume before applying to jobs",
+        "timestamp": "2025-11-06T00:09:28.736Z"
       }
     ]
   }

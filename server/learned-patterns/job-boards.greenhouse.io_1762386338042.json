@@ -1,0 +1,139 @@
+{
+  "metadata": {
+    "url": "https://job-boards.greenhouse.io/nubank/jobs/7345028",
+    "domain": "job-boards.greenhouse.io",
+    "company": "Test Company",
+    "jobTitle": "Software Engineer",
+    "timestamp": "2025-11-05T23:45:38.042Z",
+    "success": true
+  },
+  "formStructure": {
+    "totalFields": 28,
+    "fieldTypes": {
+      "text": 25,
+      "tel": 1,
+      "file": 2
+    },
+    "requiredFields": [
+      {
+        "name": "unnamed_12",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_14",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_16",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_18",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_20",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_22",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_24",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_26",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_28",
+        "type": "text",
+        "label": "Select..."
+      }
+    ]
+  },
+  "aiResponses": {
+    "first_name": "John",
+    "last_name": "Doe",
+    "preferred_name": "John",
+    "email": "john.doe@example.com",
+    "country": "United States",
+    "phone": "+1 (555) 123-4567",
+    "resume": "John_Doe_Resume.pdf",
+    "cover_letter": "John_Doe_Cover_Letter.pdf",
+    "question_61001433": "https://linkedin.com/in/johndoe",
+    "question_61001434": "https://johndoe.dev",
+    "question_61001435": "San Francisco, CA",
+    "unnamed_12": "San Francisco, CA",
+    "question_61004368": "Native",
+    "unnamed_14": "Native",
+    "question_61004369": "$150,000 USD / year",
+    "unnamed_16": "USD",
+    "question_61004370": "No",
+    "unnamed_18": "No",
+    "question_61004371": "No",
+    "unnamed_20": "No",
+    "question_61004372": "No",
+    "unnamed_22": "No",
+    "question_61004373": "United States",
+    "unnamed_24": "United States",
+    "question_61004374": "Bachelor's degree",
+    "unnamed_26": "Bachelor's degree",
+    "question_61004375": "No",
+    "unnamed_28": "No"
+  },
+  "problemsSolved": [
+    {
+      "problem": "Failed to fill resume: No resume file available - user must generate a resume before applying to jobs",
+      "solution": {
+        "issue": "Resume and cover letter files failed to upload.",
+        "solution": "Ensure that the resume and cover letter files are selected correctly from your device before submitting the application.",
+        "fieldToRetry": "resume",
+        "newValue": null,
+        "needsManualIntervention": true,
+        "learnedPattern": "Always verify file uploads before submission."
+      },
+      "timestamp": "2025-11-05T23:45:38.042Z"
+    },
+    {
+      "problem": "Failed to fill cover_letter: No resume file available - user must generate a resume before applying to jobs",
+      "timestamp": "2025-11-05T23:45:38.042Z"
+    }
+  ],
+  "patterns": {
+    "commonQuestions": [
+      {
+        "label": "What is your salary expectation? *",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What's your nationality?*",
+        "type": "text",
+        "category": "other"
+      }
+    ],
+    "fieldNamingConventions": {
+      "camelCase": 0,
+      "snake_case": 24,
+      "kebabCase": 0,
+      "standard": 4
+    },
+    "formLayout": {
+      "totalFields": 28,
+      "visibleFields": 28,
+      "requiredFields": 9,
+      "optionalFields": 19
+    }
+  }
+}

@@ -256,16 +256,39 @@ class AIResumeGenerator {
 
         // Try to fix by finding where document content starts
         if (hasDocClass && hasEndDoc) {
-          // Find where the actual content starts (usually after all package imports)
-          const beginCenterMatch = latexCode.match(/(%\s*===BEGIN:HEADER===|\\begin{center})/);
-          if (beginCenterMatch) {
-            const insertPosition = beginCenterMatch.index;
-            const fixedLatex = latexCode.substring(0, insertPosition) +
-                             '\\begin{document}\n' +
-                             latexCode.substring(insertPosition);
-            logger.info('✅ Auto-fixed missing \\begin{document}');
-            latexCode = fixedLatex;
+          // Find the last \usepackage command or similar preamble command
+          const preambleCommands = [
+            /\\usepackage\{[^}]+\}/g,
+            /\\setlength\{[^}]+\}\{[^}]+\}/g,
+            /\\definecolor\{[^}]+\}\{[^}]+\}\{[^}]+\}/g,
+            /\\renewcommand\{[^}]+\}\{[^}]+\}/g,
+            /\\newcommand\{[^}]+\}\{[^}]+\}/g,
+            /\\titleformat[^\n]+/g,
+            /\\titlespacing[^\n]+/g,
+            /\\geometry\{[^}]+\}/g,
+            /\\pagestyle\{[^}]+\}/g
+          ];
+
+          let lastPreamblePosition = latexCode.indexOf('\\documentclass');
+
+          // Find the last preamble command
+          for (const regex of preambleCommands) {
+            const matches = [...latexCode.matchAll(regex)];
+            if (matches.length > 0) {
+              const lastMatch = matches[matches.length - 1];
+              const position = lastMatch.index + lastMatch[0].length;
+              if (position > lastPreamblePosition) {
+                lastPreamblePosition = position;
+              }
+            }
           }
+
+          // Insert \begin{document} after the last preamble command
+          const fixedLatex = latexCode.substring(0, lastPreamblePosition) +
+                           '\n\n\\begin{document}\n' +
+                           latexCode.substring(lastPreamblePosition);
+          logger.info('✅ Auto-fixed missing \\begin{document} at position', lastPreamblePosition);
+          latexCode = fixedLatex;
         }
       }
 
@@ -338,12 +361,37 @@ class AIResumeGenerator {
       // Auto-fix missing \begin{document} if needed
       if (!latexCode.includes('\\begin{document}')) {
         logger.warn('⚠️ Missing \\begin{document}, auto-fixing...');
-        const beginCenterMatch = latexCode.match(/(%\s*===BEGIN:HEADER===|\\begin{center})/);
-        if (beginCenterMatch) {
-          const insertPosition = beginCenterMatch.index;
-          latexCode = latexCode.substring(0, insertPosition) +
-                     '\\begin{document}\n' +
-                     latexCode.substring(insertPosition);
+        const hasDocClass = latexCode.includes('\\documentclass');
+        const hasEndDoc = latexCode.includes('\\end{document}');
+
+        if (hasDocClass && hasEndDoc) {
+          // Find the last preamble command position
+          const preambleRegexes = [
+            /\\usepackage\{[^}]+\}/g,
+            /\\geometry\{[^}]+\}/g,
+            /\\setlength[^\n]+/g,
+            /\\definecolor[^\n]+/g,
+            /\\pagestyle\{[^}]+\}/g
+          ];
+
+          let lastPreamblePosition = latexCode.indexOf('\\documentclass');
+
+          for (const regex of preambleRegexes) {
+            const matches = [...latexCode.matchAll(regex)];
+            if (matches.length > 0) {
+              const lastMatch = matches[matches.length - 1];
+              const position = lastMatch.index + lastMatch[0].length;
+              if (position > lastPreamblePosition) {
+                lastPreamblePosition = position;
+              }
+            }
+          }
+
+          // Insert after last preamble command
+          latexCode = latexCode.substring(0, lastPreamblePosition) +
+                     '\n\n\\begin{document}\n' +
+                     latexCode.substring(lastPreamblePosition);
+          logger.info('✅ Auto-fixed missing \\begin{document}');
         }
       }
 
@@ -482,22 +530,31 @@ class AIResumeGenerator {
 
   /**
    * Determine the best style based on job description
+   * Respects user preference if explicitly set
    */
   determineStyle(jobDescription, options) {
-    if (options.style) return options.style;
+    // ALWAYS respect user's explicit style choice
+    if (options.style) {
+      logger.info(`Using user-selected style: ${options.style}`);
+      return options.style;
+    }
 
+    // Only auto-detect if no preference set
     const jdLower = jobDescription.toLowerCase();
 
     if (jdLower.includes('engineer') || jdLower.includes('developer') ||
         jdLower.includes('devops') || jdLower.includes('software')) {
+      logger.info('Auto-detected style: technical');
       return 'technical';
     }
 
     if (jdLower.includes('design') || jdLower.includes('creative') ||
         jdLower.includes('artist') || jdLower.includes('ux')) {
+      logger.info('Auto-detected style: creative');
       return 'creative';
     }
 
+    logger.info('Auto-detected style: professional (default)');
     return 'professional';
   }
 
@@ -578,11 +635,12 @@ Generate the complete LaTeX code for this resume. Output only the LaTeX code, no
       throw new Error('Invalid LaTeX: missing document environment');
     }
 
-    // Basic escape validation
+    // Strict brace validation
     const openBraces = (cleaned.match(/{/g) || []).length;
     const closeBraces = (cleaned.match(/}/g) || []).length;
-    if (Math.abs(openBraces - closeBraces) > 2) {
-      logger.warn('Warning: Potential brace mismatch in LaTeX');
+    if (openBraces !== closeBraces) {
+      logger.error(`LaTeX validation failed: brace mismatch (open: ${openBraces}, close: ${closeBraces})`);
+      throw new Error(`Invalid LaTeX: unmatched braces (${openBraces} open, ${closeBraces} close)`);
     }
 
     return cleaned.trim();

@@ -419,6 +419,10 @@ async function applyWithAI(jobUrl, user, jobData, resumePath = null) {
       }
     } else {
       logger.error('⚠️  No submit button found - form filled but cannot submit');
+      submitResult = {
+        success: false,
+        error: 'No submit button found after form filling'
+      };
     }
 
     // Take final screenshot to capture the result
@@ -513,9 +517,10 @@ const autoApplyQueue = new Queue('auto-apply', {
 
 /**
  * Process an auto-apply job
- * Concurrency limited to 2 to prevent OOM (each browser ~300MB RAM)
+ * Concurrency set to 10 for better throughput (each browser ~300MB RAM)
+ * Can handle 10 concurrent applications = ~3GB RAM total
  */
-autoApplyQueue.process(2, async (job) => {
+autoApplyQueue.process(10, async (job) => {
   const { applicationId, jobUrl, atsType, userId } = job.data;
 
   // Declare at function scope so finally block can access it

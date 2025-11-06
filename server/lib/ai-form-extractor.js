@@ -23,6 +23,175 @@ class AIFormExtractor {
   }
 
   /**
+   * Detect and extract options from custom dropdown fields
+   * Many modern sites (like Greenhouse) use custom dropdowns instead of native <select>
+   * @param {Page} page - Puppeteer page object
+   * @param {Array} fields - Fields extracted from page
+   * @returns {Array} Fields with updated custom dropdown info
+   */
+  async detectCustomDropdowns(page, fields) {
+    logger.info('🔍 Detecting custom dropdowns...');
+
+    // Identify potential custom dropdowns using multiple detection strategies
+    const customDropdownCandidates = await page.evaluate((fieldsList) => {
+      return fieldsList.filter(field => {
+        if (field.type !== 'text') return false;
+
+        const elem = document.querySelector(field.selector);
+        if (!elem) return false;
+
+        // Strategy 1: Role-based detection (Greenhouse, modern sites)
+        const role = elem.getAttribute('role');
+        if (role === 'combobox' || role === 'listbox') return true;
+
+        // Strategy 2: Class-based detection (Greenhouse: select__input)
+        const className = elem.className || '';
+        if (className.includes('select__input') ||
+            className.includes('select-input') ||
+            className.includes('dropdown-input') ||
+            className.includes('combobox')) return true;
+
+        // Strategy 3: Placeholder-based detection
+        const placeholder = elem.placeholder || '';
+        if (placeholder.toLowerCase().includes('select') ||
+            placeholder === '...' ||
+            placeholder.toLowerCase().startsWith('choose')) return true;
+
+        // Strategy 4: Readonly + click behavior (some custom dropdowns)
+        if (elem.readOnly && elem.onclick) return true;
+
+        return false;
+      }).map(f => f.name);
+    }, fields);
+
+    // Filter original fields array based on detected names
+    const detectedFields = fields.filter(f => customDropdownCandidates.includes(f.name));
+
+    if (detectedFields.length === 0) {
+      logger.info('No custom dropdowns detected');
+      return fields;
+    }
+
+    logger.info(`Found ${detectedFields.length} potential custom dropdowns`);
+
+    // Try to extract options from each custom dropdown
+    for (const field of detectedFields) {
+      try {
+        const options = await this.extractCustomDropdownOptions(page, field);
+
+        if (options && options.length > 0) {
+          // Update field to be a select type with options
+          field.type = 'select';
+          field.options = options;
+          field.isCustomDropdown = true;
+          logger.info(`✅ Extracted ${options.length} options from custom dropdown: ${field.name}`);
+        }
+      } catch (error) {
+        logger.warn(`Failed to extract options from ${field.name}: ${error.message}`);
+      }
+    }
+
+    return fields;
+  }
+
+  /**
+   * Extract options from a single custom dropdown by clicking it
+   * @param {Page} page - Puppeteer page object
+   * @param {Object} field - Field metadata
+   * @returns {Array} Dropdown options
+   */
+  async extractCustomDropdownOptions(page, field) {
+    const options = await page.evaluate((fieldSelector) => {
+      const input = document.querySelector(fieldSelector);
+      if (!input) return null;
+
+      // Click the input to reveal dropdown
+      input.click();
+      input.focus();
+
+      // Wait a bit for dropdown to appear (synchronous wait in browser context)
+      const startTime = Date.now();
+      const maxWait = 1000; // 1 second
+
+      // Look for dropdown menu that appeared
+      // Common patterns for custom dropdowns
+      const dropdownSelectors = [
+        // Greenhouse specific
+        'ul[role="listbox"]',
+        'div[role="listbox"]',
+        '.select-options',
+        '.dropdown-menu',
+        '[class*="dropdown"][class*="menu"]',
+        '[class*="select"][class*="menu"]',
+        'ul.options',
+        'div.options',
+        // Generic patterns
+        'ul[aria-expanded="true"]',
+        'div[aria-expanded="true"]'
+      ];
+
+      let dropdownMenu = null;
+      while (!dropdownMenu && (Date.now() - startTime) < maxWait) {
+        for (const selector of dropdownSelectors) {
+          const menu = document.querySelector(selector);
+          if (menu && menu.offsetParent !== null) {
+            dropdownMenu = menu;
+            break;
+          }
+        }
+      }
+
+      if (!dropdownMenu) {
+        // Try to find any visible ul/div that appeared near the input
+        const parent = input.closest('div');
+        if (parent) {
+          const visibleMenus = parent.querySelectorAll('ul, div[role="listbox"]');
+          for (const menu of visibleMenus) {
+            if (menu.offsetParent !== null && menu !== input) {
+              dropdownMenu = menu;
+              break;
+            }
+          }
+        }
+      }
+
+      if (!dropdownMenu) return null;
+
+      // Extract options from menu
+      const optionElements = Array.from(
+        dropdownMenu.querySelectorAll('li, div[role="option"], [data-option]')
+      );
+
+      const extractedOptions = optionElements
+        .filter(opt => opt.offsetParent !== null) // Only visible options
+        .map(opt => {
+          const text = opt.textContent?.trim() || '';
+          const value = opt.getAttribute('data-value') ||
+                       opt.getAttribute('value') ||
+                       text;
+
+          return {
+            value: value,
+            text: text,
+            selected: false
+          };
+        })
+        .filter(opt => opt.text && opt.text.length > 0 && opt.text !== 'Select...');
+
+      // Close dropdown by clicking input again or pressing Escape
+      input.blur();
+      document.body.click(); // Click elsewhere to close
+
+      return extractedOptions;
+    }, field.selector);
+
+    // Give page a moment to close dropdown
+    await this.sleep(100);
+
+    return options;
+  }
+
+  /**
    * Extract all form fields from the current page
    * @param {Page} page - Puppeteer page object
    * @returns {Object} Extracted form data with fields and context
@@ -316,6 +485,10 @@ class AIFormExtractor {
    */
   async extractComplete(page) {
     const extraction = await this.extractFormFields(page);
+
+    // Detect and extract custom dropdowns (Greenhouse, Lever, etc.)
+    extraction.fields = await this.detectCustomDropdowns(page, extraction.fields);
+
     const complexity = this.analyzeComplexity(extraction.fields);
     const hasCaptcha = await this.detectCaptcha(page);
     const submitButton = await this.findSubmitButton(page);
@@ -329,6 +502,13 @@ class AIFormExtractor {
       screenshot,
       timestamp: new Date().toISOString()
     };
+  }
+
+  /**
+   * Helper: sleep
+   */
+  sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 }
 

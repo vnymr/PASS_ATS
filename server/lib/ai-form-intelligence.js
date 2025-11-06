@@ -46,7 +46,7 @@ CRITICAL RULES:
 5. Match the expected format exactly (date format, number format, exact option values)
 6. For essay questions, write compelling 2-4 paragraph responses with SPECIFIC examples
 7. For "why" questions, relate user's SPECIFIC experience to the job
-8. For select/dropdown fields, choose the EXACT value from options
+8. ⚠️  For select/dropdown fields: CRITICAL - You MUST choose from EXACT values shown in options list. DO NOT invent values. Use the "value" field provided.
 9. For radio buttons, return the exact value to select
 10. For checkbox groups, return an array of values to check
 11. For yes/no questions, make intelligent defaults based on user profile
@@ -114,7 +114,15 @@ CRITICAL RULES:
       if (field.placeholder) desc += ` [placeholder: "${field.placeholder}"]`;
       if (field.required) desc += ' [REQUIRED]';
       if (field.options && field.options.length > 0) {
-        desc += `\n  Options: ${field.options.map(o => o.text || o.value).join(', ')}`;
+        // For select/dropdown fields, show options in a clear format with values
+        if (field.type === 'select' || field.type === 'select-one' || field.type === 'select-multiple') {
+          desc += `\n  ⚠️  MUST choose from these EXACT options:`;
+          field.options.forEach(opt => {
+            desc += `\n      - "${opt.text}" (value: "${opt.value}")`;
+          });
+        } else {
+          desc += `\n  Options: ${field.options.map(o => o.text || o.value).join(', ')}`;
+        }
       }
       return desc;
     }).join('\n');
@@ -226,9 +234,12 @@ CRITICAL INSTRUCTIONS:
    - Show enthusiasm, cultural fit, and unique value
    - Be specific, NOT generic
 
-7. For select/dropdown fields:
-   - Choose the EXACT value from options list
-   - Match user's qualifications to the best option
+7. For select/dropdown fields (CRITICAL):
+   - You MUST choose from the EXACT values provided in the options list
+   - Return the "value" field, NOT the "text" field (unless they're the same)
+   - If multiple options seem valid, choose the one that best matches the user's profile
+   - DO NOT make up or invent dropdown values - only use what's provided
+   - Example: If options are "Fluent" (value: "fluent"), "Native" (value: "native"), choose "fluent" or "native", NOT "Advanced"
 
 8. For yes/no questions:
    - Check pre-answered questions FIRST

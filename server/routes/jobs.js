@@ -52,7 +52,7 @@ router.get('/jobs', async (req, res) => {
       search,                   // Search in title/description
       personalized = 'false',   // Use personalized recommendations
       limit = '50',
-      offset = '0'
+      cursor                    // Cursor for pagination (job ID)
     } = req.query;
 
     // Check if personalized recommendations requested
@@ -80,7 +80,7 @@ router.get('/jobs', async (req, res) => {
         source,
         search,
         limit: parseInt(limit),
-        offset: parseInt(offset)
+        cursor
       });
 
       // Cache the result
@@ -88,7 +88,7 @@ router.get('/jobs', async (req, res) => {
         jobs: result.jobs,
         total: result.total,
         limit: parseInt(limit),
-        offset: parseInt(offset),
+        nextCursor: result.nextCursor,
         hasMore: result.hasMore,
         personalized: true
       };
@@ -148,50 +148,64 @@ router.get('/jobs', async (req, res) => {
       });
     }
 
-    // Get jobs with pagination
-    const [jobs, total] = await Promise.all([
-      prisma.aggregatedJob.findMany({
-        where,
-        orderBy: { postedDate: 'desc' },
-        take: parseInt(limit),
-        skip: parseInt(offset),
-        select: {
-          id: true,
-          title: true,
-          company: true,
-          location: true,
-          salary: true,
-          description: true,
-          requirements: true,
-          applyUrl: true,
-          atsType: true,
-          atsComplexity: true,
-          aiApplyable: true,
-          postedDate: true,
-          source: true,
-          // Include extracted metadata
-          extractedSkills: true,
-          extractedExperience: true,
-          extractedEducation: true,
-          extractedJobLevel: true,
-          extractedKeywords: true,
-          extractedBenefits: true,
-          extractionConfidence: true,
-          _count: {
-            select: { applications: true }
-          }
+    // Get jobs with cursor-based pagination (more efficient than skip)
+    const limitNum = parseInt(limit);
+
+    const queryOptions = {
+      where,
+      orderBy: { id: 'desc' },  // Use id for consistent ordering
+      take: limitNum + 1,  // Take one extra to check if there are more
+      select: {
+        id: true,
+        title: true,
+        company: true,
+        location: true,
+        salary: true,
+        description: true,
+        requirements: true,
+        applyUrl: true,
+        atsType: true,
+        atsComplexity: true,
+        aiApplyable: true,
+        postedDate: true,
+        source: true,
+        // Include extracted metadata
+        extractedSkills: true,
+        extractedExperience: true,
+        extractedEducation: true,
+        extractedJobLevel: true,
+        extractedKeywords: true,
+        extractedBenefits: true,
+        extractionConfidence: true,
+        _count: {
+          select: { applications: true }
         }
-      }),
+      }
+    };
+
+    // Add cursor if provided
+    if (cursor) {
+      queryOptions.cursor = { id: cursor };
+      queryOptions.skip = 1;  // Skip the cursor itself
+    }
+
+    const [jobs, total] = await Promise.all([
+      prisma.aggregatedJob.findMany(queryOptions),
       prisma.aggregatedJob.count({ where })
     ]);
 
+    // Check if there are more results
+    const hasMore = jobs.length > limitNum;
+    const returnedJobs = hasMore ? jobs.slice(0, limitNum) : jobs;
+    const nextCursor = hasMore ? returnedJobs[returnedJobs.length - 1].id : null;
+
     // Cache the result
     const response = {
-      jobs,
+      jobs: returnedJobs,
       total,
-      limit: parseInt(limit),
-      offset: parseInt(offset),
-      hasMore: total > (parseInt(offset) + parseInt(limit)),
+      limit: limitNum,
+      nextCursor,
+      hasMore,
       personalized: false
     };
     await cacheManager.setJobList(cacheKey, response);

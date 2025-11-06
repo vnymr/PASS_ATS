@@ -155,8 +155,9 @@ class CaptchaSolver {
    * @param {string} taskId - The task ID from 2Captcha
    * @returns {Promise<string>} The CAPTCHA solution
    */
-  async pollForSolution(taskId, maxAttempts = 60) {
+  async pollForSolution(taskId, maxAttempts = 30) {
     const pollInterval = 5000; // 5 seconds
+    // 30 attempts × 5 seconds = 150 seconds (2.5 minutes) max wait time
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       // Wait before polling
@@ -192,7 +193,7 @@ class CaptchaSolver {
       }
     }
 
-    throw new Error('CAPTCHA solving timed out (5 minutes)');
+    throw new Error('CAPTCHA solving timed out (2.5 minutes)');
   }
 
   /**
@@ -312,7 +313,7 @@ class CaptchaSolver {
       // Inject solution into page
       logger.debug('Injecting CAPTCHA solution');
 
-      await page.evaluate((token, type) => {
+      const injectionResult = await page.evaluate((token, type) => {
         if (type === 'recaptcha_v2' || type === 'recaptcha_v3') {
           // Find the textarea where reCAPTCHA stores the response
           const textarea = document.querySelector('#g-recaptcha-response') ||
@@ -320,22 +321,53 @@ class CaptchaSolver {
           if (textarea) {
             textarea.value = token;
             textarea.style.display = 'block'; // Make visible temporarily
+
+            // Verify injection worked
+            return {
+              success: textarea.value === token,
+              type: 'recaptcha',
+              textareaFound: true
+            };
           }
 
           // Trigger callback if exists
           if (window.grecaptcha && window.grecaptcha.getResponse) {
             window.grecaptcha.getResponse = () => token;
           }
+
+          return { success: false, type: 'recaptcha', textareaFound: false };
         } else if (type === 'hcaptcha') {
           // Find hCaptcha response textarea
           const textarea = document.querySelector('textarea[name="h-captcha-response"]');
           if (textarea) {
             textarea.value = token;
+
+            // Verify injection worked
+            return {
+              success: textarea.value === token,
+              type: 'hcaptcha',
+              textareaFound: true
+            };
           }
+
+          return { success: false, type: 'hcaptcha', textareaFound: false };
         }
+
+        return { success: false, type: 'unknown', textareaFound: false };
       }, solution, captchaInfo.type);
 
-      logger.info({ cost: 0.03 }, 'CAPTCHA solution injected successfully');
+      // Verify injection was successful
+      if (!injectionResult.success) {
+        const errorMsg = injectionResult.textareaFound
+          ? 'CAPTCHA injection failed - value not set correctly'
+          : `CAPTCHA injection failed - ${injectionResult.type} textarea not found`;
+        logger.error(errorMsg);
+        throw new Error(errorMsg);
+      }
+
+      // Calculate actual cost based on CAPTCHA type
+      const captchaCost = this.getCaptchaCost(captchaInfo.type);
+      logger.info({ cost: captchaCost, type: captchaInfo.type }, 'CAPTCHA solution injected and verified successfully');
 
       return true;
 
@@ -343,6 +375,23 @@ class CaptchaSolver {
       logger.error({ error: error.message }, 'Failed to solve CAPTCHA');
       throw error;
     }
+  }
+
+  /**
+   * Get the cost of solving a specific CAPTCHA type
+   * @param {string} captchaType - The type of CAPTCHA
+   * @returns {number} Cost in USD
+   */
+  getCaptchaCost(captchaType) {
+    const costs = {
+      'recaptcha_v2': 0.003,    // $0.003 per solve
+      'recaptcha_v3': 0.003,    // $0.003 per solve
+      'hcaptcha': 0.003,        // $0.003 per solve
+      'turnstile': 0.003,       // $0.003 per solve
+      'funcaptcha': 0.003       // $0.003 per solve
+    };
+
+    return costs[captchaType] || 0.003; // Default to $0.003
   }
 
   /**

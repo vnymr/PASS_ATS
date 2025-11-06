@@ -1,0 +1,139 @@
+{
+  "metadata": {
+    "url": "https://job-boards.greenhouse.io/nubank/jobs/7345028",
+    "domain": "job-boards.greenhouse.io",
+    "company": "Test Company",
+    "jobTitle": "Software Engineer",
+    "timestamp": "2025-11-06T00:06:49.129Z",
+    "success": true
+  },
+  "formStructure": {
+    "totalFields": 28,
+    "fieldTypes": {
+      "text": 25,
+      "tel": 1,
+      "file": 2
+    },
+    "requiredFields": [
+      {
+        "name": "unnamed_12",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_14",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_16",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_18",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_20",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_22",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_24",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_26",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_28",
+        "type": "text",
+        "label": "Select..."
+      }
+    ]
+  },
+  "aiResponses": {
+    "first_name": "John",
+    "last_name": "Doe",
+    "preferred_name": "John",
+    "email": "john.doe@example.com",
+    "country": "United States",
+    "phone": "+1 (555) 123-4567",
+    "resume": "John_Doe_Resume.pdf",
+    "cover_letter": "Dear Hiring Team,\n\nI am excited to apply for the Software Engineer position at Test Company. I am John Doe, a Senior Software Engineer at Tech Corp since 2020 with a B.S. in Computer Science from Stanford University (2018). Over the past five years I have led development of cloud infrastructure and backend services, and I bring hands-on experience with JavaScript, Python, React, Node.js, and AWS. My background delivering production systems at scale and collaborating across product and operations teams makes me well-suited to contribute immediately to your engineering efforts.\n\nAt Tech Corp I led the effort to redesign our cloud platform—migrating a legacy monolith to a microservices architecture on AWS, implementing CI/CD pipelines, and introducing observability and automated recovery mechanisms. I personally authored core services in Node.js and Python, and partnered with front-end engineers on React-driven interfaces. Those changes reduced deployment cycle time by over 50%, significantly improved reliability, and enabled the team to iterate faster on customer-facing features. I focus on pragmatic, well-tested engineering and on mentoring teammates to elevate overall delivery quality.\n\nI’m particularly drawn to Test Company’s focus on building reliable, user-focused products. I enjoy working cross-functionally, thrive in fast-moving environments, and am motivated by opportunities to improve systems end-to-end. I am located in San Francisco, CA, and you can find more about my work at https://johndoe.dev and on LinkedIn: https://linkedin.com/in/johndoe. Thank you for considering my application—I look forward to the possibility of contributing to your team.\n\nSincerely,\nJohn Doe",
+    "question_61001433": "https://linkedin.com/in/johndoe",
+    "question_61001434": "https://johndoe.dev",
+    "question_61001435": "San Francisco, CA",
+    "unnamed_12": "California",
+    "question_61004368": "Native",
+    "unnamed_14": "Native",
+    "question_61004369": "USD 170,000 per year",
+    "unnamed_16": "USD",
+    "question_61004370": "No",
+    "unnamed_18": "No",
+    "question_61004371": "No",
+    "unnamed_20": "No",
+    "question_61004372": "No",
+    "unnamed_22": "No",
+    "question_61004373": "United States",
+    "unnamed_24": "United States",
+    "question_61004374": "Bachelor's degree",
+    "unnamed_26": "Bachelor's degree",
+    "question_61004375": "No",
+    "unnamed_28": "No"
+  },
+  "problemsSolved": [
+    {
+      "problem": "Failed to fill resume: No resume file available - user must generate a resume before applying to jobs",
+      "solution": {
+        "issue": "Failed to fill resume and cover_letter: No resume file available.",
+        "solution": "Upload the resume and cover letter using 'Attach', 'Dropbox', or 'Google Drive' options.",
+        "fieldToRetry": "resume",
+        "newValue": null,
+        "needsManualIntervention": true,
+        "learnedPattern": "Ensure resume and cover letter files are uploaded when prompted."
+      },
+      "timestamp": "2025-11-06T00:06:49.129Z"
+    },
+    {
+      "problem": "Failed to fill cover_letter: No resume file available - user must generate a resume before applying to jobs",
+      "timestamp": "2025-11-06T00:06:49.129Z"
+    }
+  ],
+  "patterns": {
+    "commonQuestions": [
+      {
+        "label": "What is your salary expectation? *",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What's your nationality?*",
+        "type": "text",
+        "category": "other"
+      }
+    ],
+    "fieldNamingConventions": {
+      "camelCase": 0,
+      "snake_case": 24,
+      "kebabCase": 0,
+      "standard": 4
+    },
+    "formLayout": {
+      "totalFields": 28,
+      "visibleFields": 28,
+      "requiredFields": 9,
+      "optionalFields": 19
+    }
+  }
+}

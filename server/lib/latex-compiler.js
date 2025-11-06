@@ -11,12 +11,26 @@ import util from 'util';
 
 const execAsync = util.promisify(exec);
 
+// PDF cache - stores compiled PDFs by LaTeX hash
+const pdfCache = new Map();
+const MAX_CACHE_SIZE = 100; // Keep last 100 compiled PDFs
+
 /**
- * Compile LaTeX code to PDF
+ * Compile LaTeX code to PDF with caching
  * @param {string} latexCode - The LaTeX source code
  * @returns {Promise<Buffer>} - PDF buffer
  */
 async function compileLatex(latexCode) {
+  // Generate hash of LaTeX code for caching
+  const latexHash = crypto.createHash('sha256').update(latexCode).digest('hex');
+
+  // Check cache first
+  if (pdfCache.has(latexHash)) {
+    logger.debug(`📦 PDF cache hit for hash ${latexHash.substring(0, 8)}...`);
+    return pdfCache.get(latexHash);
+  }
+
+  logger.debug(`🔨 PDF cache miss, compiling...`);
   // Create temporary directory
   const tempId = crypto.randomBytes(16).toString('hex');
   const tempDir = path.join('/tmp', `latex-${tempId}`);
@@ -61,12 +75,22 @@ async function compileLatex(latexCode) {
           }
         }
 
-        // Run compilation (twice for references)
+        // Run compilation
         const result = await execAsync(`cd ${tempDir} && ${compiler.cmd} ${compiler.args}`);
 
-        // Some compilers need a second pass for references
+        // Some compilers need a second pass for references, but only if there are warnings
         if (!compiler.name.includes('tectonic')) {
-          await execAsync(`cd ${tempDir} && ${compiler.cmd} ${compiler.args}`);
+          // Check if first pass generated warnings about references
+          const needsSecondPass = result.stdout?.includes('Rerun') ||
+                                 result.stdout?.includes('undefined references') ||
+                                 result.stderr?.includes('Rerun');
+
+          if (needsSecondPass) {
+            logger.debug('Running second compilation pass for references');
+            await execAsync(`cd ${tempDir} && ${compiler.cmd} ${compiler.args}`);
+          } else {
+            logger.debug('Skipping second pass - no warnings detected');
+          }
         }
 
         compiled = true;
@@ -94,6 +118,18 @@ async function compileLatex(latexCode) {
     // Read the PDF
     const pdfFile = path.join(tempDir, 'resume.pdf');
     const pdfBuffer = await fs.readFile(pdfFile);
+
+    // Cache the compiled PDF
+    pdfCache.set(latexHash, pdfBuffer);
+
+    // Limit cache size (LRU-like behavior)
+    if (pdfCache.size > MAX_CACHE_SIZE) {
+      const firstKey = pdfCache.keys().next().value;
+      pdfCache.delete(firstKey);
+      logger.debug(`🗑️  PDF cache size limit reached, removed oldest entry`);
+    }
+
+    logger.debug(`✅ PDF cached with hash ${latexHash.substring(0, 8)}...`);
 
     return pdfBuffer;
 

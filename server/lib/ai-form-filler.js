@@ -368,7 +368,12 @@ class AIFormFiller {
       case 'select':
       case 'select-one':
       case 'select-multiple':
-        await this.fillSelect(page, selector, value);
+        // Check if this is a custom dropdown (Greenhouse, Lever, etc.)
+        if (field.isCustomDropdown) {
+          await this.fillCustomDropdown(page, selector, value, field);
+        } else {
+          await this.fillSelect(page, selector, value);
+        }
         break;
 
       case 'checkbox':
@@ -460,6 +465,115 @@ class AIFormFiller {
   }
 
   /**
+   * Fill custom dropdown (Greenhouse, Lever, modern job boards)
+   * These use custom UI instead of native <select> elements
+   */
+  async fillCustomDropdown(page, selector, value, field) {
+    logger.debug({ value, fieldName: field.name }, 'Filling custom dropdown');
+
+    const result = await page.evaluate((inputSelector, targetValue, fieldOptions) => {
+      const input = document.querySelector(inputSelector);
+      if (!input) return { success: false, reason: 'Input element not found' };
+
+      // Click to open dropdown
+      input.click();
+      input.focus();
+
+      // Wait for dropdown menu to appear
+      const startTime = Date.now();
+      const maxWait = 2000;
+
+      const dropdownSelectors = [
+        'ul[role="listbox"]',
+        'div[role="listbox"]',
+        '.select-options',
+        '.dropdown-menu',
+        'ul.options',
+        'div.options'
+      ];
+
+      let dropdownMenu = null;
+      while (!dropdownMenu && (Date.now() - startTime) < maxWait) {
+        for (const selector of dropdownSelectors) {
+          const menu = document.querySelector(selector);
+          if (menu && menu.offsetParent !== null) {
+            dropdownMenu = menu;
+            break;
+          }
+        }
+      }
+
+      if (!dropdownMenu) {
+        return { success: false, reason: 'Dropdown menu did not appear' };
+      }
+
+      // Find matching option
+      const optionElements = Array.from(
+        dropdownMenu.querySelectorAll('li, div[role="option"], [data-option]')
+      );
+
+      let matchedOption = null;
+
+      // Try exact value match first
+      matchedOption = optionElements.find(opt => {
+        const optValue = opt.getAttribute('data-value') || opt.textContent?.trim();
+        return optValue === targetValue;
+      });
+
+      // Try exact text match
+      if (!matchedOption) {
+        matchedOption = optionElements.find(opt =>
+          opt.textContent?.trim().toLowerCase() === targetValue.toLowerCase()
+        );
+      }
+
+      // Try partial match
+      if (!matchedOption) {
+        matchedOption = optionElements.find(opt => {
+          const text = opt.textContent?.trim().toLowerCase() || '';
+          const val = targetValue.toLowerCase();
+          return text.includes(val) || val.includes(text);
+        });
+      }
+
+      if (!matchedOption) {
+        const availableOptions = optionElements
+          .map(opt => opt.textContent?.trim())
+          .filter(Boolean);
+
+        return {
+          success: false,
+          reason: 'No matching option found',
+          availableOptions: availableOptions.slice(0, 10)
+        };
+      }
+
+      // Click the option
+      matchedOption.click();
+
+      // Verify selection
+      const selectedText = matchedOption.textContent?.trim();
+
+      return {
+        success: true,
+        matched: selectedText,
+        value: targetValue
+      };
+    }, selector, String(value), field.options);
+
+    // Wait for dropdown to close and value to be set
+    await this.sleep(300);
+
+    if (result.success) {
+      logger.debug({ matched: result.matched }, 'Custom dropdown option selected');
+    } else {
+      const errorMsg = `Failed to select custom dropdown option. AI provided: "${value}" but ${result.reason}. Available: ${result.availableOptions?.join(', ') || 'unknown'}`;
+      logger.error({ value, reason: result.reason, availableOptions: result.availableOptions }, errorMsg);
+      throw new Error(errorMsg);
+    }
+  }
+
+  /**
    * Fill select/dropdown
    */
   async fillSelect(page, selector, value) {
@@ -511,14 +625,17 @@ class AIFormFiller {
       return {
         success: false,
         reason: 'No matching option found',
-        availableOptions: availableOptions.map(o => o.text).slice(0, 5)
+        availableOptions: availableOptions.map(o => ({ text: o.text, value: o.value }))
       };
     }, selector, String(value));
 
     if (result.success) {
       logger.debug({ matched: result.matched, value: result.value }, 'Selected option');
     } else {
-      logger.warn({ value, reason: result.reason, availableOptions: result.availableOptions }, 'Failed to select option');
+      // THROW ERROR instead of just warning - dropdown matching failed
+      const errorMsg = `Failed to select dropdown option. AI provided: "${value}" but available options are: ${result.availableOptions.map(o => `"${o.text}" (${o.value})`).join(', ')}`;
+      logger.error({ value, reason: result.reason, availableOptions: result.availableOptions }, errorMsg);
+      throw new Error(errorMsg);
     }
 
     await this.sleep(50);
@@ -718,13 +835,26 @@ class AIFormFiller {
 
       // Check for invalid/required fields
       const invalidFields = document.querySelectorAll('input:invalid, select:invalid, textarea:invalid');
-      const requiredEmptyFields = document.querySelectorAll('input[required]:not([value]), select[required]:not([value]), textarea[required]:empty');
+      const requiredEmptyInputs = document.querySelectorAll('input[required]:not([value])');
+      const requiredEmptyTextareas = document.querySelectorAll('textarea[required]:empty');
+
+      // Check for empty required dropdowns specifically (common issue)
+      const requiredEmptySelects = Array.from(document.querySelectorAll('select[required]')).filter(select => {
+        return !select.value || select.value === '' || select.selectedIndex === 0 && select.options[0].value === '';
+      });
 
       if (invalidFields.length > 0) {
         errors.push(`${invalidFields.length} invalid field(s) detected`);
       }
-      if (requiredEmptyFields.length > 0) {
-        errors.push(`${requiredEmptyFields.length} required field(s) empty`);
+      if (requiredEmptyInputs.length > 0) {
+        errors.push(`${requiredEmptyInputs.length} required input(s) empty`);
+      }
+      if (requiredEmptyTextareas.length > 0) {
+        errors.push(`${requiredEmptyTextareas.length} required textarea(s) empty`);
+      }
+      if (requiredEmptySelects.length > 0) {
+        const selectNames = requiredEmptySelects.map(s => s.name || s.id || 'unknown').join(', ');
+        errors.push(`${requiredEmptySelects.length} required dropdown(s) not selected: ${selectNames}`);
       }
 
       return errors;
