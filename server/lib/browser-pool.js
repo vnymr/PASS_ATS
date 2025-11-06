@@ -5,9 +5,10 @@
  * Memory Optimization: 300MB → 150MB per browser
  * Launch Time: 3s → 0.5s (reuse existing)
  * Throughput: 4 jobs/min → 51 jobs/min per worker
+ * MIGRATED FROM PUPPETEER TO PLAYWRIGHT
  */
 
-import puppeteer from 'puppeteer';
+import { chromium } from 'playwright';
 import logger from './logger.js';
 
 class BrowserPool {
@@ -46,8 +47,20 @@ class BrowserPool {
       logger.debug(`Browser pool cache hit! (${this.stats.cacheHits} total)`);
     }
 
-    // Create new page
-    const page = await browser.instance.newPage();
+    // Create new context with optimizations (Playwright pattern)
+    const context = await browser.instance.newContext({
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      extraHTTPHeaders: {
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1'
+      }
+    });
+
+    // Create new page from context
+    const page = await context.newPage();
     browser.pageCount++;
     browser.lastUsed = Date.now();
     this.stats.pagesCreated++;
@@ -104,7 +117,7 @@ class BrowserPool {
   async createBrowser() {
     logger.info(`Creating new browser (${this.browsers.length + 1}/${this.maxBrowsers})...`);
 
-    const instance = await puppeteer.launch({
+    const instance = await chromium.launch({
       headless: true,
       args: [
         '--no-sandbox',
@@ -129,11 +142,10 @@ class BrowserPool {
         '--mute-audio',
         '--no-default-browser-check',
         '--no-first-run',
-        '--disable-blink-features=AutomationControlled', // Avoid detection
-        '--window-size=1280,720'
+        '--disable-blink-features=AutomationControlled' // Avoid detection
       ],
       ignoreHTTPSErrors: true,
-      defaultViewport: {
+      viewport: {
         width: 1280,
         height: 720
       }
@@ -152,44 +164,29 @@ class BrowserPool {
     // Auto-cleanup after max idle time
     this.scheduleCleanup(browser);
 
-    logger.info(`✅ Browser ${browser.id} created`);
+    logger.info(`✅ Browser ${browser.id} created (Playwright)`);
 
     return browser;
   }
 
   /**
-   * Optimize page for performance
+   * Optimize page for performance (Playwright)
    */
   async optimizePage(page) {
-    // Block unnecessary resources
-    await page.setRequestInterception(true);
-    page.on('request', (request) => {
-      const resourceType = request.resourceType();
+    // Block unnecessary resources using Playwright's route API
+    await page.route('**/*', (route) => {
+      const resourceType = route.request().resourceType();
 
       // Block images, fonts, media, stylesheets
       if (['image', 'font', 'media', 'stylesheet'].includes(resourceType)) {
-        request.abort();
+        route.abort();
       } else {
-        request.continue();
+        route.continue();
       }
     });
 
-    // Set user agent to avoid bot detection
-    await page.setUserAgent(
-      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    );
-
-    // Set extra HTTP headers
-    await page.setExtraHTTPHeaders({
-      'Accept-Language': 'en-US,en;q=0.9',
-      'Accept-Encoding': 'gzip, deflate, br',
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-      'Connection': 'keep-alive',
-      'Upgrade-Insecure-Requests': '1'
-    });
-
-    // Inject scripts to avoid bot detection
-    await page.evaluateOnNewDocument(() => {
+    // Inject scripts to avoid bot detection using Playwright's addInitScript
+    await page.addInitScript(() => {
       // Override navigator.webdriver
       Object.defineProperty(navigator, 'webdriver', {
         get: () => undefined

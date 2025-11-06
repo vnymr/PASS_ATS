@@ -1,16 +1,13 @@
 /**
  * Improved Auto Apply Flow
  * Fixes the order of operations for job applications
+ * MIGRATED FROM PUPPETEER TO PLAYWRIGHT
  */
 
-import puppeteer from 'puppeteer-extra';
-import StealthPlugin from 'puppeteer-extra-plugin-stealth';
+import { chromium } from 'playwright';
 import logger from './logger.js';
 import ImprovedCaptchaHandler from './improved-captcha-handler.js';
 import AIFormFiller from './ai-form-filler.js';
-
-// Use stealth plugin to avoid detection
-puppeteer.use(StealthPlugin());
 
 class ImprovedAutoApply {
   constructor() {
@@ -46,32 +43,32 @@ class ImprovedAutoApply {
     let page = null;
 
     try {
-      // Step 1: Launch browser with stealth mode
-      logger.info('🚀 Launching browser for improved AI application...');
-      browser = await puppeteer.launch({
+      // Step 1: Launch browser with stealth mode using Playwright
+      logger.info('🚀 Launching Playwright browser for improved AI application...');
+      browser = await chromium.launch({
         headless: process.env.HEADLESS !== 'false',
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
           '--disable-dev-shm-usage',
-          '--disable-blink-features=AutomationControlled',
-          '--window-size=1920,1080'
-        ],
-        defaultViewport: {
-          width: 1920,
-          height: 1080
-        }
+          '--disable-blink-features=AutomationControlled'
+        ]
       });
 
-      page = await browser.newPage();
+      const context = await browser.newContext({
+        viewport: {
+          width: 1920,
+          height: 1080
+        },
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      });
 
-      // Set user agent
-      await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+      page = await context.newPage();
 
       // Step 2: Navigate to job page
       logger.info(`📄 Navigating to ${jobUrl}...`);
       await page.goto(jobUrl, {
-        waitUntil: 'networkidle2',
+        waitUntil: 'networkidle',
         timeout: 30000
       });
 

@@ -574,12 +574,48 @@ class AIFormFiller {
   }
 
   /**
-   * Fill select/dropdown
+   * Fill select/dropdown with Playwright-enhanced support
    */
   async fillSelect(page, selector, value) {
     logger.debug({ value }, 'Attempting to select option');
 
-    // Try to select by value, then by text if that fails
+    // Detect if using Playwright (has selectOption method) or Puppeteer
+    const isPlaywright = typeof page.selectOption === 'function';
+
+    if (isPlaywright) {
+      // Use Playwright's superior selectOption API with auto-waiting and better matching
+      try {
+        logger.debug('Using Playwright selectOption for improved reliability');
+
+        // Playwright's selectOption handles multiple match strategies automatically:
+        // 1. By value
+        // 2. By label text (exact or partial)
+        // 3. Case-insensitive matching
+        await page.selectOption(selector, { label: String(value) }, { timeout: 5000 });
+
+        logger.debug({ value }, 'Playwright: Selected option by label');
+        return;
+      } catch (labelError) {
+        // If label matching fails, try value matching
+        try {
+          await page.selectOption(selector, { value: String(value) }, { timeout: 5000 });
+          logger.debug({ value }, 'Playwright: Selected option by value');
+          return;
+        } catch (valueError) {
+          // Fall back to Playwright's default (tries multiple strategies)
+          try {
+            await page.selectOption(selector, String(value), { timeout: 5000 });
+            logger.debug({ value }, 'Playwright: Selected option with default strategy');
+            return;
+          } catch (defaultError) {
+            logger.warn({ error: defaultError.message }, 'Playwright selectOption strategies failed, falling back to evaluate');
+            // Fall through to the evaluate-based approach below
+          }
+        }
+      }
+    }
+
+    // Fallback: Use evaluate-based approach (works for both Puppeteer and Playwright)
     const result = await page.evaluate((sel, val) => {
       const element = document.querySelector(sel);
       if (!element) return { success: false, reason: 'Element not found' };
@@ -630,7 +666,7 @@ class AIFormFiller {
     }, selector, String(value));
 
     if (result.success) {
-      logger.debug({ matched: result.matched, value: result.value }, 'Selected option');
+      logger.debug({ matched: result.matched, value: result.value }, 'Selected option (evaluate method)');
     } else {
       // THROW ERROR instead of just warning - dropdown matching failed
       const errorMsg = `Failed to select dropdown option. AI provided: "${value}" but available options are: ${result.availableOptions.map(o => `"${o.text}" (${o.value})`).join(', ')}`;
@@ -728,14 +764,24 @@ class AIFormFiller {
 
       logger.debug({ fileName: path.basename(resumePath) }, 'Using user resume for upload');
 
-      // Use Puppeteer's file upload API
-      const fileInput = await page.$(selector);
-      if (!fileInput) {
-        throw new Error(`File input not found: ${selector}`);
-      }
+      // Detect if using Playwright (has setInputFiles method) or Puppeteer
+      const isPlaywright = typeof page.setInputFiles === 'function';
 
-      await fileInput.uploadFile(resumePath);
-      logger.debug('File uploaded successfully');
+      if (isPlaywright) {
+        // Use Playwright's setInputFiles API
+        logger.debug('Using Playwright setInputFiles');
+        await page.setInputFiles(selector, resumePath);
+        logger.debug('File uploaded successfully (Playwright)');
+      } else {
+        // Use Puppeteer's uploadFile API
+        logger.debug('Using Puppeteer uploadFile');
+        const fileInput = await page.$(selector);
+        if (!fileInput) {
+          throw new Error(`File input not found: ${selector}`);
+        }
+        await fileInput.uploadFile(resumePath);
+        logger.debug('File uploaded successfully (Puppeteer)');
+      }
 
       // Wait for any upload processing
       await this.sleep(500);

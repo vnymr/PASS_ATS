@@ -6,9 +6,11 @@
  *   await recorder.startRecording('https://job-url.com');
  *   // User interacts with the browser
  *   const recipe = await recorder.stopRecording();
+ *
+ * MIGRATED FROM PUPPETEER TO PLAYWRIGHT
  */
 
-import puppeteer from 'puppeteer';
+import { chromium } from 'playwright';
 import logger from './logger.js';
 
 export class BrowserRecorder {
@@ -23,31 +25,33 @@ export class BrowserRecorder {
    * Start recording user interactions
    */
   async startRecording(jobUrl, options = {}) {
-    logger.info({ jobUrl }, '🎬 Starting browser recorder...');
+    logger.info({ jobUrl }, '🎬 Starting Playwright browser recorder...');
 
     this.recordedSteps = [];
     this.isRecording = true;
 
     // Launch browser in non-headless mode so user can interact
-    this.browser = await puppeteer.launch({
+    this.browser = await chromium.launch({
       headless: false,
-      defaultViewport: null,
       args: [
         '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--window-size=1280,1024'
+        '--disable-setuid-sandbox'
       ]
     });
 
-    this.page = await this.browser.newPage();
+    const context = await this.browser.newContext({
+      viewport: { width: 1280, height: 1024 }
+    });
+
+    this.page = await context.newPage();
 
     // Set up event listeners to capture interactions
     await this.setupRecordingListeners();
 
     // Navigate to job page
-    await this.page.goto(jobUrl, { waitUntil: 'networkidle2', timeout: 60000 });
+    await this.page.goto(jobUrl, { waitUntil: 'networkidle', timeout: 60000 });
 
-    logger.info('✅ Browser opened - interact with the page to record steps');
+    logger.info('✅ Playwright browser opened - interact with the page to record steps');
     logger.info('   When done, call stopRecording() to save the recipe');
 
     return {
@@ -61,8 +65,8 @@ export class BrowserRecorder {
    * Set up listeners to capture user interactions
    */
   async setupRecordingListeners() {
-    // Inject recording script into page
-    await this.page.evaluateOnNewDocument(() => {
+    // Inject recording script into page using Playwright's addInitScript
+    await this.page.addInitScript(() => {
       window.recordedActions = [];
 
       // Track input events

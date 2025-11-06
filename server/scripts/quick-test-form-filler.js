@@ -1,9 +1,10 @@
 /**
  * Quick Test: AI Form Filler
- * Simple test to verify Puppeteer and AI form filling works
+ * Simple test to verify Playwright and AI form filling works
+ * MIGRATED FROM PUPPETEER TO PLAYWRIGHT
  */
 
-import puppeteer from 'puppeteer';
+import { launchBrowser } from '../lib/browser-launcher.js';
 import AIFormFiller from '../lib/ai-form-filler.js';
 
 // Simple test configuration
@@ -50,21 +51,20 @@ async function runQuickTest() {
   }
 
   console.log('✅ OpenAI API key found');
-  console.log('🌐 Launching browser...\n');
+  console.log('🌐 Launching Playwright browser...\n');
 
-  const browser = await puppeteer.launch({
-    headless: false, // Show browser for debugging
-    slowMo: 50,
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
+  const browser = await launchBrowser({
+    headless: false // Show browser for debugging
   });
 
   try {
-    const page = await browser.newPage();
+    const context = await browser.newContext();
+    const page = await context.newPage();
     const filler = new AIFormFiller();
 
     console.log('📄 Navigating to test form (httpbin.org)...');
     await page.goto('https://httpbin.org/forms/post', {
-      waitUntil: 'networkidle2',
+      waitUntil: 'networkidle',
       timeout: 30000
     });
 

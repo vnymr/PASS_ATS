@@ -1,9 +1,10 @@
 /**
  * Browser Launcher Helper
- * Centralized Puppeteer browser launching with production support
+ * Centralized Playwright browser launching with production support
+ * MIGRATED FROM PUPPETEER TO PLAYWRIGHT
  */
 
-import puppeteer from 'puppeteer';
+import { chromium } from 'playwright';
 import logger from './logger.js';
 import { execSync } from 'child_process';
 
@@ -12,31 +13,38 @@ import { execSync } from 'child_process';
  * Handles Railway/Nixpacks environment with dynamic path resolution
  */
 function findChromiumPath() {
-  // If PUPPETEER_EXECUTABLE_PATH is explicitly set (not wildcard), use it
+  // If PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH is explicitly set, use it
+  if (process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH &&
+      process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH !== '*') {
+    logger.info(`Using PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: ${process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH}`);
+    return process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
+  }
+
+  // Fallback to PUPPETEER_EXECUTABLE_PATH for backwards compatibility
   if (process.env.PUPPETEER_EXECUTABLE_PATH &&
       process.env.PUPPETEER_EXECUTABLE_PATH !== '*') {
-    logger.info(`Using PUPPETEER_EXECUTABLE_PATH: ${process.env.PUPPETEER_EXECUTABLE_PATH}`);
+    logger.info(`Using PUPPETEER_EXECUTABLE_PATH (backwards compat): ${process.env.PUPPETEER_EXECUTABLE_PATH}`);
     return process.env.PUPPETEER_EXECUTABLE_PATH;
   }
 
-  // Try to find Puppeteer's bundled Chromium (most reliable)
+  // Try to find Playwright's bundled Chromium (most reliable)
   try {
-    // Look for Puppeteer's cache directory
+    // Look for Playwright's cache directory
     const homeDir = process.env.HOME || '/root';
-    const puppeteerCachePaths = [
-      `${homeDir}/.cache/puppeteer`,
-      `${process.cwd()}/node_modules/puppeteer/.local-chromium`,
-      '/app/server/node_modules/puppeteer/.local-chromium'
+    const playwrightCachePaths = [
+      `${homeDir}/Library/Caches/ms-playwright`,
+      `${homeDir}/.cache/ms-playwright`,
+      '/root/.cache/ms-playwright'
     ];
 
-    for (const cachePath of puppeteerCachePaths) {
+    for (const cachePath of playwrightCachePaths) {
       try {
-        const chromiumPath = execSync(`find ${cachePath} -name chrome -type f 2>/dev/null | head -1`,
+        const chromiumPath = execSync(`find ${cachePath} -name chrome -o -name chromium -type f 2>/dev/null | head -1`,
           { encoding: 'utf8' }
         ).trim();
 
         if (chromiumPath) {
-          logger.info(`Found Puppeteer bundled Chromium: ${chromiumPath}`);
+          logger.info(`Found Playwright bundled Chromium: ${chromiumPath}`);
           return chromiumPath;
         }
       } catch (e) {
@@ -44,7 +52,7 @@ function findChromiumPath() {
       }
     }
   } catch (error) {
-    logger.debug('Could not find Puppeteer bundled Chromium');
+    logger.debug('Could not find Playwright bundled Chromium');
   }
 
   // Try to find system chromium using which command
@@ -75,7 +83,7 @@ function findChromiumPath() {
     logger.debug('Could not find Chromium in Nix store');
   }
 
-  logger.info('Using Puppeteer default bundled Chromium');
+  logger.info('Using Playwright default bundled Chromium');
   return undefined;
 }
 
@@ -98,12 +106,6 @@ function getStandardArgs(options = {}) {
     );
   }
 
-  if (options.windowSize) {
-    args.push(`--window-size=${options.windowSize}`);
-  } else {
-    args.push('--window-size=1920,1080');
-  }
-
   if (options.extraArgs) {
     args.push(...options.extraArgs);
   }
@@ -116,16 +118,21 @@ function getStandardArgs(options = {}) {
  * @param {Object} options - Launch options
  * @param {boolean} options.headless - Run in headless mode (default: true in production)
  * @param {boolean} options.stealth - Use stealth mode to avoid detection (default: false)
- * @param {string} options.windowSize - Window size (default: 1920,1080)
+ * @param {string} options.windowSize - Window size (default: 1920x1080)
  * @param {string[]} options.extraArgs - Additional Chrome arguments
- * @returns {Promise<Browser>} Puppeteer browser instance
+ * @returns {Promise<Browser>} Playwright browser instance
  */
 export async function launchBrowser(options = {}) {
   const executablePath = findChromiumPath();
 
+  // Parse window size (default 1920x1080)
+  const windowSize = options.windowSize || '1920,1080';
+  const [width, height] = windowSize.split(',').map(Number);
+
   const launchOptions = {
     headless: options.headless !== false,
-    args: getStandardArgs(options)
+    args: getStandardArgs(options),
+    viewport: { width, height }
   };
 
   // Add executable path if found
@@ -133,18 +140,18 @@ export async function launchBrowser(options = {}) {
     launchOptions.executablePath = executablePath;
   }
 
-  logger.debug({ launchOptions }, 'Launching browser');
+  logger.debug({ launchOptions }, 'Launching Playwright browser');
 
   try {
-    const browser = await puppeteer.launch(launchOptions);
-    logger.info('✅ Browser launched successfully');
+    const browser = await chromium.launch(launchOptions);
+    logger.info('✅ Playwright browser launched successfully');
     return browser;
   } catch (error) {
     logger.error({
       error: error.message,
       executablePath,
       args: launchOptions.args
-    }, 'Failed to launch browser');
+    }, 'Failed to launch Playwright browser');
     throw new Error(`Browser launch failed: ${error.message}`);
   }
 }
@@ -156,7 +163,7 @@ export async function launchStealthBrowser(options = {}) {
   return launchBrowser({
     ...options,
     stealth: true,
-    headless: process.env.PUPPETEER_HEADLESS !== 'false'
+    headless: process.env.PUPPETEER_HEADLESS !== 'false' && process.env.PLAYWRIGHT_HEADLESS !== 'false'
   });
 }
 

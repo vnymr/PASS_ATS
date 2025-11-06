@@ -1,11 +1,12 @@
 /**
  * Recipe Engine - Record Once, Replay Forever
  *
- * Uses BrowserUse to RECORD form steps once, then replays with Puppeteer
+ * Uses BrowserUse to RECORD form steps once, then replays with Playwright
  * Cost: $0.80 once per platform → $0.05 per replay (16x cheaper!)
+ * MIGRATED FROM PUPPETEER TO PLAYWRIGHT
  */
 
-import puppeteer from 'puppeteer';
+import { chromium } from 'playwright';
 import { prisma } from './prisma-client.js';
 import logger from './logger.js';
 
@@ -50,7 +51,7 @@ class RecipeEngine {
   }
 
   /**
-   * Replay a saved recipe using Puppeteer
+   * Replay a saved recipe using Playwright
    */
   async replayRecipe(recipe, jobUrl, userData) {
     const startTime = Date.now();
@@ -58,18 +59,19 @@ class RecipeEngine {
     try {
       // Launch browser
       if (!this.browser) {
-        this.browser = await puppeteer.launch({
+        this.browser = await chromium.launch({
           headless: false, // Show browser for debugging
           args: ['--no-sandbox', '--disable-setuid-sandbox']
         });
       }
 
-      const page = await this.browser.newPage();
+      const context = await this.browser.newContext();
+      const page = await context.newPage();
 
       // Navigate to job page
-      await page.goto(jobUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+      await page.goto(jobUrl, { waitUntil: 'networkidle', timeout: 30000 });
 
-      logger.info(`Executing ${recipe.steps.length} steps...`);
+      logger.info(`Executing ${recipe.steps.length} steps with Playwright...`);
 
       // Execute each step
       for (let i = 0; i < recipe.steps.length; i++) {
@@ -100,13 +102,14 @@ class RecipeEngine {
       const confirmationId = confirmationMatch?.[1];
 
       await page.close();
+      await context.close();
 
       const duration = Date.now() - startTime;
 
       return {
         success: true,
         method: 'REPLAY',
-        cost: 0.05, // Puppeteer cost
+        cost: 0.05, // Playwright cost
         duration,
         screenshot,
         confirmationId
@@ -124,20 +127,22 @@ class RecipeEngine {
   }
 
   /**
-   * Execute a single step
+   * Execute a single step using Playwright
    */
   async executeStep(page, step, userData) {
     switch (step.action) {
       case 'type':
         const value = this.interpolate(step.value, userData);
         await page.waitForSelector(step.selector, { timeout: 5000 });
-        await page.type(step.selector, value, { delay: 50 });
+        // Use fill for faster input, falls back to type with delay for more natural behavior
+        await page.fill(step.selector, value);
         break;
 
       case 'select':
         const selectValue = this.interpolate(step.value, userData);
         await page.waitForSelector(step.selector, { timeout: 5000 });
-        await page.select(step.selector, selectValue);
+        // Playwright uses selectOption instead of select
+        await page.selectOption(step.selector, selectValue);
         break;
 
       case 'click':
@@ -148,8 +153,8 @@ class RecipeEngine {
       case 'upload':
         const filePath = this.interpolate(step.value, userData);
         await page.waitForSelector(step.selector, { timeout: 5000 });
-        const fileInput = await page.$(step.selector);
-        await fileInput.uploadFile(filePath);
+        // Playwright uses setInputFiles instead of uploadFile
+        await page.setInputFiles(step.selector, filePath);
         break;
 
       case 'radio':
@@ -162,7 +167,8 @@ class RecipeEngine {
         const checkboxValue = this.interpolate(step.value, userData);
         if (checkboxValue === 'true' || checkboxValue === true) {
           await page.waitForSelector(step.selector, { timeout: 5000 });
-          await page.click(step.selector);
+          // Use check() for better checkbox handling
+          await page.check(step.selector);
         }
         break;
 

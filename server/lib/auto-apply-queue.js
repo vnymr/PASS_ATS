@@ -1,6 +1,7 @@
 /**
  * Auto-Apply Queue Worker
  * Processes queued job applications using AI (primary) or recipe engine (fallback)
+ * MIGRATED FROM PUPPETEER TO PLAYWRIGHT
  */
 
 import Queue from 'bull';
@@ -8,13 +9,6 @@ import recipeEngine from './recipe-engine.js';
 import { prisma } from './prisma-client.js';
 import logger from './logger.js';
 import AIFormFiller from './ai-form-filler.js';
-
-// Use puppeteer-extra with stealth plugin to bypass bot detection
-import puppeteer from 'puppeteer-extra';
-import StealthPlugin from 'puppeteer-extra-plugin-stealth';
-
-// Add stealth plugin to hide automation
-puppeteer.use(StealthPlugin());
 
 const aiFormFiller = new AIFormFiller();
 
@@ -58,44 +52,42 @@ if (!redisUrl) {
 }
 
 /**
- * Apply to job using AI-powered form filling
+ * Apply to job using AI-powered form filling with Playwright
  */
 async function applyWithAI(jobUrl, user, jobData, resumePath = null) {
   let browser;
 
   try {
-    logger.info('🚀 Launching browser for AI application (stealth mode)...');
+    logger.info('🚀 Launching Playwright browser for AI application (stealth mode)...');
 
-    // Use centralized browser launcher with stealth mode
+    // Use centralized browser launcher with stealth mode (now returns Playwright browser)
     const { launchStealthBrowser } = await import('./browser-launcher.js');
     browser = await launchStealthBrowser();
 
-    const page = await browser.newPage();
+    // Create context with viewport and user agent
+    const context = await browser.newContext({
+      viewport: { width: 1920, height: 1080 },
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+    });
 
-    // Set a realistic viewport
-    await page.setViewport({ width: 1920, height: 1080 });
+    const page = await context.newPage();
 
-    // Set user agent to look like a real browser
-    await page.setUserAgent(
-      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
-    );
-
-    // Remove webdriver flag
-    await page.evaluateOnNewDocument(() => {
+    // Remove webdriver flag using Playwright's addInitScript
+    await page.addInitScript(() => {
       Object.defineProperty(navigator, 'webdriver', {
         get: () => false,
       });
     });
 
     // Add realistic browser properties
-    await page.evaluateOnNewDocument(() => {
+    await page.addInitScript(() => {
       window.chrome = {
         runtime: {},
       };
     });
 
     // Randomize mouse movements
-    await page.evaluateOnNewDocument(() => {
+    await page.addInitScript(() => {
       const originalQuery = window.document.querySelector;
       window.document.querySelector = function(selector) {
         const element = originalQuery.call(document, selector);
