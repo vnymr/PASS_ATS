@@ -561,47 +561,6 @@ export const GooeySearchBar = ({ onSearch, suggestions = dummyData }: GooeySearc
               />
             )}
           </motion.div>
-
-          {/* Inline dropdown suggestions under the search bar while typing */}
-          <AnimatePresence>
-            {state.step === 2 && (state.isLoading || (state.searchText.trim() && state.searchData.length > 0)) && (
-              <motion.div
-                key="dropdown-suggestions"
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 8 }}
-                transition={{ duration: 0.2 }}
-                className="absolute left-0"
-                style={{ top: 'calc(100% + 8px)', width: '360px', zIndex: 30 }}
-                role="listbox"
-                aria-label="Live search suggestions"
-              >
-                <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
-                  {state.isLoading ? (
-                    <div className="px-4 py-3 text-sm text-gray-600 flex items-center">
-                      <span className="mr-2" aria-hidden>
-                        <LoadingIcon />
-                      </span>
-                      Searching…
-                    </div>
-                  ) : (
-                    state.searchData.slice(0, 8).map((item) => (
-                      <button
-                        key={item}
-                        type="button"
-                        onClick={() => handleResultClick(item)}
-                        className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50"
-                        role="option"
-                        aria-selected={false}
-                      >
-                        {item}
-                      </button>
-                    ))
-                  )}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
         </motion.div>
       </div>
     </div>
