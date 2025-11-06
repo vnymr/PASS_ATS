@@ -319,10 +319,77 @@ export async function createStealthContext(browser, options = {}) {
 }
 
 /**
+ * Launch browser via Browserless Cloud (if configured)
+ * Provides advanced stealth features and managed infrastructure
+ * @param {Object} options - Launch options
+ * @returns {Promise<Browser>} Playwright browser instance
+ */
+export async function launchBrowserlessBrowser(options = {}) {
+  const browserlessUrl = process.env.BROWSERLESS_URL || process.env.BROWSERLESS_ENDPOINT;
+  const browserlessToken = process.env.BROWSERLESS_TOKEN;
+  
+  if (!browserlessUrl) {
+    throw new Error('BROWSERLESS_URL or BROWSERLESS_ENDPOINT environment variable not set');
+  }
+
+  logger.info({ browserlessUrl: browserlessUrl.replace(/\/\/.*@/, '//***@') }, 'Connecting to Browserless Cloud...');
+
+  try {
+    // Construct WebSocket URL for Browserless
+    // Format: wss://chrome.browserless.io?token=YOUR_TOKEN
+    // Or: ws://localhost:3000 (for self-hosted)
+    let wsUrl = browserlessUrl;
+    
+    // If it's an HTTP URL, convert to WebSocket
+    if (wsUrl.startsWith('http://')) {
+      wsUrl = wsUrl.replace('http://', 'ws://');
+    } else if (wsUrl.startsWith('https://')) {
+      wsUrl = wsUrl.replace('https://', 'wss://');
+    }
+    
+    // Add token if provided
+    if (browserlessToken && !wsUrl.includes('token=')) {
+      const separator = wsUrl.includes('?') ? '&' : '?';
+      wsUrl = `${wsUrl}${separator}token=${browserlessToken}`;
+    }
+
+    // Connect to Browserless Cloud via CDP (Chrome DevTools Protocol)
+    const browser = await chromium.connectOverCDP(wsUrl, {
+      timeout: 30000
+    });
+
+    logger.info('✅ Connected to Browserless Cloud');
+    return browser;
+  } catch (error) {
+    logger.error({ error: error.message, browserlessUrl: browserlessUrl.replace(/\/\/.*@/, '//***@') }, 'Failed to connect to Browserless Cloud');
+    throw new Error(`Browserless connection failed: ${error.message}`);
+  }
+}
+
+/**
  * Launch browser for stealth mode (auto-apply, form filling)
  * Includes comprehensive bot detection evasion
+ * Optionally uses Browserless Cloud if configured
  */
 export async function launchStealthBrowser(options = {}) {
+  // Check if Browserless Cloud is configured
+  const useBrowserless = process.env.USE_BROWSERLESS === 'true' || 
+                         process.env.BROWSERLESS_URL || 
+                         process.env.BROWSERLESS_ENDPOINT;
+
+  if (useBrowserless) {
+    logger.info('Using Browserless Cloud for enhanced stealth');
+    try {
+      const browser = await launchBrowserlessBrowser(options);
+      logger.info('✅ Browserless Cloud browser launched');
+      return browser;
+    } catch (error) {
+      logger.warn({ error: error.message }, 'Browserless Cloud failed, falling back to local browser');
+      // Fall through to local browser
+    }
+  }
+
+  // Use local browser with stealth techniques
   const browser = await launchBrowser({
     ...options,
     stealth: true,
@@ -365,6 +432,7 @@ export default {
   launchBrowser,
   launchStealthBrowser,
   launchPooledBrowser,
+  launchBrowserlessBrowser,
   applyStealthToPage,
   createStealthContext,
   moveMouseHumanLike
