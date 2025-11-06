@@ -4,7 +4,6 @@
  * MIGRATED FROM PUPPETEER TO PLAYWRIGHT
  */
 
-import { chromium } from 'playwright';
 import logger from './logger.js';
 import ImprovedCaptchaHandler from './improved-captcha-handler.js';
 import AIFormFiller from './ai-form-filler.js';
@@ -34,7 +33,6 @@ class ImprovedAutoApply {
       captchaSolved: false,
       errors: [],
       warnings: [],
-      cost: 0,
       screenshot: null,
       confirmationData: {}
     };
@@ -45,25 +43,21 @@ class ImprovedAutoApply {
     try {
       // Step 1: Launch browser with stealth mode using Playwright
       logger.info('🚀 Launching Playwright browser for improved AI application...');
-      browser = await chromium.launch({
-        headless: process.env.HEADLESS !== 'false',
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-blink-features=AutomationControlled'
-        ]
+      const { 
+        launchStealthBrowser, 
+        createStealthContext, 
+        applyStealthToPage 
+      } = await import('./browser-launcher.js');
+      
+      browser = await launchStealthBrowser({
+        headless: process.env.HEADLESS !== 'false'
       });
 
-      const context = await browser.newContext({
-        viewport: {
-          width: 1920,
-          height: 1080
-        },
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-      });
-
+      const context = await createStealthContext(browser);
       page = await context.newPage();
+
+      // Apply comprehensive stealth techniques to avoid bot detection
+      await applyStealthToPage(page);
 
       // Step 2: Navigate to job page
       logger.info(`📄 Navigating to ${jobUrl}...`);
@@ -72,8 +66,17 @@ class ImprovedAutoApply {
         timeout: 30000
       });
 
-      // Human-like delay
+      // Human-like delay and mouse movement to appear natural
       await this.sleep(2000 + Math.random() * 2000);
+
+      // Add random mouse movements to simulate human behavior
+      const { moveMouseHumanLike } = await import('./browser-launcher.js');
+      for (let i = 0; i < 3; i++) {
+        const randomX = Math.random() * 800 + 200;
+        const randomY = Math.random() * 400 + 100;
+        await moveMouseHumanLike(page, randomX, randomY);
+        await this.sleep(300 + Math.random() * 700);
+      }
 
       // Step 3: Look for application form or Apply button FIRST (before checking CAPTCHA)
       // Many sites show CAPTCHA only AFTER clicking the Apply button
@@ -140,7 +143,6 @@ class ImprovedAutoApply {
 
         if (captchaResult.captchaSolved) {
           result.captchaSolved = true;
-          result.cost += captchaResult.cost;
           logger.info('✅ CAPTCHA solved on application form');
         } else {
           result.errors.push(`CAPTCHA detected but not solved: ${captchaResult.error}`);
@@ -171,7 +173,6 @@ class ImprovedAutoApply {
       result.fieldsFilled = fillResult.fieldsFilled;
       result.errors.push(...fillResult.errors);
       result.warnings.push(...fillResult.warnings);
-      result.cost += fillResult.cost;
 
       // Check if filling was successful
       if (fillResult.fieldsFilled > 0) {
@@ -208,7 +209,6 @@ class ImprovedAutoApply {
         fieldsFilled: result.fieldsFilled,
         captchaDetected: result.captchaDetected,
         captchaSolved: result.captchaSolved,
-        aiCost: result.cost,
         timestamp: new Date().toISOString()
       };
 

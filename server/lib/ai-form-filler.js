@@ -21,8 +21,76 @@ class AIFormFiller {
   }
 
   /**
+   * Validate and sanitize resume file path
+   * @param {String} resumePath - Path to resume file
+   * @returns {Object} { valid: boolean, path: string|null, error: string|null }
+   */
+  async validateResumePath(resumePath) {
+    if (!resumePath) {
+      return { valid: false, path: null, error: 'No resume path provided' };
+    }
+
+    // Import fs and path modules for validation
+    const fs = await import('fs');
+    const path = await import('path');
+
+    try {
+      // 1. Check for directory traversal attempts (../../etc/passwd)
+      const normalizedPath = path.normalize(resumePath);
+      if (normalizedPath.includes('..') || normalizedPath !== resumePath) {
+        logger.error({ resumePath, normalizedPath }, 'Directory traversal attempt detected in resume path');
+        return { valid: false, path: null, error: 'Invalid file path: directory traversal not allowed' };
+      }
+
+      // 2. Resolve to absolute path to prevent relative path issues
+      const absolutePath = path.resolve(resumePath);
+
+      // 3. Check if file exists
+      if (!fs.existsSync(absolutePath)) {
+        return { valid: false, path: null, error: `Resume file not found at path: ${absolutePath}` };
+      }
+
+      // 4. Check if it's a file (not a directory)
+      const stats = fs.statSync(absolutePath);
+      if (!stats.isFile()) {
+        return { valid: false, path: null, error: 'Resume path must point to a file, not a directory' };
+      }
+
+      // 5. Validate file extension (must be PDF)
+      const ext = path.extname(absolutePath).toLowerCase();
+      if (ext !== '.pdf') {
+        return { valid: false, path: null, error: `Invalid file type: ${ext}. Only PDF files are supported` };
+      }
+
+      // 6. Check file size (must be < 10MB)
+      const maxSize = 10 * 1024 * 1024; // 10MB in bytes
+      if (stats.size > maxSize) {
+        return { valid: false, path: null, error: `File too large: ${(stats.size / 1024 / 1024).toFixed(2)}MB. Maximum size is 10MB` };
+      }
+
+      // 7. Check file is readable
+      try {
+        fs.accessSync(absolutePath, fs.constants.R_OK);
+      } catch (err) {
+        return { valid: false, path: null, error: 'Resume file is not readable' };
+      }
+
+      logger.info({
+        path: absolutePath,
+        size: `${(stats.size / 1024).toFixed(2)}KB`,
+        extension: ext
+      }, 'Resume file validated successfully');
+
+      return { valid: true, path: absolutePath, error: null };
+    } catch (error) {
+      logger.error({ error: error.message, resumePath }, 'Resume path validation failed');
+      return { valid: false, path: null, error: `File validation error: ${error.message}` };
+    }
+  }
+
+  /**
    * Complete AI-powered form filling flow
-   * @param {Page} page - Puppeteer page object
+   * @param {Page} page - Playwright page or frame object
    * @param {Object} userProfile - User's profile data
    * @param {Object} jobData - Job description and metadata
    * @param {String} resumePath - Path to user's resume PDF file (optional)
@@ -31,8 +99,21 @@ class AIFormFiller {
   async fillFormIntelligently(page, userProfile, jobData, resumePath = null) {
     logger.info('Starting AI-powered form filling...');
 
-    // Store resumePath for use in file upload
-    this.userResumePath = resumePath;
+    // Validate and sanitize resume path before storing
+    if (resumePath) {
+      const validation = await this.validateResumePath(resumePath);
+      if (!validation.valid) {
+        logger.error({ error: validation.error }, 'Resume path validation failed');
+        // Store null to prevent upload attempts
+        this.userResumePath = null;
+      } else {
+        // Store validated absolute path
+        this.userResumePath = validation.path;
+        logger.info({ resumePath: validation.path }, 'Resume path validated and stored');
+      }
+    } else {
+      this.userResumePath = null;
+    }
 
     const result = {
       success: false,
@@ -40,7 +121,6 @@ class AIFormFiller {
       fieldsFilled: 0,
       errors: [],
       warnings: [],
-      cost: 0,
       screenshots: [],
       learningRecorded: false
     };
@@ -237,14 +317,44 @@ class AIFormFiller {
       if (extraction.submitButton && fillResult.filled > 0) {
         logger.info({ buttonText: extraction.submitButton.text }, 'Found submit button');
         result.submitButton = extraction.submitButton;
+        
         // Optional auto-submit (useful for testing)
         if (process.env.AUTO_SUBMIT_FOR_TESTING === 'true') {
           logger.warn('TESTING MODE: AUTO_SUBMIT_FOR_TESTING enabled - attempting auto-submit');
-          const submitRes = await this.submitForm(page, extraction.submitButton, userProfile);
-          result.autoSubmitted = true;
-          result.submitResult = submitRes;
-          if (!submitRes.success) {
-            result.errors.push('Auto-submit failed: ' + (submitRes.error || 'unknown'));
+          
+          // Wait a bit for any async form updates to complete
+          await this.sleep(1000);
+          
+          // Verify form is ready before submitting
+          const readyCheck = await this.verifyFormReadyForSubmission(page);
+          if (!readyCheck.ready && readyCheck.issues.length > 0) {
+            logger.warn({ 
+              issues: readyCheck.issues,
+              note: 'Form has validation issues but proceeding due to AUTO_SUBMIT_FOR_TESTING'
+            }, '⚠️  Form validation warnings before auto-submit');
+          }
+          
+          try {
+            const submitRes = await this.submitForm(page, extraction.submitButton, userProfile);
+            result.autoSubmitted = true;
+            result.submitResult = submitRes;
+            
+            if (submitRes.success) {
+              logger.info({ 
+                urlChanged: submitRes.urlChanged,
+                successMessages: submitRes.successMessages 
+              }, '✅ Auto-submit successful');
+            } else {
+              logger.error({ 
+                error: submitRes.error,
+                issues: submitRes.issues 
+              }, '❌ Auto-submit failed');
+              result.errors.push('Auto-submit failed: ' + (submitRes.error || 'unknown'));
+            }
+          } catch (submitError) {
+            logger.error({ error: submitError.message }, 'Auto-submit threw exception');
+            result.autoSubmitted = false;
+            result.errors.push('Auto-submit exception: ' + submitError.message);
           }
         }
       }
@@ -269,7 +379,7 @@ class AIFormFiller {
 
       result.success = result.fieldsFilled > 0 && (result.errors.length === 0 || (fillRate >= 0.7 && hasOnlyFileErrors));
 
-      logger.info({ fieldsFilled: result.fieldsFilled, fieldsExtracted: result.fieldsExtracted, cost: result.cost }, 'Form filling complete');
+      logger.info({ fieldsFilled: result.fieldsFilled, fieldsExtracted: result.fieldsExtracted }, 'Form filling complete');
 
       return result;
 
@@ -375,10 +485,25 @@ class AIFormFiller {
         // Small delay between fields to appear human
         await this.sleep(100 + Math.random() * 200);
       } catch (error) {
-        logger.error({ fieldName: field.name, error: error.message }, 'Failed to fill field');
-        result.errors.push(`Failed to fill ${field.name}: ${error.message}`);
+        logger.error({ fieldName: field.name, fieldType: field.type, error: error.message }, 'Failed to fill field');
+        
+        // For dropdowns, provide more detailed error info
+        if (field.type === 'select' || field.type === 'select-one' || field.type === 'select-multiple' || error.message.includes('dropdown')) {
+          result.errors.push(`Dropdown "${field.name}" failed: ${error.message}`);
+        } else {
+          result.errors.push(`Failed to fill ${field.name}: ${error.message}`);
+        }
+        
+        // Continue filling other fields even if one fails
+        // This allows partial form completion
       }
     }
+
+    logger.info({ 
+      filled: result.filled, 
+      totalFields: fields.length, 
+      errors: result.errors.length 
+    }, 'Form filling summary');
 
     return result;
   }
@@ -403,6 +528,24 @@ class AIFormFiller {
     const isCustomDropdown = await page.evaluate(({sel, fieldData}) => {
       const element = document.querySelector(sel);
       if (!element || element.tagName !== 'INPUT') return false;
+
+      // EXCLUSIONS: Never treat these as custom dropdowns
+      // 1. Phone/tel fields - these are always text inputs
+      if (element.type === 'tel' || element.id?.includes('phone') || element.name?.includes('phone')) {
+        return false;
+      }
+
+      // 2. Location/autocomplete fields - these need special handling
+      if (element.id?.includes('location') || element.name?.includes('location') ||
+          element.placeholder?.toLowerCase().includes('city') ||
+          element.placeholder?.toLowerCase().includes('location')) {
+        return false;
+      }
+
+      // 3. Fields with autocomplete attribute - these are autocomplete fields
+      if (element.hasAttribute('autocomplete') && element.getAttribute('autocomplete') !== 'off') {
+        return false;
+      }
 
       // Check multiple indicators that this is a styled dropdown:
       const parent = element.parentElement;
@@ -451,6 +594,23 @@ class AIFormFiller {
         placeholder: field.placeholder
       }, '🔽 Detected custom dropdown (text input styled as dropdown)');
       await this.fillCustomDropdownWithMouse(page, selector, value, field);
+      return;
+    }
+
+    // Check if this is an autocomplete field (e.g., location)
+    const isAutocompleteField =
+      field.name?.includes('location') ||
+      field.label?.toLowerCase().includes('location') ||
+      field.label?.toLowerCase().includes('city') ||
+      field.placeholder?.toLowerCase().includes('city') ||
+      field.placeholder?.toLowerCase().includes('location');
+
+    if (isAutocompleteField && field.type === 'text') {
+      logger.info({
+        field: field.name,
+        label: field.label
+      }, '🌐 Detected autocomplete field (type + select)');
+      await this.fillAutocompleteField(page, selector, value, field);
       return;
     }
 
@@ -534,14 +694,24 @@ class AIFormFiller {
    * Fill text input with human-like typing
    */
   async fillTextInput(page, selector, text) {
+    // Add human-like "reading time" before filling important fields
+    const fieldName = selector.toLowerCase();
+    if (fieldName.includes('email') || fieldName.includes('phone') ||
+        fieldName.includes('location') || fieldName.includes('name')) {
+      // Simulate reading the field label (500ms - 1.5s)
+      await this.sleep(500 + Math.random() * 1000);
+    }
+
     // Use Playwright's native fill method - properly triggers React/Vue change detection
     try {
       // Clear existing value first
       await page.fill(selector, '');
+      // Add tiny delay after clearing (human-like)
+      await this.sleep(100 + Math.random() * 200);
       // Fill with new value
       await page.fill(selector, String(text));
-      // Small delay to let any onChange handlers run
-      await this.sleep(50);
+      // Longer delay to let any onChange handlers run and simulate "moving to next field"
+      await this.sleep(200 + Math.random() * 300);
     } catch (error) {
       // Fallback to evaluate if fill fails
       logger.warn({ selector, error: error.message }, 'Native fill failed, using fallback');
@@ -554,7 +724,7 @@ class AIFormFiller {
           element.dispatchEvent(new Event('blur', { bubbles: true }));
         }
       }, {sel: selector, val: String(text)});
-      await this.sleep(50);
+      await this.sleep(200 + Math.random() * 300);
     }
   }
 
@@ -664,248 +834,692 @@ class AIFormFiller {
   }
 
   /**
-   * Fill custom dropdown using mouse interactions (for Greenhouse-style dropdowns)
+   * Fill custom dropdown (for Greenhouse-style dropdowns)
    * These are text inputs styled to look like dropdowns
+   * Uses hybrid approach: Playwright locators + page.evaluate() for reliability
    */
   async fillCustomDropdownWithMouse(page, selector, value, field) {
-    logger.info({ selector, value, field: field.name }, '🖱️  Filling custom dropdown with mouse clicks');
+    logger.info({ selector, value, field: field.name }, '🖱️  Filling custom dropdown with enhanced matching');
+
+    const maxRetries = 3;
+    let lastError = null;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        logger.debug({ attempt, maxRetries }, 'Dropdown fill attempt');
+
+        // Step 1: Try multiple strategies to open the dropdown
+        let dropdownOpened = false;
+        
+        // Strategy 1: Use Playwright locator to click (triggers proper events)
+        try {
+          const locator = page.locator(selector).first();
+          await locator.scrollIntoViewIfNeeded();
+          
+          // Try clicking the input directly
+          await locator.click({ timeout: 5000, force: false });
+          await this.sleep(300);
+          
+          // Check if dropdown opened
+          dropdownOpened = await page.evaluate(() => {
+            const menus = document.querySelectorAll('[role="listbox"], [role="menu"], .select-options, .dropdown-menu, ul.options, div.options');
+            return Array.from(menus).some(menu => menu.offsetParent !== null);
+          });
+          
+          if (dropdownOpened) {
+            logger.debug('Dropdown opened via direct locator click');
+          }
+        } catch (e) {
+          logger.debug({ error: e.message }, 'Direct locator click failed, trying alternatives');
+        }
+
+        // Strategy 2: If direct click didn't work, try clicking parent container
+        if (!dropdownOpened) {
+          try {
+            const parentInfo = await page.evaluate((sel) => {
+              const el = document.querySelector(sel);
+              if (!el) return null;
+
+              // Find clickable parent container
+              let parent = el.parentElement;
+              let attempts = 0;
+              while (parent && parent !== document.body && attempts < 5) {
+                const classes = parent.className || '';
+                const id = parent.id || '';
+                
+                // Check if this looks like a clickable dropdown container
+                if (classes.includes('select') ||
+                    classes.includes('dropdown') ||
+                    classes.includes('field') ||
+                    id.includes('select') ||
+                    id.includes('dropdown') ||
+                    parent.getAttribute('role') === 'combobox') {
+                  return {
+                    selector: parent.id ? `#${parent.id}` : 
+                             parent.className ? `.${parent.className.split(' ')[0]}` : null,
+                    tagName: parent.tagName,
+                    className: classes
+                  };
+                }
+                parent = parent.parentElement;
+                attempts++;
+              }
+              
+              // If no specific container found, return parent element info
+              if (el.parentElement) {
+                return {
+                  selector: null,
+                  tagName: el.parentElement.tagName,
+                  className: el.parentElement.className || ''
+                };
+              }
+              
+              return null;
+            }, selector);
+
+            if (parentInfo) {
+              logger.debug({ parentInfo }, 'Found parent container, trying to click it');
+              
+              // Try clicking parent using multiple methods
+              const parentClickSuccess = await page.evaluate(({ inputSel }) => {
+                const input = document.querySelector(inputSel);
+                if (!input) return false;
+                
+                // Try clicking parent
+                let parent = input.parentElement;
+                if (parent) {
+                  // Try multiple click methods
+                  parent.click();
+                  parent.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+                  parent.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+                  parent.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+                  
+                  // Also try focusing and triggering focus events
+                  if (input.focus) {
+                    input.focus();
+                    input.dispatchEvent(new Event('focus', { bubbles: true }));
+                  }
+                  
+                  return true;
+                }
+                return false;
+              }, { inputSel: selector });
+              
+              if (parentClickSuccess) {
+                await this.sleep(400);
+                
+                // Check if dropdown opened
+                dropdownOpened = await page.evaluate(() => {
+                  const menus = document.querySelectorAll('[role="listbox"], [role="menu"], .select-options, .dropdown-menu');
+                  return Array.from(menus).some(menu => menu.offsetParent !== null);
+                });
+                
+                if (dropdownOpened) {
+                  logger.debug('Dropdown opened via parent container click');
+                }
+              }
+            }
+          } catch (e) {
+            logger.debug({ error: e.message }, 'Parent click strategy failed');
+          }
+        }
+
+        // Strategy 3: Try clicking arrow/chevron button (common in custom dropdowns)
+        if (!dropdownOpened) {
+          try {
+            logger.debug('Trying to find and click dropdown arrow/chevron');
+            const arrowClicked = await page.evaluate((sel) => {
+              const input = document.querySelector(sel);
+              if (!input) return false;
+              
+              // Look for arrow/chevron icon in parent containers
+              let parent = input.parentElement;
+              let attempts = 0;
+              
+              while (parent && parent !== document.body && attempts < 5) {
+                // Look for SVG icons (arrows, chevrons)
+                const svgs = parent.querySelectorAll('svg');
+                for (const svg of svgs) {
+                  const classes = svg.className?.baseVal || svg.className || '';
+                  if (classes.includes('arrow') ||
+                      classes.includes('chevron') ||
+                      classes.includes('caret') ||
+                      classes.includes('dropdown')) {
+                    // Click the SVG or its parent
+                    const clickable = svg.closest('button') || svg.closest('[role="button"]') || svg.parentElement;
+                    if (clickable) {
+                      clickable.click();
+                      return true;
+                    }
+                  }
+                }
+                
+                // Look for button elements with arrow classes
+                const buttons = parent.querySelectorAll('button, [role="button"]');
+                for (const btn of buttons) {
+                  const classes = btn.className || '';
+                  if (classes.includes('arrow') ||
+                      classes.includes('chevron') ||
+                      classes.includes('dropdown-toggle') ||
+                      classes.includes('select-arrow')) {
+                    btn.click();
+                    return true;
+                  }
+                }
+                
+                parent = parent.parentElement;
+                attempts++;
+              }
+              
+              return false;
+            }, selector);
+            
+            if (arrowClicked) {
+              await this.sleep(400);
+              dropdownOpened = await page.evaluate(() => {
+                const menus = document.querySelectorAll('[role="listbox"], [role="menu"], .select-options, .dropdown-menu');
+                return Array.from(menus).some(menu => menu.offsetParent !== null);
+              });
+              
+              if (dropdownOpened) {
+                logger.debug('Dropdown opened via arrow/chevron click');
+              }
+            }
+          } catch (e) {
+            logger.debug({ error: e.message }, 'Arrow click strategy failed');
+          }
+        }
+
+        // Strategy 4: Try keyboard approach - focus and press Space or ArrowDown
+        if (!dropdownOpened) {
+          try {
+            logger.debug('Trying keyboard approach to open dropdown');
+            const locator = page.locator(selector).first();
+            await locator.focus();
+            await this.sleep(200);
+            
+            // Try Space key (common for opening dropdowns)
+            await page.keyboard.press('Space');
+            await this.sleep(300);
+            
+            dropdownOpened = await page.evaluate(() => {
+              const menus = document.querySelectorAll('[role="listbox"], [role="menu"], .select-options, .dropdown-menu');
+              return Array.from(menus).some(menu => menu.offsetParent !== null);
+            });
+            
+            if (!dropdownOpened) {
+              // Try ArrowDown
+              await page.keyboard.press('ArrowDown');
+              await this.sleep(300);
+              
+              dropdownOpened = await page.evaluate(() => {
+                const menus = document.querySelectorAll('[role="listbox"], [role="menu"], .select-options, .dropdown-menu');
+                return Array.from(menus).some(menu => menu.offsetParent !== null);
+              });
+            }
+            
+            if (dropdownOpened) {
+              logger.debug('Dropdown opened via keyboard');
+            }
+          } catch (e) {
+            logger.debug({ error: e.message }, 'Keyboard approach failed');
+          }
+        }
+
+        if (!dropdownOpened) {
+          logger.warn({ selector, field: field.name }, 'Could not open dropdown with any strategy');
+          throw new Error('Dropdown menu did not open after multiple attempts');
+        }
+
+        // Give dropdown a moment to fully render
+        await this.sleep(300);
+
+        // Step 2: Wait for dropdown menu to appear (async wait outside evaluate)
+        // Expanded selectors to catch more dropdown patterns (especially Greenhouse)
+        let dropdownVisible = false;
+        const dropdownSelectors = [
+          'ul[role="listbox"]',
+          'div[role="listbox"]',
+          '[role="menu"]',
+          '[role="listbox"]',
+          '.select-options',
+          '.dropdown-menu',
+          '.select-menu',
+          '.select__menu',
+          '.select__menu-list',
+          'ul.options',
+          'div.options',
+          'div[class*="option"]',
+          'div[class*="menu"]',
+          'div[class*="dropdown"]',
+          'div[class*="Select-menu"]',
+          'div[class*="react-select"]',
+          '[class*="menu-portal"]',
+          '[class*="menu-list"]',
+          '[class*="options-list"]',
+          'ul[class*="menu"]',
+          'div[class*="popover"]',
+          '[data-testid*="menu"]',
+          '[data-testid*="dropdown"]'
+        ];
+
+        // Wait up to 3 seconds for dropdown to appear
+        for (let waitAttempt = 0; waitAttempt < 15; waitAttempt++) {
+          dropdownVisible = await page.evaluate((selectors) => {
+            // Try all selectors
+            for (const sel of selectors) {
+              try {
+                const menus = document.querySelectorAll(sel);
+                for (const menu of menus) {
+                  // Check if menu is visible
+                  if (menu && menu.offsetParent !== null) {
+                    // Additional check: make sure it's actually visible (not just in DOM)
+                    const style = window.getComputedStyle(menu);
+                    if (style.display !== 'none' && 
+                        style.visibility !== 'hidden' && 
+                        style.opacity !== '0') {
+                      return true;
+                    }
+                  }
+                }
+              } catch (e) {
+                // Invalid selector, continue
+              }
+            }
+            return false;
+          }, dropdownSelectors);
+
+          if (dropdownVisible) {
+            logger.debug({ waitAttempt }, 'Dropdown menu detected as visible');
+            break;
+          }
+          await this.sleep(200);
+        }
+
+        if (!dropdownVisible) {
+          // Log what we found for debugging
+          const debugInfo = await page.evaluate(() => {
+            const allMenus = document.querySelectorAll('[role="listbox"], [role="menu"], [class*="menu"], [class*="dropdown"]');
+            return Array.from(allMenus).map(menu => ({
+              tagName: menu.tagName,
+              className: menu.className,
+              id: menu.id,
+              role: menu.getAttribute('role'),
+              visible: menu.offsetParent !== null,
+              display: window.getComputedStyle(menu).display,
+              visibility: window.getComputedStyle(menu).visibility
+            }));
+          });
+          
+          logger.warn({ 
+            selector, 
+            field: field.name,
+            foundMenus: debugInfo 
+          }, 'Dropdown menu did not appear - debug info');
+          
+          throw new Error('Dropdown menu did not appear after clicking');
+        }
+
+        // Step 3: Get all available options and find best match
+        const result = await page.evaluate(({ selectors, targetValue }) => {
+          // Find the dropdown menu with better visibility checks
+          let dropdownMenu = null;
+          for (const sel of selectors) {
+            try {
+              const menus = document.querySelectorAll(sel);
+              for (const menu of menus) {
+                if (menu && menu.offsetParent !== null) {
+                  const style = window.getComputedStyle(menu);
+                  if (style.display !== 'none' && 
+                      style.visibility !== 'hidden' && 
+                      style.opacity !== '0') {
+                    dropdownMenu = menu;
+                    break;
+                  }
+                }
+              }
+              if (dropdownMenu) break;
+            } catch (e) {
+              // Invalid selector, continue
+            }
+          }
+
+          if (!dropdownMenu) {
+            return { success: false, reason: 'Dropdown menu not found' };
+          }
+
+          // Enumerate all visible options with expanded selectors
+          const optionSelectors = [
+            'li',
+            'div[role="option"]',
+            '[role="option"]',
+            '[data-option]',
+            'div[class*="option"]',
+            'span[class*="option"]',
+            'a[role="option"]',
+            '[class*="Select-option"]',
+            '[class*="react-select__option"]',
+            '[class*="menu-item"]',
+            '[class*="dropdown-item"]'
+          ];
+          
+          const allOptions = [];
+          for (const optSel of optionSelectors) {
+            try {
+              const opts = dropdownMenu.querySelectorAll(optSel);
+              allOptions.push(...Array.from(opts));
+            } catch (e) {
+              // Invalid selector, continue
+            }
+          }
+          
+          // Filter to only visible options with text
+          const optionElements = allOptions.filter(el => {
+            // Only visible elements
+            if (el.offsetParent === null) return false;
+            
+            // Check computed style
+            const style = window.getComputedStyle(el);
+            if (style.display === 'none' || 
+                style.visibility === 'hidden' || 
+                style.opacity === '0') {
+              return false;
+            }
+            
+            // Must have text content
+            const text = el.textContent?.trim() || '';
+            return text.length > 0;
+          });
+
+          const availableOptions = optionElements
+            .map(opt => opt.textContent?.trim())
+            .filter(Boolean);
+
+          if (availableOptions.length === 0) {
+            return { success: false, reason: 'No options found in dropdown', availableOptions: [] };
+          }
+
+          // Fuzzy matching function with scoring
+          const fuzzyMatch = (needle, haystack) => {
+            if (!needle || !haystack) return 0;
+            const needleLower = needle.toLowerCase().trim();
+            const haystackLower = haystack.toLowerCase().trim();
+
+            // Exact match
+            if (needleLower === haystackLower) return 1.0;
+
+            // Contains match
+            if (haystackLower.includes(needleLower)) return 0.9;
+            if (needleLower.includes(haystackLower)) return 0.85;
+
+            // Word overlap scoring
+            const needleWords = needleLower.split(/\s+/).filter(w => w.length > 1);
+            const haystackWords = haystackLower.split(/\s+/).filter(w => w.length > 1);
+            if (needleWords.length === 0 || haystackWords.length === 0) return 0;
+
+            const needleSet = new Set(needleWords);
+            let overlap = 0;
+            for (const word of haystackWords) {
+              if (needleSet.has(word)) overlap++;
+            }
+
+            return overlap / Math.max(needleWords.length, haystackWords.length);
+          };
+
+          // Find best matching option
+          let bestOption = null;
+          let bestScore = -1;
+          const aiValue = String(targetValue || '').trim();
+
+          optionElements.forEach((opt) => {
+            const optText = opt.textContent?.trim() || '';
+            const score = fuzzyMatch(aiValue, optText);
+
+            if (score > bestScore) {
+              bestScore = score;
+              bestOption = opt;
+            }
+          });
+
+          // Fallback to first non-placeholder option if match score is too low
+          if (!bestOption || bestScore < 0.5) {
+            const placeholderPatterns = /^(select|choose|pick|--|please)/i;
+            const firstNonPlaceholder = optionElements.find(opt => {
+              const text = opt.textContent?.trim() || '';
+              return text.length > 0 && !placeholderPatterns.test(text);
+            });
+
+            if (firstNonPlaceholder) {
+              // Click option (no scroll to avoid movement)
+              firstNonPlaceholder.click();
+
+              return {
+                success: true,
+                matched: firstNonPlaceholder.textContent?.trim(),
+                value: targetValue,
+                usedFallback: true,
+                originalScore: bestScore,
+                availableOptions: availableOptions.slice(0, 15),
+                reason: `Low match score (${bestScore.toFixed(2)}), used fallback`
+              };
+            }
+          }
+
+          if (!bestOption) {
+            return {
+              success: false,
+              reason: 'No matching option found',
+              availableOptions: availableOptions.slice(0, 15)
+            };
+          }
+
+          // Click option (no scroll to avoid movement)
+          bestOption.click();
+
+          return {
+            success: true,
+            matched: bestOption.textContent?.trim(),
+            value: targetValue,
+            matchScore: bestScore,
+            availableOptions: availableOptions.slice(0, 15)
+          };
+        }, { selectors: dropdownSelectors, targetValue: String(value) });
+
+        // Wait for dropdown to close and value to be set
+        await this.sleep(400);
+
+        if (result.success) {
+          const logData = {
+            matched: result.matched,
+            matchScore: result.matchScore,
+            usedFallback: result.usedFallback,
+            availableOptions: result.availableOptions
+          };
+
+          if (result.usedFallback) {
+            logger.warn(logData, '⚠️  Used fallback option for custom dropdown');
+          } else {
+            logger.info(logData, '✅ Custom dropdown option selected with fuzzy match');
+          }
+          return; // Success!
+        } else {
+          lastError = new Error(`Failed to select: ${result.reason}. Available options: ${result.availableOptions?.join(', ') || 'none'}`);
+          logger.warn({ attempt, reason: result.reason, availableOptions: result.availableOptions }, 'Dropdown selection failed, will retry');
+        }
+      } catch (error) {
+        lastError = error;
+        logger.warn({ attempt, error: error.message }, 'Dropdown fill attempt failed, will retry');
+        if (attempt < maxRetries) {
+          await this.sleep(500 * attempt); // Exponential backoff
+        }
+      }
+    }
+
+    // All retries failed
+    const errorMsg = `Failed to fill custom dropdown "${field.name}" after ${maxRetries} attempts. AI provided: "${value}". Error: ${lastError?.message || 'unknown'}`;
+    logger.error({ selector, value, field: field.name, error: lastError?.message }, errorMsg);
+    throw new Error(errorMsg);
+  }
+
+  /**
+   * Fill autocomplete field (type + wait for suggestions + select)
+   * Used for location/city fields that show autocomplete suggestions
+   */
+  async fillAutocompleteField(page, selector, value, field) {
+    logger.info({ selector, value, field: field.name }, '🌐 Filling autocomplete field');
 
     try {
-      // STEP 1: Get the dropdown element's bounding box
-      // Use .first() to handle cases where selector matches multiple elements
-      let locator = page.locator(selector);
+      // Step 1: Click and focus the field
+      await page.click(selector);
+      await this.sleep(300);
 
-      // Check if selector matches multiple elements
-      const count = await locator.count();
-      if (count > 1) {
-        logger.warn({ selector, count }, 'Selector matches multiple elements, using .first()');
-        locator = locator.first();
-      }
+      // Step 2: Clear and type the value slowly (character by character for autocomplete to trigger)
+      await page.fill(selector, ''); // Clear first
+      await page.type(selector, String(value), { delay: 50 }); // Type with delay
+      await this.sleep(1200); // Wait longer for autocomplete suggestions to appear
 
-      const boundingBox = await locator.boundingBox();
-      if (!boundingBox) {
-        throw new Error(`Dropdown element not found or not visible: ${selector}`);
-      }
+      logger.debug('Waiting for autocomplete suggestions...');
 
-      logger.info({
-        x: boundingBox.x,
-        y: boundingBox.y,
-        width: boundingBox.width,
-        height: boundingBox.height
-      }, '📍 Got dropdown bounding box');
+      // Step 3: Try multiple strategies to select from autocomplete
 
-      // STEP 2: Click on the dropdown with mouse (click near the arrow on the right side)
-      const clickX = boundingBox.x + boundingBox.width - 15; // Click on the arrow
-      const clickY = boundingBox.y + boundingBox.height / 2; // Center vertically
+      // Strategy 1: Try to find and click autocomplete suggestion
+      const suggestionSelected = await page.evaluate(({ targetValue }) => {
+        const selectors = [
+          '[role="option"]',
+          '[role="listbox"] > *',
+          '.autocomplete-option',
+          '.suggestion',
+          'li[class*="option"]',
+          'div[class*="suggestion"]',
+          '[class*="autocomplete"] li',
+          '[class*="dropdown"] li',
+          'ul[role="listbox"] li',
+          'div[role="listbox"] div',
+          // Greenhouse-specific selectors
+          '.select__menu [class*="option"]',
+          '[class*="MenuList"] > div',
+          '[class*="option-list"] > *'
+        ];
 
-      logger.info({ clickX, clickY }, '👆 Clicking dropdown arrow with mouse');
-      await page.mouse.click(clickX, clickY);
-      await this.sleep(500); // Wait for dropdown menu to appear
+        const allOptions = [];
 
-      // STEP 3: Look for dropdown menu options
-      // Greenhouse typically shows options in a div/list that appears below the input
-      const optionsAppeared = await page.evaluate(() => {
-        // Look for common dropdown menu selectors
-        const dropdownMenus = document.querySelectorAll('[role="listbox"], [role="menu"], ul[class*="dropdown"], div[class*="options"]');
-        return dropdownMenus.length > 0;
-      });
+        // Find visible suggestions and collect them
+        for (const sel of selectors) {
+          const options = Array.from(document.querySelectorAll(sel))
+            .filter(el => {
+              if (el.offsetParent === null) return false; // Not visible
+              const text = el.textContent?.trim() || '';
+              if (text.length === 0) return false; // No text
+              // Filter out duplicates
+              if (allOptions.some(opt => opt.textContent === text)) return false;
+              return true;
+            });
 
-      logger.info({ optionsAppeared }, 'Dropdown menu status');
-
-      // STEP 4: Enumerate visible options for robust matching
-      const options = await page.evaluate(() => {
-        const texts = new Set();
-        const menus = document.querySelectorAll('[role="listbox"], [role="menu"], ul[class*="dropdown"], div[class*="menu"], div[class*="options"], div[class*="option-list"]');
-        for (const menu of menus) {
-          const children = menu.querySelectorAll('[role="option"], li, div[class*="option"], div[class*="item"], span[class*="option"]');
-          for (const el of children) {
-            if (el.offsetParent === null) continue;
-            const t = (el.textContent || '').trim();
-            if (!t) continue;
-            texts.add(t);
+          if (options.length > 0) {
+            allOptions.push(...options);
           }
         }
-        return Array.from(texts);
-      });
 
-      logger.info({ count: options.length, options }, '📋 Custom dropdown options enumerated');
+        // Log what we found
+        const optionTexts = allOptions.map(el => el.textContent?.trim()).slice(0, 10);
 
-      // FALLBACK: If no options found, treat as text input
-      if (options.length === 0) {
-        logger.warn({ field: field.name, value }, '⚠️  No dropdown options - treating as text input');
-        await page.mouse.click(10, 10); // Close any menu
-        await this.sleep(200);
-        await locator.clear();
-        await this.sleep(100);
-        await locator.fill(String(value));
-        await this.sleep(200);
-        logger.info({ field: field.name, value }, '✅ Filled as text input');
-        return;
-      }
+        if (allOptions.length > 0) {
+          // Try to find best match
+          const needle = targetValue.toLowerCase().trim();
+          let bestMatch = null;
+          let bestScore = -1;
 
-      // STEP 5: Choose a target option using fuzzy matching
-      const aiRaw = value == null ? '' : String(value);
-      const aiValue = aiRaw.toLowerCase().trim();
-
-      const pickBestOption = (needle, opts) => {
-        if (!opts || opts.length === 0) return null;
-        // exact match
-        let best = null;
-        let bestScore = -1;
-        const norm = s => s.toLowerCase().trim();
-        const score = (a, b) => {
-          if (!a || !b) return 0;
-          if (a === b) return 1.0;
-          if (a.includes(b) || b.includes(a)) return 0.9;
-          const aw = a.split(/\s+/);
-          const bw = b.split(/\s+/);
-          const setA = new Set(aw);
-          let overlap = 0;
-          for (const w of bw) if (setA.has(w)) overlap++;
-          return overlap / Math.max(1, Math.max(aw.length, bw.length));
-        };
-        for (const opt of opts) {
-          const s = score(norm(opt), needle);
-          if (s > bestScore) {
-            bestScore = s;
-            best = opt;
+          for (const opt of allOptions) {
+            const text = opt.textContent?.trim().toLowerCase() || '';
+            // Match city name (handle "Austin, TX" format)
+            const cityPart = text.split(',')[0].trim();
+            if (text.includes(needle) || needle.includes(cityPart) || cityPart.includes(needle.split(',')[0].trim())) {
+              const score = text === needle ? 1.0 : (cityPart === needle.split(',')[0].trim() ? 0.9 : 0.8);
+              if (score > bestScore) {
+                bestScore = score;
+                bestMatch = opt;
+              }
+            }
           }
-        }
-        return { option: best, score: bestScore };
-      };
 
-      let chosen = null;
-      let chosenScore = -1;
-      if (aiValue) {
-        const picked = pickBestOption(aiValue, options.map(o => o));
-        if (picked && picked.option) {
-          chosen = picked.option;
-          chosenScore = picked.score;
-        }
-      }
+          if (bestMatch) {
+            try {
+              // Try multiple click methods (no scroll to avoid movement)
+              bestMatch.click();
+              bestMatch.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+              bestMatch.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+              return { success: true, matched: bestMatch.textContent?.trim(), strategy: 'click', availableOptions: optionTexts };
+            } catch (e) {
+              return { success: false, reason: 'Click failed: ' + e.message, availableOptions: optionTexts };
+            }
+          }
 
-      // If AI didn't provide a usable value or match is weak, pick first non-placeholder
-      if (!chosen || chosenScore < 0.5) {
-        const firstNonPlaceholder = options.find(o => !/^select/i.test(o) && !/^choose/i.test(o) && o.trim().length > 0);
-        if (firstNonPlaceholder) {
-          logger.warn({ aiValue, chosen, chosenScore, fallback: firstNonPlaceholder }, 'Using fallback option for custom dropdown');
-          chosen = firstNonPlaceholder;
-        }
-      }
-
-      if (!chosen) {
-        const errMsg = `No options available to select for custom dropdown. AI provided: "${aiRaw}"`;
-        logger.error({ field: field.name, options }, errMsg);
-        throw new Error(errMsg);
-      }
-
-      // STEP 6: Click the chosen option using robust selectors
-      const optionClicked = await page.evaluate(({ target }) => {
-        const menus = document.querySelectorAll('[role="listbox"], [role="menu"], ul, div[class*="option"], div[class*="dropdown"]');
-        const needle = (target || '').toLowerCase().trim();
-
-        for (const menu of menus) {
-          const options = menu.querySelectorAll('[role="option"], li, div[class*="option"]');
-
-          for (const option of options) {
-            const optTextLower = option.textContent?.toLowerCase().trim() || '';
-
-            // Try various matching strategies
-            if (optTextLower === needle ||
-                optTextLower.includes(needle) ||
-                needle.includes(optTextLower)) {
-
-              option.click();
-              return { success: true, matched: option.textContent?.trim(), clicked: true };
+          // If no match, click first option
+          if (allOptions.length > 0) {
+            try {
+              const first = allOptions[0];
+              // Click first option (no scroll to avoid movement)
+              first.click();
+              first.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+              first.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+              return { success: true, matched: first.textContent?.trim(), usedFirst: true, strategy: 'click-first', availableOptions: optionTexts };
+            } catch (e) {
+              return { success: false, reason: 'Click first failed: ' + e.message, availableOptions: optionTexts };
             }
           }
         }
 
-        // Second pass: match by exact trimmed text
-        for (const menu of menus) {
-          const options = menu.querySelectorAll('[role="option"], li, div[class*="option"]');
-          for (const option of options) {
-            if ((option.textContent || '').trim() === target) {
-              option.click();
-              return { success: true, matched: option.textContent?.trim(), clicked: true };
-            }
-          }
-        }
+        return { success: false, reason: 'No autocomplete suggestions found', checkedSelectors: selectors.length };
+      }, { targetValue: String(value) });
 
-        return { success: false, reason: 'No matching option found' };
-      }, { target: chosen });
+      logger.debug({ suggestionResult: suggestionSelected }, 'Autocomplete suggestion result');
 
-      if (optionClicked.success) {
-        logger.info({ matched: optionClicked.matched }, '✅ Successfully clicked dropdown option');
-        await this.sleep(200);
+      if (suggestionSelected.success) {
+        logger.info({
+          matched: suggestionSelected.matched,
+          usedFirst: suggestionSelected.usedFirst,
+          strategy: suggestionSelected.strategy
+        }, '✅ Autocomplete suggestion selected');
+        await this.sleep(500);
         return;
       }
 
-      // STEP 7: Fallback - try keyboard navigation with option clicking
-      logger.warn('Could not click option, trying keyboard fallback');
-
-      // Focus the input element directly to ensure we're typing in the right place
-      await locator.focus();
+      // Strategy 2: Keyboard navigation fallback (ArrowDown + Enter)
+      logger.info('Trying keyboard navigation for autocomplete...');
+      await page.keyboard.press('ArrowDown');
       await this.sleep(200);
+      await page.keyboard.press('Enter');
+      await this.sleep(500);
 
-      // Clear any existing value first
-      await locator.fill('');
-      await this.sleep(100);
+      // Verify the field has a value
+      const fieldValue = await page.inputValue(selector);
+      if (fieldValue && fieldValue.trim().length > 0) {
+        logger.info({ value: fieldValue }, '✅ Autocomplete field filled via keyboard');
+        return;
+      }
 
-      // Type the value to filter options (type a few characters to narrow down)
-      const searchTerm = String(value).substring(0, 15);
-      await locator.fill(searchTerm);
-      await this.sleep(800); // Give more time for dropdown menu to appear with filtered options
+      // Strategy 3: If still empty, try typing again and pressing Tab
+      logger.warn('Autocomplete value not accepted, trying Tab key...');
+      await page.fill(selector, String(value));
+      await this.sleep(300);
+      await page.keyboard.press('Tab');
+      await this.sleep(500);
 
-      // Now try to click on the first visible option in the dropdown menu
-      const optionClickedFromMenu = await page.evaluate(({ val }) => {
-        // Look for dropdown menu options that appeared
-        const menus = document.querySelectorAll('[role="listbox"], [role="menu"], ul[class*="dropdown"], div[class*="menu"], div[class*="options"]');
-
-        for (const menu of menus) {
-          // Check if menu is visible
-          if (menu.offsetParent === null) continue;
-
-          const options = menu.querySelectorAll('[role="option"], li, div[class*="option"]');
-
-          for (const option of options) {
-            // Only click visible options
-            if (option.offsetParent === null) continue;
-
-            const text = option.textContent?.toLowerCase().trim() || '';
-
-            // Click first visible option that matches our search
-            if (text.includes(val.toLowerCase()) || val.toLowerCase().includes(text)) {
-              option.click();
-              return { success: true, matched: option.textContent?.trim() };
-            }
-          }
-
-          // If no match found, just click the first visible option
-          const firstVisible = Array.from(options).find(opt => opt.offsetParent !== null);
-          if (firstVisible) {
-            firstVisible.click();
-            return { success: true, matched: firstVisible.textContent?.trim() };
-          }
-        }
-
-        return { success: false };
-      }, { val: searchTerm });
-
-      if (optionClickedFromMenu.success) {
-        logger.info({ matched: optionClickedFromMenu.matched }, '✅ Selected option from dropdown menu via keyboard fallback');
+      // Final check
+      const finalValue = await page.inputValue(selector);
+      if (finalValue && finalValue.trim().length > 0) {
+        logger.info({ value: finalValue }, '✅ Autocomplete field filled via Tab');
       } else {
-        // Last resort: press Enter
-        await page.keyboard.press('Enter');
-        await this.sleep(200);
-        logger.info('✅ Selected option via Enter key');
-        // If still uncertain, log options for debugging
-        logger.warn({ field: field.name, aiValue: aiRaw, options }, 'Dropdown selection may be ambiguous');
+        logger.warn({
+          value,
+          finalValue
+        }, '⚠️  Autocomplete field may not be properly filled');
       }
 
     } catch (error) {
-      logger.error({ selector, value, error: error.message }, '❌ Failed to fill custom dropdown with mouse');
-      throw new Error(`Failed to fill custom dropdown "${field.name}": ${error.message}`);
+      logger.error({ selector, value, error: error.message }, '❌ Failed to fill autocomplete field');
+      // Fallback: just type the value
+      await this.fillTextInput(page, selector, value);
     }
   }
 
@@ -1022,10 +1636,10 @@ class AIFormFiller {
         await page.selectOption(selector, bestMatch.value, { timeout: 5000 });
         logger.info({ selected: bestMatch.text }, '✅ Selected option using Playwright selectOption');
       } else {
-        // Puppeteer fallback
-        logger.info({ value: bestMatch.value }, '🎯 Selecting option with Puppeteer select');
-        await page.select(selector, bestMatch.value);
-        logger.info({ selected: bestMatch.text }, '✅ Selected option using Puppeteer select');
+        // Legacy fallback (should not be reached with Playwright)
+        logger.warn({ value: bestMatch.value }, '⚠️ Using legacy select method');
+        await page.selectOption(selector, bestMatch.value);
+        logger.info({ selected: bestMatch.text }, '✅ Selected option using legacy method');
       }
 
       // STEP 5: Verify the selection worked
@@ -1151,33 +1765,29 @@ class AIFormFiller {
         throw new Error('No resume file available - user must generate a resume before applying to jobs');
       }
 
-      // Validate resume file exists
-      const fs = await import('fs');
+      // Resume path was already validated in fillFormIntelligently()
+      // This is a final sanity check
       const path = await import('path');
+      logger.debug({ fileName: path.basename(resumePath) }, 'Using validated resume for upload');
 
-      if (!fs.existsSync(resumePath)) {
-        throw new Error(`Resume file not found at path: ${resumePath}`);
-      }
+      // Use Playwright's setInputFiles API
+      logger.debug('Using Playwright setInputFiles');
 
-      logger.debug({ fileName: path.basename(resumePath) }, 'Using user resume for upload');
-
-      // Detect if using Playwright (has setInputFiles method) or Puppeteer
-      const isPlaywright = typeof page.setInputFiles === 'function';
-
-      if (isPlaywright) {
-        // Use Playwright's setInputFiles API
-        logger.debug('Using Playwright setInputFiles');
+      if (typeof page.setInputFiles === 'function') {
         await page.setInputFiles(selector, resumePath);
         logger.debug('File uploaded successfully (Playwright)');
       } else {
-        // Use Puppeteer's uploadFile API
-        logger.debug('Using Puppeteer uploadFile');
+        // Fallback for ElementHandle
         const fileInput = await page.$(selector);
         if (!fileInput) {
           throw new Error(`File input not found: ${selector}`);
         }
-        await fileInput.uploadFile(resumePath);
-        logger.debug('File uploaded successfully (Puppeteer)');
+        if (typeof fileInput.setInputFiles === 'function') {
+          await fileInput.setInputFiles(resumePath);
+          logger.debug('File uploaded successfully');
+        } else {
+          throw new Error('setInputFiles method not available');
+        }
       }
 
       // Wait for any upload processing
@@ -1476,9 +2086,19 @@ class AIFormFiller {
       const initialUrl = page.url();
       logger.info({ initialUrl }, 'Capturing initial state before submit');
 
-      // Step 3: Click submit button
-      await page.click(submitButton.selector);
-      logger.info('Submit button clicked');
+      // Step 3: Click submit button (with retry logic)
+      try {
+        // Try using Playwright locator first (more reliable)
+        const submitLocator = page.locator(submitButton.selector).first();
+        // No scroll to avoid constant movement - button should be visible
+        await submitLocator.click({ timeout: 10000 });
+        logger.info('Submit button clicked using locator');
+      } catch (locatorError) {
+        logger.warn({ error: locatorError.message }, 'Locator click failed, trying direct click');
+        // Fallback to direct click
+        await page.click(submitButton.selector, { timeout: 10000 });
+        logger.info('Submit button clicked using direct click');
+      }
 
       // Step 4: Wait for page to process submission
       // Use Promise.allSettled to wait for multiple possible outcomes
@@ -1508,6 +2128,122 @@ class AIFormFiller {
           successMessages: verification.successMessages
         };
       } else {
+        logger.warn({
+          errorMessages: verification.errorMessages,
+          formStillVisible: verification.formStillVisible
+        }, 'Form submission failed - checking for empty required fields to retry');
+
+        // RETRY LOGIC: Check for empty required fields and try to fill them
+        const retryable = verification.formStillVisible && verification.errorMessages.length > 0;
+
+        if (retryable && !this._submitRetried) {
+          this._submitRetried = true; // Prevent infinite retry loop
+
+          logger.info('🔄 Attempting to fill empty required fields and retry submission...');
+
+          // Find empty required fields
+          const emptyFields = await page.evaluate(() => {
+            const fields = [];
+            const inputs = document.querySelectorAll('input[required], textarea[required], select[required]');
+
+            for (const input of inputs) {
+              const value = input.value?.trim() || '';
+              const type = input.type || input.tagName.toLowerCase();
+
+              // Check if field is empty or invalid
+              const isEmpty = !value || value === '' || value === 'Select...' || value === 'Choose...';
+              const hasError = input.classList.contains('error') ||
+                              input.classList.contains('invalid') ||
+                              input.getAttribute('aria-invalid') === 'true';
+
+              if (isEmpty || hasError) {
+                fields.push({
+                  selector: `#${input.id}` || `input[name="${input.name}"]`,
+                  name: input.name || input.id,
+                  type: type,
+                  label: input.labels?.[0]?.textContent?.trim() || input.placeholder || input.name,
+                  value: value,
+                  isEmpty: isEmpty,
+                  hasError: hasError
+                });
+              }
+            }
+
+            return fields;
+          });
+
+          if (emptyFields.length > 0) {
+            logger.info({ count: emptyFields.length, fields: emptyFields }, 'Found empty/invalid required fields');
+
+            // Try to fill empty fields using existing AI responses
+            for (const field of emptyFields) {
+              try {
+                logger.info({ field: field.name, label: field.label }, 'Retrying fill for empty field');
+
+                // Get value from user profile or use a sensible default
+                let value = null;
+
+                // Try to map field name to userProfile
+                if (field.name?.includes('phone') || field.label?.toLowerCase().includes('phone')) {
+                  value = userProfile?.phone;
+                } else if (field.name?.includes('location') || field.label?.toLowerCase().includes('location') || field.label?.toLowerCase().includes('city')) {
+                  value = userProfile?.location || userProfile?.city;
+                } else if (field.name?.includes('email')) {
+                  value = userProfile?.email;
+                } else if (field.name?.includes('name')) {
+                  value = userProfile?.fullName || `${userProfile?.firstName} ${userProfile?.lastName}`;
+                }
+
+                if (value) {
+                  await this.fillSingleField(page, field, value);
+                  logger.info({ field: field.name }, '✅ Retried field fill');
+                } else {
+                  logger.warn({ field: field.name }, 'No value available for retry');
+                }
+
+                await this.sleep(200);
+              } catch (fillError) {
+                logger.warn({ field: field.name, error: fillError.message }, 'Failed to retry field fill');
+              }
+            }
+
+            // Wait a bit for validation
+            await this.sleep(1000);
+
+            // Retry submit
+            logger.info('🔁 Retrying submit after filling empty fields...');
+            try {
+              // Click submit again
+              const submitLocator = page.locator(submitButton.selector).first();
+              await submitLocator.click({ timeout: 10000 });
+              logger.info('Submit button clicked (retry)');
+
+              // Wait for response
+              await this.sleep(5000);
+
+              // Re-verify submission
+              const retryVerification = await this.verifySubmissionSuccess(page, initialUrl);
+
+              if (retryVerification.success) {
+                logger.info('✅ Retry submission successful!');
+                return {
+                  success: true,
+                  urlChanged: retryVerification.urlChanged,
+                  currentUrl: retryVerification.currentUrl,
+                  successMessages: retryVerification.successMessages,
+                  retriedAfterErrors: true
+                };
+              } else {
+                logger.warn('Retry submission still failed');
+              }
+            } catch (retryError) {
+              logger.error({ error: retryError.message }, 'Retry submission attempt failed');
+            }
+          } else {
+            logger.info('No empty required fields found to retry');
+          }
+        }
+
         logger.error({
           errorMessages: verification.errorMessages,
           formStillVisible: verification.formStillVisible,
@@ -1632,7 +2368,6 @@ class AIFormFiller {
    */
   getStatistics() {
     return {
-      cost: this.intelligence.getCostSummary(),
       learning: this.learningSystem.getLearningSummary()
     };
   }

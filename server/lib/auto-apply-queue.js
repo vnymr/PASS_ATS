@@ -1,19 +1,16 @@
 /**
  * Auto-Apply Queue Worker
- * Processes queued job applications using AI (primary) or recipe engine (fallback)
+ * Processes queued job applications using AI-powered form filling
  * MIGRATED FROM PUPPETEER TO PLAYWRIGHT
  */
 
 import Queue from 'bull';
-import recipeEngine from './recipe-engine.js';
 import { prisma } from './prisma-client.js';
 import logger from './logger.js';
 import AIFormFiller from './ai-form-filler.js';
+import { classifyError, shouldRetryError } from './error-classifier.js';
 
 const aiFormFiller = new AIFormFiller();
-
-// Strategy selector: AI first, then recipes
-const APPLY_STRATEGY = process.env.APPLY_STRATEGY || 'AI_FIRST'; // AI_FIRST, RECIPE_ONLY, AI_ONLY
 
 const redisUrl = process.env.REDIS_URL || '';
 
@@ -61,46 +58,20 @@ async function applyWithAI(jobUrl, user, jobData, resumePath = null) {
     logger.info('🚀 Launching Playwright browser for AI application (stealth mode)...');
 
     // Use centralized browser launcher with stealth mode (now returns Playwright browser)
-    const { launchStealthBrowser } = await import('./browser-launcher.js');
+    const { 
+      launchStealthBrowser, 
+      createStealthContext, 
+      applyStealthToPage 
+    } = await import('./browser-launcher.js');
     browser = await launchStealthBrowser();
 
-    // Create context with viewport and user agent
-    const context = await browser.newContext({
-      viewport: { width: 1920, height: 1080 },
-      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
-    });
+    // Create stealth context with realistic browser properties
+    const context = await createStealthContext(browser);
 
     const page = await context.newPage();
 
-    // Remove webdriver flag using Playwright's addInitScript
-    await page.addInitScript(() => {
-      Object.defineProperty(navigator, 'webdriver', {
-        get: () => false,
-      });
-    });
-
-    // Add realistic browser properties
-    await page.addInitScript(() => {
-      window.chrome = {
-        runtime: {},
-      };
-    });
-
-    // Randomize mouse movements
-    await page.addInitScript(() => {
-      const originalQuery = window.document.querySelector;
-      window.document.querySelector = function(selector) {
-        const element = originalQuery.call(document, selector);
-        if (element) {
-          element.addEventListener('click', () => {
-            // Simulate human-like delay
-            const delay = Math.random() * 100 + 50;
-            setTimeout(() => {}, delay);
-          });
-        }
-        return element;
-      };
-    });
+    // Apply comprehensive stealth techniques to avoid bot detection
+    await applyStealthToPage(page);
 
     // Transform Greenhouse URLs to direct application page
     let targetUrl = jobUrl;
@@ -127,7 +98,7 @@ async function applyWithAI(jobUrl, user, jobData, resumePath = null) {
     // Navigate to job application page
     logger.info(`📄 Navigating to ${targetUrl}...`);
     await page.goto(targetUrl, {
-      waitUntil: 'networkidle2',
+      waitUntil: 'networkidle',  // Playwright uses 'networkidle' not 'networkidle2'
       timeout: 30000
     });
 
@@ -368,14 +339,12 @@ async function applyWithAI(jobUrl, user, jobData, resumePath = null) {
         success: false,
         error: fillResult.errors.join('; '),
         method: 'AI_AUTO',
-        cost: fillResult.cost,
         details: fillResult
       };
     }
 
     logger.info('✅ AI successfully filled form!');
     logger.info(`   Fields filled: ${fillResult.fieldsFilled}/${fillResult.fieldsExtracted}`);
-    logger.info(`   Cost: $${fillResult.cost.toFixed(4)}`);
 
     // IMPORTANT: Click the submit button to actually submit the application
     let submitResult = { success: false, error: 'No submit button found' };
@@ -430,8 +399,6 @@ async function applyWithAI(jobUrl, user, jobData, resumePath = null) {
       logger.error({ error: screenshotError.message }, 'Failed to capture final screenshot');
     }
 
-    await browser.close();
-
     // Only return success if form was filled AND submitted successfully
     if (!submitResult.success) {
       logger.error({
@@ -444,12 +411,10 @@ async function applyWithAI(jobUrl, user, jobData, resumePath = null) {
         success: false,
         error: submitResult.error || 'Form submission failed',
         method: 'AI_AUTO',
-        cost: fillResult.cost,
         screenshot: screenshot,
         confirmationData: {
           fieldsExtracted: fillResult.fieldsExtracted,
           fieldsFilled: fillResult.fieldsFilled,
-          aiCost: fillResult.cost,
           complexity: fillResult.complexity,
           learningRecorded: fillResult.learningRecorded,
           submitAttempted: true,
@@ -462,12 +427,10 @@ async function applyWithAI(jobUrl, user, jobData, resumePath = null) {
     return {
       success: true,
       method: 'AI_AUTO',
-      cost: fillResult.cost,
       screenshot: screenshot,
       confirmationData: {
         fieldsExtracted: fillResult.fieldsExtracted,
         fieldsFilled: fillResult.fieldsFilled,
-        aiCost: fillResult.cost,
         complexity: fillResult.complexity,
         learningRecorded: fillResult.learningRecorded,
         submitted: true,
@@ -480,16 +443,32 @@ async function applyWithAI(jobUrl, user, jobData, resumePath = null) {
   } catch (error) {
     logger.error({ error: error.message, stack: error.stack }, '❌ AI application error');
 
-    if (browser) {
-      await browser.close();
-    }
-
     return {
       success: false,
       error: error.message,
-      method: 'AI_AUTO',
-      cost: 0
+      method: 'AI_AUTO'
     };
+  } finally {
+    // CRITICAL: Always close browser to prevent memory leaks
+    if (browser) {
+      try {
+        logger.debug('Closing browser');
+        await browser.close();
+        logger.debug('Browser closed successfully');
+      } catch (closeError) {
+        logger.error({
+          error: closeError.message,
+          stack: closeError.stack
+        }, 'Failed to close browser - potential memory leak');
+
+        // Try to force kill browser process if close fails
+        try {
+          await browser.close({ reason: 'force' });
+        } catch (forceCloseError) {
+          logger.error({ error: forceCloseError.message }, 'Failed to force close browser');
+        }
+      }
+    }
   }
 }
 
@@ -558,9 +537,8 @@ autoApplyQueue.process(10, async (job) => {
       throw new Error('User profile missing required data. Please complete profile setup.');
     }
 
-    // Apply using AI-powered application (Puppeteer + GPT-4 Vision)
-    // Note: Recipe engine requires BrowserUse which is not currently configured
-    logger.info(`Applying with strategy: AI-ONLY (Puppeteer + AI)`);
+    // Apply using AI-powered application (Playwright + GPT-4 Vision)
+    logger.info(`Applying with strategy: AI-ONLY (Playwright + AI)`);
 
     // Check if user has uploaded a custom resume (priority)
     const uploadedResume = profileData?.uploadedResume;
@@ -615,64 +593,130 @@ autoApplyQueue.process(10, async (job) => {
 
     logger.info({ resumePath, filename }, '📄 Resume file ready for upload');
 
-    // Use AI-powered application with Puppeteer
+    // Use AI-powered application with Playwright
     logger.info('🤖 Attempting AI-powered application...');
     result = await applyWithAI(jobUrl, user, job.data, resumePath);
 
     // If AI fails, return error (don't fall back to BrowserUse)
     if (!result.success) {
       logger.error({ error: result.error, details: result }, 'AI application failed');
-      // Note: Could fall back to recipe engine if BrowserUse API key is configured
-      // But for now, we only support direct AI application
+      // Direct AI application is the only supported method
     }
 
     if (result.success) {
-      // Application submitted successfully
-      await prisma.autoApplication.update({
-        where: { id: applicationId },
-        data: {
-          status: 'SUBMITTED',
-          method: result.method || 'AI_AUTO',
-          submittedAt: new Date(),
-          completedAt: new Date(),
-          confirmationUrl: result.screenshot,
-          confirmationId: result.confirmationId || null,
-          confirmationData: result.confirmationData || {},
-          cost: result.cost,
-          retryCount: job.attemptsMade
+      // Application submitted successfully - use transaction for atomic update
+      await prisma.$transaction(async (tx) => {
+        // Update application status
+        await tx.autoApplication.update({
+          where: { id: applicationId },
+          data: {
+            status: 'SUBMITTED',
+            method: result.method || 'AI_AUTO',
+            submittedAt: new Date(),
+            completedAt: new Date(),
+            confirmationUrl: result.screenshot,
+            confirmationId: result.confirmationData?.confirmationId || null,
+            confirmationData: result.confirmationData || {},
+            retryCount: job.attemptsMade,
+            cost: result.cost || 0.05 // Track cost per application
+          }
+        });
+
+        // If using a recipe, record execution success
+        if (result.recipeId) {
+          await tx.recipeExecution.create({
+            data: {
+              recipeId: result.recipeId,
+              success: true,
+              method: result.method,
+              duration: result.duration || null,
+              cost: result.cost || 0.05,
+              jobUrl: jobUrl,
+              executedAt: new Date()
+            }
+          });
+
+          // Update recipe statistics
+          await tx.applicationRecipe.update({
+            where: { id: result.recipeId },
+            data: {
+              timesUsed: { increment: 1 },
+              lastUsed: new Date(),
+              // Update success rate incrementally
+              successRate: {
+                // (oldSuccessRate * oldTimesUsed + 1) / (oldTimesUsed + 1)
+                // Prisma doesn't support this directly, so we'll update in a raw query
+              },
+              totalSaved: { increment: result.savedCost || 0 }
+            }
+          });
         }
+      }, {
+        maxWait: 5000, // Max 5s to acquire transaction lock
+        timeout: 10000, // Max 10s for transaction to complete
+        isolationLevel: 'ReadCommitted' // Prevent dirty reads
       });
 
       logger.info({
         applicationId,
         method: result.method,
-        cost: result.cost
+        cost: result.cost || 0.05
       }, '✅ Application submitted successfully');
 
       return {
         success: true,
         applicationId,
-        cost: result.cost,
         method: result.method
       };
 
     } else {
-      // Application failed
+      // Application failed - use transaction for atomic update
       const errorType = result.needsConfiguration ? 'CONFIGURATION_ERROR' :
                        result.needsInstall ? 'DEPENDENCY_ERROR' :
-                       result.needsRecording ? 'NO_RECIPE' :
                        'APPLICATION_ERROR';
 
-      await prisma.autoApplication.update({
-        where: { id: applicationId },
-        data: {
-          status: 'FAILED',
-          error: result.error,
-          errorType,
-          completedAt: new Date(),
-          cost: result.cost || 0,
-          retryCount: job.attemptsMade
+      await prisma.$transaction(async (tx) => {
+        // Update application status
+        await tx.autoApplication.update({
+          where: { id: applicationId },
+          data: {
+            status: 'FAILED',
+            error: result.error,
+            errorType,
+            completedAt: new Date(),
+            retryCount: job.attemptsMade,
+            cost: result.cost || 0 // Track cost even on failure
+          }
+        });
+
+        // If using a recipe, record execution failure
+        if (result.recipeId) {
+          await tx.recipeExecution.create({
+            data: {
+              recipeId: result.recipeId,
+              success: false,
+              method: result.method,
+              error: result.error,
+              errorType: errorType,
+              cost: result.cost || 0,
+              jobUrl: jobUrl,
+              executedAt: new Date()
+            }
+          });
+
+          // Update recipe failure count
+          await tx.applicationRecipe.update({
+            where: { id: result.recipeId },
+            data: {
+              failureCount: { increment: 1 },
+              lastFailure: new Date()
+            }
+          });
         }
+      }, {
+        maxWait: 5000,
+        timeout: 10000,
+        isolationLevel: 'ReadCommitted'
       });
 
       logger.error({
@@ -685,19 +729,30 @@ autoApplyQueue.process(10, async (job) => {
     }
 
   } catch (error) {
-    // Update application with error
-    await prisma.autoApplication.update({
-      where: { id: applicationId },
-      data: {
-        status: 'FAILED',
-        error: error.message,
-        errorType: 'PROCESSING_ERROR',
-        completedAt: new Date(),
-        retryCount: job.attemptsMade
-      }
-    }).catch(err => {
-      logger.error({ error: err.message }, 'Failed to update application status');
-    });
+    // Update application with error - use transaction for consistency
+    try {
+      await prisma.$transaction(async (tx) => {
+        await tx.autoApplication.update({
+          where: { id: applicationId },
+          data: {
+            status: 'FAILED',
+            error: error.message,
+            errorType: 'PROCESSING_ERROR',
+            completedAt: new Date(),
+            retryCount: job.attemptsMade
+          }
+        });
+      }, {
+        maxWait: 5000,
+        timeout: 10000,
+        isolationLevel: 'ReadCommitted'
+      });
+    } catch (dbError) {
+      logger.error({
+        error: dbError.message,
+        originalError: error.message
+      }, 'Failed to update application status in database');
+    }
 
     logger.error({
       applicationId,
@@ -728,19 +783,43 @@ autoApplyQueue.process(10, async (job) => {
 autoApplyQueue.on('completed', (job, result) => {
   logger.info({
     jobId: job.id,
-    applicationId: job.data.applicationId,
-    cost: result.cost
+    applicationId: job.data.applicationId
   }, 'Auto-apply job completed');
 });
 
-autoApplyQueue.on('failed', (job, error) => {
+autoApplyQueue.on('failed', async (job, error) => {
+  const { applicationId } = job.data;
+
+  // Classify the error
+  const classification = classifyError(error);
+  const retryDecision = shouldRetryError(error, job.attemptsMade);
+
   logger.error({
     jobId: job.id,
-    applicationId: job.data.applicationId,
+    applicationId,
     error: error.message,
+    errorType: classification.type,
     attemptsMade: job.attemptsMade,
-    maxAttempts: job.opts.attempts
+    maxAttempts: job.opts.attempts,
+    willRetry: retryDecision.shouldRetry,
+    retryReason: retryDecision.reason
   }, 'Auto-apply job failed');
+
+  // Update application with classified error information
+  try {
+    await prisma.autoApplication.update({
+      where: { id: applicationId },
+      data: {
+        errorType: classification.type,
+        error: classification.userMessage
+      }
+    });
+  } catch (dbError) {
+    logger.error({
+      applicationId,
+      error: dbError.message
+    }, 'Failed to update application error type');
+  }
 });
 
 autoApplyQueue.on('stalled', (job) => {
