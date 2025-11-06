@@ -117,7 +117,7 @@ export default function Billing() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
-      <Button variant="outline" onClick={() => navigate('/dashboard')} className="mb-6">← Back to Dashboard</Button>
+      <Button variant="outline" onClick={() => navigate('/happy')} className="mb-6">← Back to Chat</Button>
 
       <h1 className="mb-2 text-3xl font-bold text-neutral-900 tracking-tight">Subscription & Usage</h1>
       <p className="text-neutral-600 mb-8">Manage your subscription and view your usage statistics</p>

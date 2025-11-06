@@ -12,7 +12,7 @@ export default function CheckoutSuccess() {
       setCountdown((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
-          navigate('/dashboard');
+          navigate('/happy');
           return 0;
         }
         return prev - 1;
@@ -53,7 +53,7 @@ export default function CheckoutSuccess() {
           </div>
 
           <div className="modern-checkout-redirect">
-            <p>Redirecting to dashboard in {countdown} seconds...</p>
+            <p>Redirecting to chat in {countdown} seconds...</p>
             <div className="modern-countdown-bar">
               {(() => {
                 const pct = Math.max(0, Math.min(100, Math.round((countdown / 5) * 100)));
@@ -65,10 +65,10 @@ export default function CheckoutSuccess() {
 
           <button
             className="modern-checkout-btn primary"
-            onClick={() => navigate('/dashboard')}
+            onClick={() => navigate('/happy')}
           >
             <Icons.home size={18} />
-            Go to Dashboard Now
+            Go to Chat Now
           </button>
 
           {sessionId && (

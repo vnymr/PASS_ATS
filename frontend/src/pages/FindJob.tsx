@@ -6,9 +6,11 @@ import Card from '../ui/Card';
 import { useAuth } from '@clerk/clerk-react';
 import type { Job as JobType, GetJobsResponse } from '../services/api';
 import JobCard from '../components/JobCard';
+import JobCardSimple from '../components/JobCardSimple';
 import JobDetailPanel from '../components/JobDetailPanel';
+import JobDetailPanelSimple from '../components/JobDetailPanelSimple';
 import logger from '../utils/logger';
-import MinimalSearch from '../components/MinimalSearch';
+import { GooeySearchBar } from '../ui/AnimatedSearchBar';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '';
 const PAGE_SIZE = 100; // Increased from 50 to 100
@@ -25,11 +27,13 @@ type SearchMeta = {
   query: string;
   offset: number;
   hasMore: boolean;
+  total: number;
 };
 
 type BrowseMeta = {
   offset: number;
   hasMore: boolean;
+  total: number;
 };
 
 const buildUrl = (path: string) => (API_BASE_URL ? `${API_BASE_URL}${path}` : path);
@@ -120,7 +124,6 @@ export default function FindJob() {
   const [jobs, setJobs] = useState<JobWithExtras[]>([]);
   const [selectedJob, setSelectedJob] = useState<JobWithExtras | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState('');
   const [explanation, setExplanation] = useState('');
   const [remoteOnly, setRemoteOnly] = useState(false);
@@ -128,8 +131,8 @@ export default function FindJob() {
   const [savedJobs, setSavedJobs] = useState<Record<string, boolean>>({});
   const [hoveredJobId, setHoveredJobId] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(false);
-  const [browseMeta, setBrowseMeta] = useState<BrowseMeta>({ offset: 0, hasMore: false });
-  const [searchMeta, setSearchMeta] = useState<SearchMeta>({ query: initialQueryRef.current, offset: initialQueryRef.current ? PAGE_SIZE : 0, hasMore: false });
+  const [browseMeta, setBrowseMeta] = useState<BrowseMeta>({ offset: 0, hasMore: false, total: 0 });
+  const [searchMeta, setSearchMeta] = useState<SearchMeta>({ query: initialQueryRef.current, offset: 0, hasMore: false, total: 0 });
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [usePersonalized, setUsePersonalized] = useState(true); // Default to personalized
   const [isPersonalizedResponse, setIsPersonalizedResponse] = useState(false); // Track if response is personalized
@@ -182,12 +185,7 @@ export default function FindJob() {
     async ({ offset = 0, append = false }: { offset?: number; append?: boolean } = {}) => {
       const requestId = ++requestIdRef.current;
 
-      if (append) {
-        setIsLoadingMore(true);
-      } else {
-        setLoading(true);
-      }
-
+      setLoading(true);
       setError('');
 
       try {
@@ -230,27 +228,20 @@ export default function FindJob() {
         });
 
         setBrowseMeta({
-          offset: offset + PAGE_SIZE,
+          offset: offset,
           hasMore: Boolean(data.hasMore),
+          total: data.total || 0,
         });
 
-        // Ensure we never clear jobs when appending
-        setJobs(prev => {
-          if (append && prev.length > 0) {
-            return [...prev, ...normalized];
-          }
-          return normalized;
-        });
-
-        if (!append) {
-          setSelectedJob(normalized[0] ?? null);
-        }
+        // Don't append, replace based on page
+        setJobs(normalized);
+        setSelectedJob(normalized[0] ?? null);
 
         if (!append) {
           setMode('browse');
           setActiveQuery('');
           setExplanation('');
-          setSearchMeta({ query: '', offset: 0, hasMore: false });
+          setSearchMeta({ query: '', offset: 0, hasMore: false, total: 0 });
           lastUrlQueryRef.current = '';
           setSearchParams({});
         }
@@ -264,11 +255,7 @@ export default function FindJob() {
         }
       } finally {
         if (requestId === requestIdRef.current) {
-          if (append) {
-            setIsLoadingMore(false);
-          } else {
-            setLoading(false);
-          }
+          setLoading(false);
         }
       }
     },
@@ -287,12 +274,7 @@ export default function FindJob() {
 
       const requestId = ++requestIdRef.current;
 
-      if (append) {
-        setIsLoadingMore(true);
-      } else {
-        setLoading(true);
-      }
-
+      setLoading(true);
       setError('');
       setMode('search');
       setActiveQuery(trimmedQuery);
@@ -352,18 +334,16 @@ export default function FindJob() {
           append,
           previousCount: jobs.length,
           newJobsCount: normalized.length,
-          willResultIn: append ? jobs.length + normalized.length : normalized.length
+          willResultIn: normalized.length
         });
-        setJobs(prev => (append ? [...prev, ...normalized] : normalized));
-
-        if (!append) {
-          setSelectedJob(normalized[0] ?? null);
-        }
+        setJobs(normalized);
+        setSelectedJob(normalized[0] ?? null);
 
         setSearchMeta({
           query: trimmedQuery,
-          offset: offset + PAGE_SIZE,
+          offset: offset,
           hasMore: Boolean(data.hasMore),
+          total: data.total || 0,
         });
       } catch (err) {
         if (requestId === requestIdRef.current) {
@@ -376,11 +356,7 @@ export default function FindJob() {
         }
       } finally {
         if (requestId === requestIdRef.current) {
-          if (append) {
-            setIsLoadingMore(false);
-          } else {
-            setLoading(false);
-          }
+          setLoading(false);
         }
       }
     },
@@ -417,7 +393,7 @@ export default function FindJob() {
       setMode('browse');
       setActiveQuery('');
       setExplanation('');
-      setSearchMeta({ query: '', offset: 0, hasMore: false });
+      setSearchMeta({ query: '', offset: 0, hasMore: false, total: 0 });
       fetchJobs({ offset: 0, append: false });
     }
   }, [searchParams, runSearch, fetchJobs]);
@@ -447,7 +423,7 @@ export default function FindJob() {
         setMode('browse');
         setActiveQuery('');
         setExplanation('');
-        setSearchMeta({ query: '', offset: 0, hasMore: false });
+        setSearchMeta({ query: '', offset: 0, hasMore: false, total: 0 });
         lastUrlQueryRef.current = '';
         setSearchParams({});
         fetchJobs({ offset: 0, append: false });
@@ -477,7 +453,7 @@ export default function FindJob() {
     setMode('browse');
     setActiveQuery('');
     setExplanation('');
-    setSearchMeta({ query: '', offset: 0, hasMore: false });
+    setSearchMeta({ query: '', offset: 0, hasMore: false, total: 0 });
     lastUrlQueryRef.current = '';
     setSearchParams({});
     fetchJobs({ offset: 0, append: false });
@@ -499,20 +475,6 @@ export default function FindJob() {
     });
   };
 
-  const handleLoadMore = () => {
-    logger.debug('Load more clicked', {
-      mode,
-      currentJobs: jobs.length,
-      browseOffset: browseMeta.offset,
-      searchOffset: searchMeta.offset
-    });
-
-    if (mode === 'search' && activeQuery) {
-      runSearch(activeQuery, { offset: searchMeta.offset, append: true });
-    } else {
-      fetchJobs({ offset: browseMeta.offset, append: true });
-    }
-  };
 
   const handleRetry = () => {
     setError('');
@@ -553,9 +515,9 @@ export default function FindJob() {
 
       if (result.success) {
         window.alert(
-          `✅ Application queued successfully!\n\nApplication ID: ${result.applicationId}\nStatus: ${result.status}\n${result.message}\n\nCheck your Agent Dashboard to track progress.`
+          `✅ Application queued successfully!\n\nApplication ID: ${result.applicationId}\nStatus: ${result.status}\n${result.message}\n\nCheck your Chat to track progress.`
         );
-        navigate('/dashboard');
+        navigate('/happy');
       } else {
         window.alert('Failed to queue application. Please try again.');
       }
@@ -567,8 +529,8 @@ export default function FindJob() {
           );
           navigate('/application-questions');
         } else if (err.message.includes('Already applied')) {
-          window.alert('ℹ️ You have already applied to this job. Check your Agent Dashboard for status updates.');
-          navigate('/dashboard');
+          window.alert('ℹ️ You have already applied to this job. Check your Chat for status updates.');
+          navigate('/happy');
         } else if (err.message.includes('cannot be auto-applied')) {
           window.alert('⚠️ This job requires a manual application. You can still generate a tailored resume and apply manually.');
         } else {
@@ -582,34 +544,44 @@ export default function FindJob() {
     }
   };
 
-  const canLoadMore = mode === 'search' ? searchMeta.hasMore : browseMeta.hasMore;
-  const isInitialLoading = loading && !isLoadingMore;
+  const isInitialLoading = loading;
   const showEmptyState = !isInitialLoading && !error && filteredJobs.length === 0;
 
   // Tailwind replaces previous inline style objects
 
+  const jobSearchSuggestions = [
+    "Remote React jobs $120k+",
+    "Senior engineer healthcare",
+    "Data analyst NYC",
+    "Design jobs flexible hours",
+    "Machine learning startups",
+    "Product manager fintech",
+    "Full-stack developer remote",
+    "DevOps AWS Kubernetes",
+    "Frontend TypeScript React",
+    "Backend Python Django"
+  ];
+
   return (
-    <div className="flex-1 w-full bg-background min-h-screen text-text font-sans">
-      {/* Minimal Search Header */}
-      <MinimalSearch
-        value={searchInput}
-        onChange={setSearchInput}
-        onSubmit={() => {
-          const trimmed = searchInput.trim();
-          if (trimmed) {
-            skipDebounceRef.current = true;
-            runSearch(trimmed, { offset: 0, append: false });
-          }
-        }}
-        title="Find your next opportunity"
-      />
+    <div className="flex-1 w-full min-h-screen bg-background text-text font-sans">
+      <div className="max-w-[1160px] mx-auto flex flex-col gap-2 px-4 lg:px-6 pt-4 pb-0">
+        <div className="flex flex-col gap-3 sticky top-0 z-20 bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/60">
 
-      <div className="max-w-[1160px] mx-auto flex flex-col gap-4 px-4 lg:px-6 pb-8">
-        <div className="flex flex-col gap-3">
+          {/* Search on Left, Filters on Right */}
+          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 pb-3 border-b border-[rgba(12,19,16,0.06)]">
+            {/* Search Bar on Left */}
+            <div className="flex items-center gap-3">
+              <GooeySearchBar
+                suggestions={jobSearchSuggestions}
+                onSearch={(query) => {
+                  skipDebounceRef.current = true;
+                  setSearchInput(query);
+                  runSearch(query, { offset: 0, append: false });
+                }}
+              />
+            </div>
 
-          {/* Filters and Count */}
-          <div className="flex items-center justify-between flex-wrap gap-3 pb-3 border-b border-[rgba(12,19,16,0.06)]">
-            <div className="flex items-center gap-2.5 flex-wrap">
+            <div className="flex items-center gap-2.5 flex-wrap flex-1 justify-end">
               <button
                 type="button"
                 onClick={() => setUsePersonalized(prev => !prev)}
@@ -641,10 +613,6 @@ export default function FindJob() {
                 </span>
               )}
             </div>
-
-            <div className="text-[13px] text-[var(--gray-600)] font-semibold">
-              {filteredJobs.length} {filteredJobs.length === 1 ? 'role' : 'roles'}
-            </div>
           </div>
 
           {mode === 'search' && explanation && (
@@ -661,18 +629,31 @@ export default function FindJob() {
           )}
         </div>
 
-        <div className={`${selectedJob && isDetailOpen ? 'md:flex' : 'grid'} gap-4 items-start ${selectedJob && isDetailOpen ? '' : 'grid-cols-1'} transition-all duration-300`}>
-          <div className={`${isMobile ? 'flex flex-col gap-4 pr-0' : 'pr-1'} overflow-hidden ${selectedJob && isDetailOpen && !isMobile ? 'md:w-[620px] md:flex-none' : ''}`}>
-            <div className={`${isMobile ? 'flex flex-col gap-4' : selectedJob && isDetailOpen ? 'flex flex-col gap-3 max-h-[calc(100vh-260px)] overflow-y-auto pr-1.5' : 'flex flex-col gap-6 max-h-[calc(100vh-260px)] overflow-y-auto pr-1.5'}`}>
+        <div className={`${selectedJob && isDetailOpen && !isMobile ? 'flex gap-6' : ''} items-start transition-all duration-300`}>
+          <div className={`${isMobile ? 'flex flex-col gap-4 pr-0' : 'pr-1'} ${selectedJob && isDetailOpen && !isMobile ? 'w-[380px] flex-shrink-0' : 'w-full'}`}>
+            <div className={`${isMobile ? 'flex flex-col gap-4' : selectedJob && isDetailOpen ? 'grid grid-cols-1 gap-4' : 'grid grid-cols-2 gap-4'}`}>
               {isInitialLoading && (
                 <>
                   {Array.from({ length: isMobile ? 4 : 6 }).map((_, index) => (
-                  <div key={`skeleton-${index}`} className="bg-elevated rounded-2xl border border-[rgba(28,63,64,0.12)] p-5 shadow-sm flex flex-col gap-4">
-                    <div className="w-16 h-16 rounded-2xl bg-[var(--primary-50)] opacity-60" />
-                    <div className="flex flex-col gap-3">
-                      <div className="w-[70%] h-[18px] rounded-lg bg-[rgba(28,63,64,0.12)] opacity-60" />
-                      <div className="w-1/2 h-[14px] rounded-lg bg-[rgba(28,63,64,0.12)] opacity-60" />
-                      <div className="w-[85%] h-3 rounded-md bg-[rgba(28,63,64,0.10)] opacity-60" />
+                  <div key={`skeleton-${index}`} className="bg-white rounded-xl border border-gray-200 p-6 animate-pulse">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="w-20 h-4 bg-gray-200 rounded" />
+                      <div className="w-5 h-5 bg-gray-200 rounded" />
+                    </div>
+                    <div className="flex gap-4 mb-4">
+                      <div className="w-12 h-12 rounded-full bg-gray-200" />
+                      <div className="flex-1">
+                        <div className="w-3/4 h-5 bg-gray-200 rounded mb-2" />
+                        <div className="w-1/2 h-4 bg-gray-200 rounded" />
+                      </div>
+                    </div>
+                    <div className="flex gap-3 mb-4">
+                      <div className="w-20 h-4 bg-gray-200 rounded" />
+                      <div className="w-20 h-4 bg-gray-200 rounded" />
+                      <div className="w-24 h-4 bg-gray-200 rounded" />
+                    </div>
+                    <div className="flex justify-end">
+                      <div className="w-24 h-10 bg-gray-200 rounded-lg" />
                     </div>
                   </div>
                   ))}
@@ -712,16 +693,14 @@ export default function FindJob() {
                 };
 
                 return (
-                  <JobCard
+                  <JobCardSimple
                     key={job.id}
                     job={enrichedJob}
                     delay={index * 0.05}
-                    compact={false}
-                    onClick={() => { setSelectedJob(job); setIsDetailOpen(true); }}
-                    onGenerateResume={() => navigate('/generate', { state: { jobId: job.id } })}
+                    onViewDetails={(job) => { setSelectedJob(enrichedJob as any); setIsDetailOpen(true); }}
+                    onGenerateResume={(job) => navigate('/generate', { state: { jobId: job.id } })}
                     onViewJob={(url) => window.open(url, '_blank', 'noopener')}
-                    onAutoApply={(jobId) => handleAutoApply(job)}
-                    showMatchScore={isPersonalizedResponse}
+                    onAutoApply={(job) => handleAutoApply(job)}
                   />
                 );
               })}
@@ -755,29 +734,18 @@ export default function FindJob() {
               </div>
             )}
 
-            {canLoadMore && !error && (
-              <button
-                type="button"
-                onClick={handleLoadMore}
-                disabled={isLoadingMore}
-                className={`mt-3 px-5 py-3 rounded-xl border border-[rgba(28,63,64,0.16)] bg-elevated text-accent font-semibold transition ${isLoadingMore ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
-              >
-                {isLoadingMore ? 'Loading more jobs…' : 'Load more jobs'}
-              </button>
-            )}
           </div>
 
           {/* Job Detail Panel - Side by Side on Desktop */}
           {selectedJob && isDetailOpen && !isMobile && (
-            <div className="sticky top-[180px] self-start">
-              <JobDetailPanel
+            <div className="self-start sticky top-24">
+              <JobDetailPanelSimple
                 job={selectedJob as any}
                 isOpen={true}
                 onClose={() => setIsDetailOpen(false)}
                 onGenerateResume={(job) => navigate('/generate', { state: { jobId: job.id } })}
-                onApply={(url) => window.open(url, '_blank', 'noopener')}
+                onViewJob={(url) => window.open(url, '_blank', 'noopener')}
                 onAutoApply={(job) => handleAutoApply(job as any)}
-                isSidePanel={true}
               />
             </div>
           )}

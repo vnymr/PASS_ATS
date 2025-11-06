@@ -6,7 +6,6 @@ import { authLogger } from './utils/logger';
 
 // Page components
 import Landing from './pages/Landing';
-import DashboardModern from './pages/DashboardModern';
 import MemoryProfile from './pages/MemoryProfile';
 import GenerateResume from './pages/GenerateResume';
 import History from './pages/History';
@@ -114,13 +113,6 @@ export default function App() {
     <Routes>
       <Route path="/" element={<Landing />} />
       <Route path="/auth" element={<AuthPage />} />
-      <Route path="/dashboard" element={
-        <ProtectedRoute>
-          <ModernLayout>
-            <DashboardModern />
-          </ModernLayout>
-        </ProtectedRoute>
-      } />
       <Route path="/profile" element={
         <ProtectedRoute>
           <ModernLayout>
@@ -145,7 +137,7 @@ export default function App() {
       <Route path="/history" element={
         <ProtectedRoute>
           <ModernLayout>
-            <DashboardModern />
+            <History />
           </ModernLayout>
         </ProtectedRoute>
       } />
@@ -153,13 +145,6 @@ export default function App() {
         <ProtectedRoute>
           <ModernLayout>
             <FindJob />
-          </ModernLayout>
-        </ProtectedRoute>
-      } />
-      <Route path="/extension" element={
-        <ProtectedRoute>
-          <ModernLayout>
-            <DashboardModern />
           </ModernLayout>
         </ProtectedRoute>
       } />

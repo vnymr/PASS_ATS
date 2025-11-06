@@ -37,10 +37,10 @@ export default function CheckoutCancel() {
 
             <button
               className="modern-checkout-btn secondary"
-              onClick={() => navigate('/dashboard')}
+              onClick={() => navigate('/happy')}
             >
               <Icons.home size={18} />
-              Go to Dashboard
+              Go to Chat
             </button>
           </div>
 

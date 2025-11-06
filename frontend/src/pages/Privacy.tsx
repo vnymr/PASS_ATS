@@ -325,7 +325,7 @@ export default function Privacy() {
             <div className="footer-section">
               <h4>Product</h4>
               <ul>
-                <li><a onClick={() => navigate('/dashboard')}>Dashboard</a></li>
+                <li><a onClick={() => navigate('/happy')}>Chat</a></li>
                 <li><a onClick={() => navigate('/billing')}>Pricing</a></li>
                 <li><a href="https://chromewebstore.google.com" target="_blank" rel="noopener noreferrer">Chrome Extension</a></li>
               </ul>

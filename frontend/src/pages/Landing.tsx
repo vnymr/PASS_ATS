@@ -15,10 +15,10 @@ export default function Landing() {
   const [isExtensionModalOpen, setIsExtensionModalOpen] = useState(false);
   const [resumeCount, setResumeCount] = useState<number | null>(null);
 
-  // Redirect signed-in users directly to dashboard
+  // Redirect signed-in users directly to happy page
   useEffect(() => {
     if (isSignedIn) {
-      navigate('/dashboard');
+      navigate('/happy');
     }
   }, [isSignedIn, navigate]);
 
@@ -132,13 +132,13 @@ export default function Landing() {
             <SignedIn>
               <button
                 onClick={() => {
-                  trackCTAClick('hero', 'Go to Dashboard');
-                  navigate('/dashboard');
+                  trackCTAClick('hero', 'Go to Chat');
+                  navigate('/happy');
                 }}
                 className="btn btn-primary btn-large btn-glow"
-                aria-label="Navigate to your dashboard"
+                aria-label="Navigate to chat"
               >
-                <span>Go to Dashboard</span>
+                <span>Go to Chat</span>
                 <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M7.5 15L12.5 10L7.5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
@@ -350,12 +350,12 @@ export default function Landing() {
               <SignedIn>
                 <button
                   onClick={() => {
-                    trackCTAClick('cta_section', 'Go to Dashboard');
-                    navigate('/dashboard');
+                    trackCTAClick('cta_section', 'Go to Chat');
+                    navigate('/happy');
                   }}
                   className="btn btn-primary btn-large btn-glow"
                 >
-                  <span>Go to Dashboard</span>
+                  <span>Go to Chat</span>
                   <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M7.5 15L12.5 10L7.5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
@@ -372,7 +372,7 @@ export default function Landing() {
             <div className="footer-section">
               <h4>Product</h4>
               <ul>
-                <li><a onClick={() => navigate('/dashboard')}>Dashboard</a></li>
+                <li><a onClick={() => navigate('/happy')}>Chat</a></li>
                 <li><a onClick={() => navigate('/billing')}>Pricing</a></li>
                 <li><a href="https://chromewebstore.google.com" target="_blank" rel="noopener noreferrer">Chrome Extension</a></li>
               </ul>

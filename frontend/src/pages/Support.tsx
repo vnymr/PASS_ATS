@@ -107,7 +107,7 @@ export default function Support() {
         },
         {
           q: "Why is authentication failing in the extension?",
-          a: "Go to happyresumes.com/dashboard, sign in, and wait 5 seconds for the sync. Then click the extension icon and click 'Check Connection'. If it still fails, sign out and sign back in."
+          a: "Go to happyresumes.com/happy, sign in, and wait 5 seconds for the sync. Then click the extension icon and click 'Check Connection'. If it still fails, sign out and sign back in."
         }
       ]
     },
@@ -174,7 +174,7 @@ export default function Support() {
         <section className="quick-links-section">
           <div className="container">
             <div className="quick-links-grid">
-              <div className="quick-link-card" onClick={() => navigate('/dashboard')}>
+              <div className="quick-link-card" onClick={() => navigate('/happy')}>
                 <div className="quick-link-icon">
                   <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
                     <path d="M13 2L3 14H12L11 22L21 10H12L13 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -320,7 +320,7 @@ export default function Support() {
             <div className="footer-section">
               <h4>Product</h4>
               <ul>
-                <li><a onClick={() => navigate('/dashboard')}>Dashboard</a></li>
+                <li><a onClick={() => navigate('/happy')}>Chat</a></li>
                 <li><a onClick={() => navigate('/billing')}>Pricing</a></li>
                 <li><a href="https://chromewebstore.google.com" target="_blank" rel="noopener noreferrer">Chrome Extension</a></li>
               </ul>
