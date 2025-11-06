@@ -1,0 +1,136 @@
+{
+  "metadata": {
+    "url": "https://job-boards.greenhouse.io/nubank/jobs/7345028",
+    "domain": "job-boards.greenhouse.io",
+    "company": "Not found",
+    "jobTitle": "Customer Excellence Analyst",
+    "timestamp": "2025-11-06T06:05:12.971Z",
+    "success": true
+  },
+  "formStructure": {
+    "totalFields": 28,
+    "fieldTypes": {
+      "text": 25,
+      "tel": 1,
+      "file": 2
+    },
+    "requiredFields": [
+      {
+        "name": "unnamed_12",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_14",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_16",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_18",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_20",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_22",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_24",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_26",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_28",
+        "type": "text",
+        "label": "Select..."
+      }
+    ]
+  },
+  "aiResponses": {
+    "first_name": "Sarah",
+    "last_name": "Martinez",
+    "preferred_name": "Sarah",
+    "email": "sarah.martinez@example.com",
+    "country": "United States",
+    "phone": "+1 (555) 345-6789",
+    "resume": "Sarah_Martinez_Resume.pdf",
+    "cover_letter": "Sarah_Martinez_Cover_Letter.pdf",
+    "question_61001433": "https://linkedin.com/in/sarahmartinez",
+    "question_61001434": "https://sarahmartinez.dev",
+    "question_61001435": "Austin, TX",
+    "unnamed_12": "United States",
+    "question_61004368": "Fluent",
+    "unnamed_14": "Fluent",
+    "question_61004369": "COP 60,000,000 per year (negotiable based on total compensation and benefits)",
+    "unnamed_16": "COP 60,000,000 per year",
+    "question_61004370": "No",
+    "unnamed_18": "No",
+    "question_61004371": "Yes",
+    "unnamed_20": "Yes",
+    "question_61004372": "Yes",
+    "unnamed_22": "Yes",
+    "question_61004373": "United States",
+    "unnamed_24": "United States",
+    "question_61004374": "Bachelor's degree",
+    "unnamed_26": "Bachelor's degree",
+    "question_61004375": "Yes. As a Senior Software Engineer at TechCorp (2020–present) and previously at StartupXYZ (2018–2020), I regularly worked shoulder-to-shoulder with customer support and client success teams to resolve customer issues across email, chat, and phone. I took the lead on technical escalations, translating complex technical root causes into clear, empathetic communications for non-technical customers and stakeholders. For example, I coordinated cross-functional incident responses that included direct email follow-ups to affected customers and synchronous calls with enterprise clients to ensure timely resolution and retain trust.\n\nI’ve also built tooling and processes that directly improved customer-facing support. At TechCorp I developed internal diagnostics and dashboards that allowed support agents to identify the most common causes of user-reported errors, reducing the time-to-first-response and enabling support to resolve more queries without engineering intervention. At StartupXYZ I worked on a customer feedback ingestion pipeline that surfaced repeat issues to product and engineering, enabling prioritized fixes and clearer knowledge-base content for support agents.\n\nThese experiences gave me hands-on practice in the channels you call out (email, telephone, chat) and taught me how to combine technical troubleshooting with empathy and clear communication. I enjoy mentoring support colleagues on technical topics, creating reproducible steps to diagnose issues, and continuously improving contact-center efficiency through automation and better tooling. I’m excited about the Customer Excellence Analyst role because it combines customer empathy with data-driven process improvement — areas where I have demonstrable impact and enthusiasm.",
+    "unnamed_28": "Yes"
+  },
+  "problemsSolved": [
+    {
+      "problem": "Failed to fill resume: No resume file available - user must generate a resume before applying to jobs",
+      "solution": {
+        "issue": "Failed to analyze screenshot",
+        "solution": "Manual intervention required",
+        "needsManualIntervention": true
+      },
+      "timestamp": "2025-11-06T06:05:12.971Z"
+    },
+    {
+      "problem": "Failed to fill cover_letter: No resume file available - user must generate a resume before applying to jobs",
+      "timestamp": "2025-11-06T06:05:12.971Z"
+    }
+  ],
+  "patterns": {
+    "commonQuestions": [
+      {
+        "label": "What is your salary expectation? *",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What's your nationality?*",
+        "type": "text",
+        "category": "other"
+      }
+    ],
+    "fieldNamingConventions": {
+      "camelCase": 0,
+      "snake_case": 24,
+      "kebabCase": 0,
+      "standard": 4
+    },
+    "formLayout": {
+      "totalFields": 28,
+      "visibleFields": 28,
+      "requiredFields": 9,
+      "optionalFields": 19
+    }
+  }
+}

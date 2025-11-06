@@ -1,0 +1,136 @@
+{
+  "metadata": {
+    "url": "https://job-boards.greenhouse.io/nubank/jobs/7345028",
+    "domain": "job-boards.greenhouse.io",
+    "company": "Not found",
+    "jobTitle": "Customer Excellence Analyst",
+    "timestamp": "2025-11-06T06:08:30.124Z",
+    "success": true
+  },
+  "formStructure": {
+    "totalFields": 28,
+    "fieldTypes": {
+      "text": 25,
+      "tel": 1,
+      "file": 2
+    },
+    "requiredFields": [
+      {
+        "name": "unnamed_12",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_14",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_16",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_18",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_20",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_22",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_24",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_26",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_28",
+        "type": "text",
+        "label": "Select..."
+      }
+    ]
+  },
+  "aiResponses": {
+    "first_name": "Sarah",
+    "last_name": "Martinez",
+    "preferred_name": "Sarah",
+    "email": "sarah.martinez@example.com",
+    "country": "United States",
+    "phone": "+1 (555) 345-6789",
+    "resume": "Sarah_Martinez_Resume.pdf",
+    "cover_letter": "Sarah_Martinez_CoverLetter_Customer_Excellence_Analyst.pdf",
+    "question_61001433": "https://linkedin.com/in/sarahmartinez",
+    "question_61001434": "https://sarahmartinez.dev",
+    "question_61001435": "Austin, TX, USA",
+    "unnamed_12": "No",
+    "question_61004368": "fluent",
+    "unnamed_14": "Full-time",
+    "question_61004369": "USD 80,000 annually (open to discussion based on total compensation and benefits)",
+    "unnamed_16": "No preference",
+    "question_61004370": "No",
+    "unnamed_18": "Yes",
+    "question_61004371": "Yes",
+    "unnamed_20": "Yes",
+    "question_61004372": "Yes",
+    "unnamed_22": "United States",
+    "question_61004373": "United States",
+    "unnamed_24": "Bachelor's degree",
+    "question_61004374": "Bachelor's degree",
+    "unnamed_26": "Yes",
+    "question_61004375": "I have direct experience collaborating closely with customer-facing teams and communicating with customers across channels such as email and chat. As a Senior Software Engineer at TechCorp, I regularly partnered with support and account teams to triage customer-reported issues, reproduce problems, and communicate timely technical explanations and workarounds. In several incidents I owned the technical investigation and then drafted clear, empathetic responses for customers and internal stakeholders, helping reduce escalation time and improving customer satisfaction.\n\nBeyond incident response, I have driven initiatives that improved the customer experience indirectly but substantially—building diagnostic tooling, automating common support tasks, and improving internal documentation so support agents could resolve issues faster over chat and email. For example, I led a project to build an internal incident triage dashboard that reduced mean time to acknowledge and resolved repeat customer issues 30% faster, leading to fewer follow-ups and higher NPS in affected accounts.\n\nI bring a customer-first mindset to engineering: I focus on clear, empathetic communication, reliable technical solutions, and cross-team collaboration to ensure customer issues are resolved quickly and transparently. I’m excited about the Customer Excellence Analyst role because it blends my technical problem-solving experience with my passion for delivering exceptional, human-centered customer experiences.",
+    "unnamed_28": "1-3 years"
+  },
+  "problemsSolved": [
+    {
+      "problem": "Failed to fill resume: No resume file available - user must generate a resume before applying to jobs",
+      "solution": {
+        "issue": "Failed to analyze screenshot",
+        "solution": "Manual intervention required",
+        "needsManualIntervention": true
+      },
+      "timestamp": "2025-11-06T06:08:30.125Z"
+    },
+    {
+      "problem": "Failed to fill cover_letter: No resume file available - user must generate a resume before applying to jobs",
+      "timestamp": "2025-11-06T06:08:30.125Z"
+    }
+  ],
+  "patterns": {
+    "commonQuestions": [
+      {
+        "label": "What is your salary expectation? *",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What's your nationality?*",
+        "type": "text",
+        "category": "other"
+      }
+    ],
+    "fieldNamingConventions": {
+      "camelCase": 0,
+      "snake_case": 24,
+      "kebabCase": 0,
+      "standard": 4
+    },
+    "formLayout": {
+      "totalFields": 28,
+      "visibleFields": 28,
+      "requiredFields": 9,
+      "optionalFields": 19
+    }
+  }
+}

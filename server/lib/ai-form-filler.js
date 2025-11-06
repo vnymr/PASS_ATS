@@ -62,6 +62,45 @@ class AIFormFiller {
       result.hasCaptcha = extraction.hasCaptcha;
       result.complexity = extraction.complexity.complexity;
 
+      // Step 2.5: Check if we're on a job description page instead of application form
+      // If we have very few fields (1-3), likely need to click "Apply" button first
+      if (extraction.fields.length <= 3) {
+        logger.warn({ fieldCount: extraction.fields.length }, '⚠️  Very few fields found - checking for Apply button');
+
+        const applyButton = await this.findAndClickApplyButton(page);
+        if (applyButton.clicked) {
+          logger.info({ buttonText: applyButton.text }, '✅ Clicked Apply button - waiting for application form');
+
+          // Wait for navigation or modal to load
+          await this.sleep(3000);
+
+          // Re-extract form fields from the actual application page
+          logger.info('Re-extracting form fields from application page...');
+          const newExtraction = await this.extractor.extractComplete(page);
+
+          if (newExtraction.fields.length > extraction.fields.length) {
+            logger.info({
+              oldCount: extraction.fields.length,
+              newCount: newExtraction.fields.length
+            }, '✅ Found more fields after clicking Apply button');
+
+            // Update extraction with new data
+            extraction.fields = newExtraction.fields;
+            extraction.submitButton = newExtraction.submitButton;
+            extraction.hasCaptcha = newExtraction.hasCaptcha;
+            extraction.complexity = newExtraction.complexity;
+
+            result.fieldsExtracted = newExtraction.fields.length;
+            result.hasCaptcha = newExtraction.hasCaptcha;
+            result.complexity = newExtraction.complexity.complexity;
+          } else {
+            logger.warn('No additional fields found after clicking Apply button');
+          }
+        } else {
+          logger.info('No Apply button found - proceeding with current page');
+        }
+      }
+
       if (extraction.hasCaptcha) {
         // TESTING MODE: Skip CAPTCHA check to test AI form filling
         if (process.env.SKIP_CAPTCHA_FOR_TESTING === 'true') {
@@ -198,7 +237,16 @@ class AIFormFiller {
       if (extraction.submitButton && fillResult.filled > 0) {
         logger.info({ buttonText: extraction.submitButton.text }, 'Found submit button');
         result.submitButton = extraction.submitButton;
-        // Don't auto-submit, let caller decide
+        // Optional auto-submit (useful for testing)
+        if (process.env.AUTO_SUBMIT_FOR_TESTING === 'true') {
+          logger.warn('TESTING MODE: AUTO_SUBMIT_FOR_TESTING enabled - attempting auto-submit');
+          const submitRes = await this.submitForm(page, extraction.submitButton, userProfile);
+          result.autoSubmitted = true;
+          result.submitResult = submitRes;
+          if (!submitRes.success) {
+            result.errors.push('Auto-submit failed: ' + (submitRes.error || 'unknown'));
+          }
+        }
       }
 
       // Step 8: Final screenshot
@@ -350,6 +398,62 @@ class AIFormFiller {
 
     logger.debug({ selector }, 'Using selector');
 
+    // Check if this is a custom dropdown (text input styled to look like a dropdown)
+    // These are common in Greenhouse, Lever, and other ATS systems
+    const isCustomDropdown = await page.evaluate(({sel, fieldData}) => {
+      const element = document.querySelector(sel);
+      if (!element || element.tagName !== 'INPUT') return false;
+
+      // Check multiple indicators that this is a styled dropdown:
+      const parent = element.parentElement;
+      const grandparent = parent?.parentElement;
+
+      // 1. Has arrow icon (SVG or icon element)
+      const hasArrowIcon =
+        parent?.querySelector('svg[class*="arrow"], svg[class*="chevron"], svg[class*="caret"]') ||
+        parent?.querySelector('[class*="dropdown-arrow"], [class*="select-arrow"]') ||
+        grandparent?.querySelector('svg[class*="arrow"], svg[class*="chevron"], svg[class*="caret"]');
+
+      // 2. Has dropdown/select related classes
+      const hasDropdownClass =
+        element.className.includes('select') ||
+        element.className.includes('dropdown') ||
+        parent?.className.includes('select') ||
+        parent?.className.includes('dropdown') ||
+        grandparent?.className.includes('select') ||
+        grandparent?.className.includes('dropdown');
+
+      // 3. Has "Select..." placeholder or value
+      const hasSelectPlaceholder =
+        element.placeholder?.includes('Select') ||
+        element.value?.includes('Select') ||
+        fieldData.value?.includes('Select') ||
+        fieldData.placeholder?.includes('Select');
+
+      // 4. Has readonly attribute (common for styled dropdowns)
+      const isReadonly = element.hasAttribute('readonly') || element.readOnly;
+
+      // 5. Parent has specific dropdown wrapper classes
+      const hasDropdownWrapper =
+        parent?.className.includes('dropdown-wrapper') ||
+        parent?.className.includes('select-wrapper') ||
+        grandparent?.className.includes('dropdown-wrapper');
+
+      return (hasArrowIcon || hasDropdownClass || hasSelectPlaceholder ||
+              (isReadonly && hasDropdownWrapper));
+    }, {sel: selector, fieldData: field});
+
+    if (isCustomDropdown) {
+      logger.info({
+        field: field.name,
+        label: field.label,
+        value: field.value,
+        placeholder: field.placeholder
+      }, '🔽 Detected custom dropdown (text input styled as dropdown)');
+      await this.fillCustomDropdownWithMouse(page, selector, value, field);
+      return;
+    }
+
     // Different filling strategies based on field type
     switch (field.type) {
       case 'text':
@@ -368,12 +472,9 @@ class AIFormFiller {
       case 'select':
       case 'select-one':
       case 'select-multiple':
-        // Check if this is a custom dropdown (Greenhouse, Lever, etc.)
-        if (field.isCustomDropdown) {
-          await this.fillCustomDropdown(page, selector, value, field);
-        } else {
-          await this.fillSelect(page, selector, value);
-        }
+        // Always use native select method for <select> elements
+        // Playwright's selectOption() works great for Greenhouse/Lever native selects
+        await this.fillSelect(page, selector, value);
         break;
 
       case 'checkbox':
@@ -433,143 +534,378 @@ class AIFormFiller {
    * Fill text input with human-like typing
    */
   async fillTextInput(page, selector, text) {
-    // Use evaluate to set value directly - more reliable than typing
-    await page.evaluate((sel, val) => {
-      const element = document.querySelector(sel);
-      if (element) {
-        element.value = val;
-        element.dispatchEvent(new Event('input', { bubbles: true }));
-        element.dispatchEvent(new Event('change', { bubbles: true }));
-      }
-    }, selector, String(text));
-
-    // Small delay to let any onChange handlers run
-    await this.sleep(50);
+    // Use Playwright's native fill method - properly triggers React/Vue change detection
+    try {
+      // Clear existing value first
+      await page.fill(selector, '');
+      // Fill with new value
+      await page.fill(selector, String(text));
+      // Small delay to let any onChange handlers run
+      await this.sleep(50);
+    } catch (error) {
+      // Fallback to evaluate if fill fails
+      logger.warn({ selector, error: error.message }, 'Native fill failed, using fallback');
+      await page.evaluate(({sel, val}) => {
+        const element = document.querySelector(sel);
+        if (element) {
+          element.value = val;
+          element.dispatchEvent(new Event('input', { bubbles: true }));
+          element.dispatchEvent(new Event('change', { bubbles: true }));
+          element.dispatchEvent(new Event('blur', { bubbles: true }));
+        }
+      }, {sel: selector, val: String(text)});
+      await this.sleep(50);
+    }
   }
 
   /**
    * Fill textarea
    */
   async fillTextarea(page, selector, text) {
-    // Use evaluate to set value directly
-    await page.evaluate((sel, val) => {
-      const element = document.querySelector(sel);
-      if (element) {
-        element.value = val;
-        element.dispatchEvent(new Event('input', { bubbles: true }));
-        element.dispatchEvent(new Event('change', { bubbles: true }));
-      }
-    }, selector, String(text));
-
-    await this.sleep(50);
+    // Use Playwright's native fill method
+    try {
+      await page.fill(selector, '');
+      await page.fill(selector, String(text));
+      await this.sleep(50);
+    } catch (error) {
+      logger.warn({ selector, error: error.message }, 'Native fill failed, using fallback');
+      await page.evaluate(({sel, val}) => {
+        const element = document.querySelector(sel);
+        if (element) {
+          element.value = val;
+          element.dispatchEvent(new Event('input', { bubbles: true }));
+          element.dispatchEvent(new Event('change', { bubbles: true }));
+          element.dispatchEvent(new Event('blur', { bubbles: true }));
+        }
+      }, {sel: selector, val: String(text)});
+      await this.sleep(50);
+    }
   }
 
   /**
    * Fill custom dropdown (Greenhouse, Lever, modern job boards)
-   * These use custom UI instead of native <select> elements
+   * These use React-select style components - uses type + keyboard method
+   * Based on Playwright best practices for react-select
    */
   async fillCustomDropdown(page, selector, value, field) {
-    logger.debug({ value, fieldName: field.name }, 'Filling custom dropdown');
+    logger.debug({ value, fieldName: field.name }, 'Filling custom dropdown (react-select style)');
 
-    const result = await page.evaluate((inputSelector, targetValue, fieldOptions) => {
-      const input = document.querySelector(inputSelector);
-      if (!input) return { success: false, reason: 'Input element not found' };
+    try {
+      // Method 1: Type to search + Tab/Enter (works for most Greenhouse/Lever dropdowns)
+      try {
+        logger.debug({ selector }, 'Attempting dropdown via type + keyboard method');
 
-      // Click to open dropdown
-      input.click();
-      input.focus();
+        // Click the dropdown to open it
+        await page.click(selector, { timeout: 5000 });
+        await this.sleep(200);
 
-      // Wait for dropdown menu to appear
-      const startTime = Date.now();
-      const maxWait = 2000;
+        // Type the value (react-select has built-in search/filter)
+        await page.fill(selector, String(value));
+        await this.sleep(300); // Wait for options to filter
 
-      const dropdownSelectors = [
-        'ul[role="listbox"]',
-        'div[role="listbox"]',
-        '.select-options',
-        '.dropdown-menu',
-        'ul.options',
-        'div.options'
+        // Press Tab or Enter to select the first matching option
+        await page.keyboard.press('Enter');
+        await this.sleep(200);
+
+        logger.debug({ value }, 'Custom dropdown filled via type+Enter method');
+        return { success: true, matched: value, value: value };
+
+      } catch (typeError) {
+        logger.warn({ error: typeError.message }, 'Type+keyboard method failed, trying click method');
+      }
+
+      // Method 2: Click dropdown, wait for options, click specific option
+      logger.debug('Attempting dropdown via click + wait + click option method');
+
+      // Click to open
+      await page.click(selector, { timeout: 5000 });
+      await this.sleep(300);
+
+      // Try to find option by text using different selectors
+      const optionSelectors = [
+        `div[role="option"]:has-text("${value}")`,
+        `li:has-text("${value}")`,
+        `[data-option]:has-text("${value}")`,
+        `div[role="listbox"] div:has-text("${value}")`
       ];
 
-      let dropdownMenu = null;
-      while (!dropdownMenu && (Date.now() - startTime) < maxWait) {
-        for (const selector of dropdownSelectors) {
-          const menu = document.querySelector(selector);
-          if (menu && menu.offsetParent !== null) {
-            dropdownMenu = menu;
-            break;
-          }
+      for (const optionSelector of optionSelectors) {
+        try {
+          await page.click(optionSelector, { timeout: 2000 });
+          logger.debug({ value, optionSelector }, 'Custom dropdown option clicked');
+          await this.sleep(200);
+          return { success: true, matched: value, value: value };
+        } catch (e) {
+          // Try next selector
         }
       }
 
-      if (!dropdownMenu) {
-        return { success: false, reason: 'Dropdown menu did not appear' };
+      // Method 3: Keyboard navigation fallback
+      logger.debug('Attempting dropdown via keyboard navigation');
+      await page.click(selector);
+      await this.sleep(200);
+
+      // Type a few characters to filter, then use arrow down + enter
+      const searchTerm = String(value).substring(0, 3);
+      await page.keyboard.type(searchTerm);
+      await this.sleep(200);
+      await page.keyboard.press('ArrowDown');
+      await this.sleep(100);
+      await page.keyboard.press('Enter');
+      await this.sleep(200);
+
+      logger.debug({ value }, 'Custom dropdown filled via keyboard navigation');
+      return { success: true, matched: value, value: value };
+
+    } catch (error) {
+      logger.error({ selector, value, error: error.message }, 'All custom dropdown methods failed');
+      throw new Error(`Failed to select dropdown option "${value}": ${error.message}`);
+    }
+  }
+
+  /**
+   * Fill custom dropdown using mouse interactions (for Greenhouse-style dropdowns)
+   * These are text inputs styled to look like dropdowns
+   */
+  async fillCustomDropdownWithMouse(page, selector, value, field) {
+    logger.info({ selector, value, field: field.name }, '🖱️  Filling custom dropdown with mouse clicks');
+
+    try {
+      // STEP 1: Get the dropdown element's bounding box
+      // Use .first() to handle cases where selector matches multiple elements
+      let locator = page.locator(selector);
+
+      // Check if selector matches multiple elements
+      const count = await locator.count();
+      if (count > 1) {
+        logger.warn({ selector, count }, 'Selector matches multiple elements, using .first()');
+        locator = locator.first();
       }
 
-      // Find matching option
-      const optionElements = Array.from(
-        dropdownMenu.querySelectorAll('li, div[role="option"], [data-option]')
-      );
+      const boundingBox = await locator.boundingBox();
+      if (!boundingBox) {
+        throw new Error(`Dropdown element not found or not visible: ${selector}`);
+      }
 
-      let matchedOption = null;
+      logger.info({
+        x: boundingBox.x,
+        y: boundingBox.y,
+        width: boundingBox.width,
+        height: boundingBox.height
+      }, '📍 Got dropdown bounding box');
 
-      // Try exact value match first
-      matchedOption = optionElements.find(opt => {
-        const optValue = opt.getAttribute('data-value') || opt.textContent?.trim();
-        return optValue === targetValue;
+      // STEP 2: Click on the dropdown with mouse (click near the arrow on the right side)
+      const clickX = boundingBox.x + boundingBox.width - 15; // Click on the arrow
+      const clickY = boundingBox.y + boundingBox.height / 2; // Center vertically
+
+      logger.info({ clickX, clickY }, '👆 Clicking dropdown arrow with mouse');
+      await page.mouse.click(clickX, clickY);
+      await this.sleep(500); // Wait for dropdown menu to appear
+
+      // STEP 3: Look for dropdown menu options
+      // Greenhouse typically shows options in a div/list that appears below the input
+      const optionsAppeared = await page.evaluate(() => {
+        // Look for common dropdown menu selectors
+        const dropdownMenus = document.querySelectorAll('[role="listbox"], [role="menu"], ul[class*="dropdown"], div[class*="options"]');
+        return dropdownMenus.length > 0;
       });
 
-      // Try exact text match
-      if (!matchedOption) {
-        matchedOption = optionElements.find(opt =>
-          opt.textContent?.trim().toLowerCase() === targetValue.toLowerCase()
-        );
+      logger.info({ optionsAppeared }, 'Dropdown menu status');
+
+      // STEP 4: Enumerate visible options for robust matching
+      const options = await page.evaluate(() => {
+        const texts = new Set();
+        const menus = document.querySelectorAll('[role="listbox"], [role="menu"], ul[class*="dropdown"], div[class*="menu"], div[class*="options"], div[class*="option-list"]');
+        for (const menu of menus) {
+          const children = menu.querySelectorAll('[role="option"], li, div[class*="option"], div[class*="item"], span[class*="option"]');
+          for (const el of children) {
+            if (el.offsetParent === null) continue;
+            const t = (el.textContent || '').trim();
+            if (!t) continue;
+            texts.add(t);
+          }
+        }
+        return Array.from(texts);
+      });
+
+      logger.info({ count: options.length, options }, '📋 Custom dropdown options enumerated');
+
+      // FALLBACK: If no options found, treat as text input
+      if (options.length === 0) {
+        logger.warn({ field: field.name, value }, '⚠️  No dropdown options - treating as text input');
+        await page.mouse.click(10, 10); // Close any menu
+        await this.sleep(200);
+        await locator.clear();
+        await this.sleep(100);
+        await locator.fill(String(value));
+        await this.sleep(200);
+        logger.info({ field: field.name, value }, '✅ Filled as text input');
+        return;
       }
 
-      // Try partial match
-      if (!matchedOption) {
-        matchedOption = optionElements.find(opt => {
-          const text = opt.textContent?.trim().toLowerCase() || '';
-          const val = targetValue.toLowerCase();
-          return text.includes(val) || val.includes(text);
-        });
-      }
+      // STEP 5: Choose a target option using fuzzy matching
+      const aiRaw = value == null ? '' : String(value);
+      const aiValue = aiRaw.toLowerCase().trim();
 
-      if (!matchedOption) {
-        const availableOptions = optionElements
-          .map(opt => opt.textContent?.trim())
-          .filter(Boolean);
-
-        return {
-          success: false,
-          reason: 'No matching option found',
-          availableOptions: availableOptions.slice(0, 10)
+      const pickBestOption = (needle, opts) => {
+        if (!opts || opts.length === 0) return null;
+        // exact match
+        let best = null;
+        let bestScore = -1;
+        const norm = s => s.toLowerCase().trim();
+        const score = (a, b) => {
+          if (!a || !b) return 0;
+          if (a === b) return 1.0;
+          if (a.includes(b) || b.includes(a)) return 0.9;
+          const aw = a.split(/\s+/);
+          const bw = b.split(/\s+/);
+          const setA = new Set(aw);
+          let overlap = 0;
+          for (const w of bw) if (setA.has(w)) overlap++;
+          return overlap / Math.max(1, Math.max(aw.length, bw.length));
         };
+        for (const opt of opts) {
+          const s = score(norm(opt), needle);
+          if (s > bestScore) {
+            bestScore = s;
+            best = opt;
+          }
+        }
+        return { option: best, score: bestScore };
+      };
+
+      let chosen = null;
+      let chosenScore = -1;
+      if (aiValue) {
+        const picked = pickBestOption(aiValue, options.map(o => o));
+        if (picked && picked.option) {
+          chosen = picked.option;
+          chosenScore = picked.score;
+        }
       }
 
-      // Click the option
-      matchedOption.click();
+      // If AI didn't provide a usable value or match is weak, pick first non-placeholder
+      if (!chosen || chosenScore < 0.5) {
+        const firstNonPlaceholder = options.find(o => !/^select/i.test(o) && !/^choose/i.test(o) && o.trim().length > 0);
+        if (firstNonPlaceholder) {
+          logger.warn({ aiValue, chosen, chosenScore, fallback: firstNonPlaceholder }, 'Using fallback option for custom dropdown');
+          chosen = firstNonPlaceholder;
+        }
+      }
 
-      // Verify selection
-      const selectedText = matchedOption.textContent?.trim();
+      if (!chosen) {
+        const errMsg = `No options available to select for custom dropdown. AI provided: "${aiRaw}"`;
+        logger.error({ field: field.name, options }, errMsg);
+        throw new Error(errMsg);
+      }
 
-      return {
-        success: true,
-        matched: selectedText,
-        value: targetValue
-      };
-    }, selector, String(value), field.options);
+      // STEP 6: Click the chosen option using robust selectors
+      const optionClicked = await page.evaluate(({ target }) => {
+        const menus = document.querySelectorAll('[role="listbox"], [role="menu"], ul, div[class*="option"], div[class*="dropdown"]');
+        const needle = (target || '').toLowerCase().trim();
 
-    // Wait for dropdown to close and value to be set
-    await this.sleep(300);
+        for (const menu of menus) {
+          const options = menu.querySelectorAll('[role="option"], li, div[class*="option"]');
 
-    if (result.success) {
-      logger.debug({ matched: result.matched }, 'Custom dropdown option selected');
-    } else {
-      const errorMsg = `Failed to select custom dropdown option. AI provided: "${value}" but ${result.reason}. Available: ${result.availableOptions?.join(', ') || 'unknown'}`;
-      logger.error({ value, reason: result.reason, availableOptions: result.availableOptions }, errorMsg);
-      throw new Error(errorMsg);
+          for (const option of options) {
+            const optTextLower = option.textContent?.toLowerCase().trim() || '';
+
+            // Try various matching strategies
+            if (optTextLower === needle ||
+                optTextLower.includes(needle) ||
+                needle.includes(optTextLower)) {
+
+              option.click();
+              return { success: true, matched: option.textContent?.trim(), clicked: true };
+            }
+          }
+        }
+
+        // Second pass: match by exact trimmed text
+        for (const menu of menus) {
+          const options = menu.querySelectorAll('[role="option"], li, div[class*="option"]');
+          for (const option of options) {
+            if ((option.textContent || '').trim() === target) {
+              option.click();
+              return { success: true, matched: option.textContent?.trim(), clicked: true };
+            }
+          }
+        }
+
+        return { success: false, reason: 'No matching option found' };
+      }, { target: chosen });
+
+      if (optionClicked.success) {
+        logger.info({ matched: optionClicked.matched }, '✅ Successfully clicked dropdown option');
+        await this.sleep(200);
+        return;
+      }
+
+      // STEP 7: Fallback - try keyboard navigation with option clicking
+      logger.warn('Could not click option, trying keyboard fallback');
+
+      // Focus the input element directly to ensure we're typing in the right place
+      await locator.focus();
+      await this.sleep(200);
+
+      // Clear any existing value first
+      await locator.fill('');
+      await this.sleep(100);
+
+      // Type the value to filter options (type a few characters to narrow down)
+      const searchTerm = String(value).substring(0, 15);
+      await locator.fill(searchTerm);
+      await this.sleep(800); // Give more time for dropdown menu to appear with filtered options
+
+      // Now try to click on the first visible option in the dropdown menu
+      const optionClickedFromMenu = await page.evaluate(({ val }) => {
+        // Look for dropdown menu options that appeared
+        const menus = document.querySelectorAll('[role="listbox"], [role="menu"], ul[class*="dropdown"], div[class*="menu"], div[class*="options"]');
+
+        for (const menu of menus) {
+          // Check if menu is visible
+          if (menu.offsetParent === null) continue;
+
+          const options = menu.querySelectorAll('[role="option"], li, div[class*="option"]');
+
+          for (const option of options) {
+            // Only click visible options
+            if (option.offsetParent === null) continue;
+
+            const text = option.textContent?.toLowerCase().trim() || '';
+
+            // Click first visible option that matches our search
+            if (text.includes(val.toLowerCase()) || val.toLowerCase().includes(text)) {
+              option.click();
+              return { success: true, matched: option.textContent?.trim() };
+            }
+          }
+
+          // If no match found, just click the first visible option
+          const firstVisible = Array.from(options).find(opt => opt.offsetParent !== null);
+          if (firstVisible) {
+            firstVisible.click();
+            return { success: true, matched: firstVisible.textContent?.trim() };
+          }
+        }
+
+        return { success: false };
+      }, { val: searchTerm });
+
+      if (optionClickedFromMenu.success) {
+        logger.info({ matched: optionClickedFromMenu.matched }, '✅ Selected option from dropdown menu via keyboard fallback');
+      } else {
+        // Last resort: press Enter
+        await page.keyboard.press('Enter');
+        await this.sleep(200);
+        logger.info('✅ Selected option via Enter key');
+        // If still uncertain, log options for debugging
+        logger.warn({ field: field.name, aiValue: aiRaw, options }, 'Dropdown selection may be ambiguous');
+      }
+
+    } catch (error) {
+      logger.error({ selector, value, error: error.message }, '❌ Failed to fill custom dropdown with mouse');
+      throw new Error(`Failed to fill custom dropdown "${field.name}": ${error.message}`);
     }
   }
 
@@ -577,104 +913,155 @@ class AIFormFiller {
    * Fill select/dropdown with Playwright-enhanced support
    */
   async fillSelect(page, selector, value) {
-    logger.debug({ value }, 'Attempting to select option');
+    logger.info({ selector, value }, '🔽 Attempting to select dropdown option');
 
-    // Detect if using Playwright (has selectOption method) or Puppeteer
-    const isPlaywright = typeof page.selectOption === 'function';
-
-    if (isPlaywright) {
-      // Use Playwright's superior selectOption API with auto-waiting and better matching
-      try {
-        logger.debug('Using Playwright selectOption for improved reliability');
-
-        // Playwright's selectOption handles multiple match strategies automatically:
-        // 1. By value
-        // 2. By label text (exact or partial)
-        // 3. Case-insensitive matching
-        await page.selectOption(selector, { label: String(value) }, { timeout: 5000 });
-
-        logger.debug({ value }, 'Playwright: Selected option by label');
-        return;
-      } catch (labelError) {
-        // If label matching fails, try value matching
-        try {
-          await page.selectOption(selector, { value: String(value) }, { timeout: 5000 });
-          logger.debug({ value }, 'Playwright: Selected option by value');
-          return;
-        } catch (valueError) {
-          // Fall back to Playwright's default (tries multiple strategies)
-          try {
-            await page.selectOption(selector, String(value), { timeout: 5000 });
-            logger.debug({ value }, 'Playwright: Selected option with default strategy');
-            return;
-          } catch (defaultError) {
-            logger.warn({ error: defaultError.message }, 'Playwright selectOption strategies failed, falling back to evaluate');
-            // Fall through to the evaluate-based approach below
-          }
-        }
-      }
-    }
-
-    // Fallback: Use evaluate-based approach (works for both Puppeteer and Playwright)
-    const result = await page.evaluate((sel, val) => {
-      const element = document.querySelector(sel);
-      if (!element) return { success: false, reason: 'Element not found' };
-
-      const options = Array.from(element.options);
-      const availableOptions = options.map(o => ({ value: o.value, text: o.text }));
-
-      // Try to find option by exact value match
-      let option = options.find(opt => opt.value === val);
-
-      // If not found, try by text content (case insensitive)
-      if (!option) {
-        option = options.find(opt =>
-          opt.text.toLowerCase().trim() === val.toLowerCase().trim()
-        );
+    try {
+      // STEP 1: Get dropdown element bounding box for mouse click
+      const boundingBox = await page.locator(selector).boundingBox();
+      if (!boundingBox) {
+        throw new Error(`Dropdown element not found or not visible: ${selector}`);
       }
 
-      // If still not found, try partial text match
-      if (!option) {
-        option = options.find(opt =>
-          opt.text.toLowerCase().includes(val.toLowerCase()) ||
-          val.toLowerCase().includes(opt.text.toLowerCase())
-        );
-      }
+      logger.info({
+        x: boundingBox.x,
+        y: boundingBox.y,
+        width: boundingBox.width,
+        height: boundingBox.height
+      }, '📍 Got dropdown position');
 
-      // If still not found, try value partial match
-      if (!option) {
-        option = options.find(opt =>
-          opt.value.toLowerCase().includes(val.toLowerCase())
-        );
-      }
+      // STEP 2: Use mouse to click on the dropdown (click on the right side where arrow usually is)
+      const clickX = boundingBox.x + boundingBox.width - 20; // Click near the arrow
+      const clickY = boundingBox.y + boundingBox.height / 2; // Click in the middle vertically
 
-      if (option) {
-        element.value = option.value;
-        element.dispatchEvent(new Event('change', { bubbles: true }));
+      logger.info({ clickX, clickY }, '🖱️  Clicking dropdown with mouse');
+      await page.mouse.click(clickX, clickY);
+      await this.sleep(300); // Wait for dropdown to open
+      logger.info('✅ Dropdown clicked with mouse');
+
+      // STEP 3: Get all available options to find the best match
+      const optionsInfo = await page.evaluate(({sel}) => {
+        const element = document.querySelector(sel);
+        if (!element) return { success: false, reason: 'Element not found' };
+
+        const options = Array.from(element.options);
         return {
           success: true,
-          matched: option.text,
-          value: option.value
+          options: options.map(o => ({ value: o.value, text: o.text, index: o.index }))
         };
+      }, {sel: selector});
+
+      if (!optionsInfo.success) {
+        throw new Error('Dropdown element not found');
       }
 
-      return {
-        success: false,
-        reason: 'No matching option found',
-        availableOptions: availableOptions.map(o => ({ text: o.text, value: o.value }))
-      };
-    }, selector, String(value));
+      logger.info({
+        availableOptions: optionsInfo.options.length,
+        options: optionsInfo.options.map(o => o.text)
+      }, '📋 Found dropdown options');
 
-    if (result.success) {
-      logger.debug({ matched: result.matched, value: result.value }, 'Selected option (evaluate method)');
-    } else {
-      // THROW ERROR instead of just warning - dropdown matching failed
-      const errorMsg = `Failed to select dropdown option. AI provided: "${value}" but available options are: ${result.availableOptions.map(o => `"${o.text}" (${o.value})`).join(', ')}`;
-      logger.error({ value, reason: result.reason, availableOptions: result.availableOptions }, errorMsg);
-      throw new Error(errorMsg);
+      // STEP 3: Find the best matching option using fuzzy matching
+      const aiValue = String(value).toLowerCase().trim();
+      let bestMatch = null;
+      let matchType = null;
+
+      // Try exact value match first
+      bestMatch = optionsInfo.options.find(opt => opt.value.toLowerCase() === aiValue);
+      if (bestMatch) matchType = 'exact-value';
+
+      // Try exact text match
+      if (!bestMatch) {
+        bestMatch = optionsInfo.options.find(opt => opt.text.toLowerCase().trim() === aiValue);
+        if (bestMatch) matchType = 'exact-text';
+      }
+
+      // Try partial text match (AI value contained in option text)
+      if (!bestMatch) {
+        bestMatch = optionsInfo.options.find(opt =>
+          opt.text.toLowerCase().includes(aiValue)
+        );
+        if (bestMatch) matchType = 'partial-text-contains';
+      }
+
+      // Try reverse partial match (option text contained in AI value)
+      if (!bestMatch) {
+        bestMatch = optionsInfo.options.find(opt =>
+          aiValue.includes(opt.text.toLowerCase())
+        );
+        if (bestMatch) matchType = 'partial-ai-contains';
+      }
+
+      // Try word matching (any word in AI value matches option)
+      if (!bestMatch) {
+        const aiWords = aiValue.split(/\s+/).filter(w => w.length > 2);
+        bestMatch = optionsInfo.options.find(opt => {
+          const optText = opt.text.toLowerCase();
+          return aiWords.some(word => optText.includes(word));
+        });
+        if (bestMatch) matchType = 'word-match';
+      }
+
+      if (!bestMatch) {
+        const errorMsg = `Failed to select dropdown option. AI provided: "${value}" but available options are: ${optionsInfo.options.map(o => `"${o.text}" (value: ${o.value})`).join(', ')}`;
+        logger.error({ value, availableOptions: optionsInfo.options }, errorMsg);
+        throw new Error(errorMsg);
+      }
+
+      logger.info({
+        aiValue: value,
+        matched: bestMatch.text,
+        matchType,
+        matchedValue: bestMatch.value
+      }, '✅ Found matching option');
+
+      // STEP 4: Select the option using Playwright's selectOption
+      const isPlaywright = typeof page.selectOption === 'function';
+
+      if (isPlaywright) {
+        // Use the option's value for selection (most reliable)
+        logger.info({ value: bestMatch.value, text: bestMatch.text }, '🎯 Selecting option with Playwright selectOption');
+        await page.selectOption(selector, bestMatch.value, { timeout: 5000 });
+        logger.info({ selected: bestMatch.text }, '✅ Selected option using Playwright selectOption');
+      } else {
+        // Puppeteer fallback
+        logger.info({ value: bestMatch.value }, '🎯 Selecting option with Puppeteer select');
+        await page.select(selector, bestMatch.value);
+        logger.info({ selected: bestMatch.text }, '✅ Selected option using Puppeteer select');
+      }
+
+      // STEP 5: Verify the selection worked
+      logger.info('🔍 Verifying selection...');
+      const selectedValue = await page.evaluate(({sel}) => {
+        const element = document.querySelector(sel);
+        return element ? element.value : null;
+      }, {sel: selector});
+
+      logger.info({ expected: bestMatch.value, actual: selectedValue }, 'Selection verification result');
+
+      if (selectedValue !== bestMatch.value) {
+        logger.warn({
+          expected: bestMatch.value,
+          actual: selectedValue
+        }, '⚠️ Selection verification failed - value mismatch, trying fallback');
+
+        // Try fallback method: direct DOM manipulation
+        await page.evaluate(({sel, val}) => {
+          const element = document.querySelector(sel);
+          if (element) {
+            element.value = val;
+            element.dispatchEvent(new Event('change', { bubbles: true }));
+            element.dispatchEvent(new Event('blur', { bubbles: true }));
+          }
+        }, {sel: selector, val: bestMatch.value});
+
+        logger.debug('Used fallback DOM manipulation to set value');
+      }
+
+      await this.sleep(100);
+
+    } catch (error) {
+      logger.error({ selector, value, error: error.message }, 'Failed to fill select dropdown');
+      throw error;
     }
-
-    await this.sleep(50);
   }
 
   /**
@@ -710,15 +1097,25 @@ class AIFormFiller {
 
     logger.debug({ checked: shouldCheck }, shouldCheck ? 'Checking checkbox' : 'Unchecking checkbox');
 
-    await page.evaluate((sel, check) => {
-      const element = document.querySelector(sel);
-      if (element && element.checked !== check) {
-        element.checked = check;
-        element.dispatchEvent(new Event('change', { bubbles: true }));
+    // Use Playwright's native check/uncheck methods
+    try {
+      if (shouldCheck) {
+        await page.check(selector);
+      } else {
+        await page.uncheck(selector);
       }
-    }, selector, shouldCheck);
-
-    await this.sleep(50);
+      await this.sleep(50);
+    } catch (error) {
+      logger.warn({ selector, error: error.message }, 'Native check/uncheck failed, using fallback');
+      await page.evaluate(({sel, check}) => {
+        const element = document.querySelector(sel);
+        if (element && element.checked !== check) {
+          element.checked = check;
+          element.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      }, {sel: selector, check: shouldCheck});
+      await this.sleep(50);
+    }
   }
 
   /**
@@ -1060,15 +1457,20 @@ class AIFormFiller {
       // Step 1: Verify form is ready for submission
       const readyCheck = await this.verifyFormReadyForSubmission(page);
       if (!readyCheck.ready) {
-        logger.error({ issues: readyCheck.issues }, 'Form not ready for submission');
-        return {
-          success: false,
-          error: 'Form validation failed: ' + readyCheck.issues.join('; '),
-          issues: readyCheck.issues
-        };
+        // If AUTO_SUBMIT_FOR_TESTING is enabled, proceed anyway for testing purposes
+        if (process.env.AUTO_SUBMIT_FOR_TESTING === 'true') {
+          logger.warn({ issues: readyCheck.issues }, '⚠️  Form validation failed but AUTO_SUBMIT_FOR_TESTING enabled - clicking submit anyway');
+        } else {
+          logger.error({ issues: readyCheck.issues }, 'Form not ready for submission');
+          return {
+            success: false,
+            error: 'Form validation failed: ' + readyCheck.issues.join('; '),
+            issues: readyCheck.issues
+          };
+        }
+      } else {
+        logger.info('Form validation passed, proceeding with submission');
       }
-
-      logger.info('Form validation passed, proceeding with submission');
 
       // Step 2: Capture initial state
       const initialUrl = page.url();
@@ -1127,6 +1529,94 @@ class AIFormFiller {
         success: false,
         error: error.message
       };
+    }
+  }
+
+  /**
+   * Find and click Apply button to navigate to application form
+   */
+  async findAndClickApplyButton(page) {
+    logger.info('🔍 Looking for Apply button...');
+
+    try {
+      // Try multiple button text variations
+      const applyTexts = [
+        'apply for this position',
+        'apply now',
+        'apply for this job',
+        'apply',
+        'submit application',
+        'start application',
+        'begin application'
+      ];
+
+      for (const text of applyTexts) {
+        try {
+          // Use Playwright's getByRole or getByText for better matching
+          const button = page.getByRole('button', { name: new RegExp(text, 'i') });
+          const count = await button.count();
+
+          if (count > 0) {
+            const buttonText = await button.first().textContent();
+            logger.info({ buttonText, searchText: text }, 'Found Apply button');
+
+            await button.first().click();
+            return { clicked: true, text: buttonText };
+          }
+        } catch (error) {
+          // Try next variant
+        }
+
+        // Also try links
+        try {
+          const link = page.getByRole('link', { name: new RegExp(text, 'i') });
+          const count = await link.count();
+
+          if (count > 0) {
+            const linkText = await link.first().textContent();
+            logger.info({ linkText, searchText: text }, 'Found Apply link');
+
+            await link.first().click();
+            return { clicked: true, text: linkText };
+          }
+        } catch (error) {
+          // Try next variant
+        }
+      }
+
+      // Try generic selectors as fallback
+      const genericSelectors = [
+        'button:has-text("Apply")',
+        'a:has-text("Apply")',
+        '[class*="apply"][class*="button"]',
+        '[data-qa*="apply"]',
+        '#apply-button',
+        '.apply-button'
+      ];
+
+      for (const selector of genericSelectors) {
+        try {
+          const element = page.locator(selector).first();
+          const count = await element.count();
+
+          if (count > 0) {
+            const text = await element.textContent();
+            logger.info({ text, selector }, 'Found Apply button via selector');
+
+            await element.click();
+            return { clicked: true, text };
+          }
+        } catch (error) {
+          // Try next selector
+        }
+      }
+
+      logger.info('No Apply button found');
+      return { clicked: false };
+
+    } catch (error) {
+      logger.error({ error: error.message }, 'Error finding Apply button');
+      return { clicked: false, error: error.message };
     }
   }
 

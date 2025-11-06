@@ -1,0 +1,136 @@
+{
+  "metadata": {
+    "url": "https://job-boards.greenhouse.io/nubank/jobs/7345028",
+    "domain": "job-boards.greenhouse.io",
+    "company": "Not found",
+    "jobTitle": "Customer Excellence Analyst",
+    "timestamp": "2025-11-06T05:43:07.270Z",
+    "success": true
+  },
+  "formStructure": {
+    "totalFields": 28,
+    "fieldTypes": {
+      "text": 25,
+      "tel": 1,
+      "file": 2
+    },
+    "requiredFields": [
+      {
+        "name": "unnamed_12",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_14",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_16",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_18",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_20",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_22",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_24",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_26",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_28",
+        "type": "text",
+        "label": "Select..."
+      }
+    ]
+  },
+  "aiResponses": {
+    "first_name": "Sarah",
+    "last_name": "Martinez",
+    "preferred_name": "Sarah",
+    "email": "sarah.martinez@example.com",
+    "country": "United States",
+    "phone": "+1 (555) 345-6789",
+    "resume": "Sarah_Martinez_Resume.pdf",
+    "cover_letter": "Sarah_Martinez_CoverLetter.pdf",
+    "question_61001433": "https://linkedin.com/in/sarahmartinez",
+    "question_61001434": "https://sarahmartinez.dev",
+    "question_61001435": "Austin, TX, USA",
+    "unnamed_12": "yes",
+    "question_61004368": "fluent",
+    "unnamed_14": "fluent",
+    "question_61004369": "USD 50,000 per year (open to discussion based on local market and total compensation)",
+    "unnamed_16": "USD",
+    "question_61004370": "No",
+    "unnamed_18": "no",
+    "question_61004371": "Yes",
+    "unnamed_20": "yes",
+    "question_61004372": "Yes",
+    "unnamed_22": "yes",
+    "question_61004373": "United States",
+    "unnamed_24": "United States",
+    "question_61004374": "Bachelor's degree",
+    "unnamed_26": "bachelors",
+    "question_61004375": "Yes",
+    "unnamed_28": "yes"
+  },
+  "problemsSolved": [
+    {
+      "problem": "Failed to fill resume: No resume file available - user must generate a resume before applying to jobs",
+      "solution": {
+        "issue": "Failed to analyze screenshot",
+        "solution": "Manual intervention required",
+        "needsManualIntervention": true
+      },
+      "timestamp": "2025-11-06T05:43:07.270Z"
+    },
+    {
+      "problem": "Failed to fill cover_letter: No resume file available - user must generate a resume before applying to jobs",
+      "timestamp": "2025-11-06T05:43:07.270Z"
+    }
+  ],
+  "patterns": {
+    "commonQuestions": [
+      {
+        "label": "What is your salary expectation? *",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What's your nationality?*",
+        "type": "text",
+        "category": "other"
+      }
+    ],
+    "fieldNamingConventions": {
+      "camelCase": 0,
+      "snake_case": 24,
+      "kebabCase": 0,
+      "standard": 4
+    },
+    "formLayout": {
+      "totalFields": 28,
+      "visibleFields": 28,
+      "requiredFields": 9,
+      "optionalFields": 19
+    }
+  }
+}

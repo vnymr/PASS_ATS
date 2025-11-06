@@ -1,0 +1,240 @@
+{
+  "metadata": {
+    "url": "https://job-boards.greenhouse.io/nubank/jobs/7345028",
+    "domain": "job-boards.greenhouse.io",
+    "company": "Not found",
+    "jobTitle": "Customer Excellence Analyst",
+    "timestamp": "2025-11-06T05:33:03.820Z",
+    "success": true
+  },
+  "formStructure": {
+    "totalFields": 28,
+    "fieldTypes": {
+      "text": 25,
+      "tel": 1,
+      "file": 2
+    },
+    "requiredFields": [
+      {
+        "name": "unnamed_12",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_14",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_16",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_18",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_20",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_22",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_24",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_26",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_28",
+        "type": "text",
+        "label": "Select..."
+      }
+    ]
+  },
+  "aiResponses": {
+    "first_name": "Sarah",
+    "last_name": "Martinez",
+    "preferred_name": "Sarah",
+    "email": "sarah.martinez@example.com",
+    "country": "United States",
+    "phone": "+1 (555) 345-6789",
+    "resume": "https://sarahmartinez.dev/Sarah_Martinez_Resume.pdf",
+    "cover_letter": "https://sarahmartinez.dev/Sarah_Martinez_Cover_Letter_Nu_Customer_Excellence.pdf",
+    "question_61001433": "https://linkedin.com/in/sarahmartinez",
+    "question_61001434": "https://sarahmartinez.dev",
+    "question_61001435": "Austin, TX",
+    "unnamed_12": "application_submitted",
+    "question_61004368": "Native",
+    "unnamed_14": "native",
+    "question_61004369": "55,000 USD per year",
+    "unnamed_16": "USD",
+    "question_61004370": "No",
+    "unnamed_18": "no",
+    "question_61004371": "Yes",
+    "unnamed_20": "yes",
+    "question_61004372": "Yes",
+    "unnamed_22": "yes",
+    "question_61004373": "United States",
+    "unnamed_24": "United States",
+    "question_61004374": "Bachelor's degree",
+    "unnamed_26": "bachelors",
+    "question_61004375": "Yes",
+    "unnamed_28": "yes"
+  },
+  "problemsSolved": [
+    {
+      "problem": "Failed to fill first_name: Too many arguments. If you need to pass more than 1 argument to the function wrap them in an object.",
+      "solution": {
+        "issue": "Failed to analyze screenshot",
+        "solution": "Manual intervention required",
+        "needsManualIntervention": true
+      },
+      "timestamp": "2025-11-06T05:33:03.820Z"
+    },
+    {
+      "problem": "Failed to fill last_name: Too many arguments. If you need to pass more than 1 argument to the function wrap them in an object.",
+      "timestamp": "2025-11-06T05:33:03.820Z"
+    },
+    {
+      "problem": "Failed to fill preferred_name: Too many arguments. If you need to pass more than 1 argument to the function wrap them in an object.",
+      "timestamp": "2025-11-06T05:33:03.820Z"
+    },
+    {
+      "problem": "Failed to fill email: Too many arguments. If you need to pass more than 1 argument to the function wrap them in an object.",
+      "timestamp": "2025-11-06T05:33:03.820Z"
+    },
+    {
+      "problem": "Failed to fill country: Too many arguments. If you need to pass more than 1 argument to the function wrap them in an object.",
+      "timestamp": "2025-11-06T05:33:03.820Z"
+    },
+    {
+      "problem": "Failed to fill phone: Too many arguments. If you need to pass more than 1 argument to the function wrap them in an object.",
+      "timestamp": "2025-11-06T05:33:03.820Z"
+    },
+    {
+      "problem": "Failed to fill resume: No resume file available - user must generate a resume before applying to jobs",
+      "timestamp": "2025-11-06T05:33:03.820Z"
+    },
+    {
+      "problem": "Failed to fill cover_letter: No resume file available - user must generate a resume before applying to jobs",
+      "timestamp": "2025-11-06T05:33:03.820Z"
+    },
+    {
+      "problem": "Failed to fill question_61001433: Too many arguments. If you need to pass more than 1 argument to the function wrap them in an object.",
+      "timestamp": "2025-11-06T05:33:03.820Z"
+    },
+    {
+      "problem": "Failed to fill question_61001434: Too many arguments. If you need to pass more than 1 argument to the function wrap them in an object.",
+      "timestamp": "2025-11-06T05:33:03.820Z"
+    },
+    {
+      "problem": "Failed to fill question_61001435: Too many arguments. If you need to pass more than 1 argument to the function wrap them in an object.",
+      "timestamp": "2025-11-06T05:33:03.820Z"
+    },
+    {
+      "problem": "Failed to fill unnamed_12: Too many arguments. If you need to pass more than 1 argument to the function wrap them in an object.",
+      "timestamp": "2025-11-06T05:33:03.820Z"
+    },
+    {
+      "problem": "Failed to fill question_61004368: Too many arguments. If you need to pass more than 1 argument to the function wrap them in an object.",
+      "timestamp": "2025-11-06T05:33:03.820Z"
+    },
+    {
+      "problem": "Failed to fill unnamed_14: Too many arguments. If you need to pass more than 1 argument to the function wrap them in an object.",
+      "timestamp": "2025-11-06T05:33:03.820Z"
+    },
+    {
+      "problem": "Failed to fill question_61004369: Too many arguments. If you need to pass more than 1 argument to the function wrap them in an object.",
+      "timestamp": "2025-11-06T05:33:03.820Z"
+    },
+    {
+      "problem": "Failed to fill unnamed_16: Too many arguments. If you need to pass more than 1 argument to the function wrap them in an object.",
+      "timestamp": "2025-11-06T05:33:03.820Z"
+    },
+    {
+      "problem": "Failed to fill question_61004370: Too many arguments. If you need to pass more than 1 argument to the function wrap them in an object.",
+      "timestamp": "2025-11-06T05:33:03.820Z"
+    },
+    {
+      "problem": "Failed to fill unnamed_18: Too many arguments. If you need to pass more than 1 argument to the function wrap them in an object.",
+      "timestamp": "2025-11-06T05:33:03.820Z"
+    },
+    {
+      "problem": "Failed to fill question_61004371: Too many arguments. If you need to pass more than 1 argument to the function wrap them in an object.",
+      "timestamp": "2025-11-06T05:33:03.820Z"
+    },
+    {
+      "problem": "Failed to fill unnamed_20: Too many arguments. If you need to pass more than 1 argument to the function wrap them in an object.",
+      "timestamp": "2025-11-06T05:33:03.820Z"
+    },
+    {
+      "problem": "Failed to fill question_61004372: Too many arguments. If you need to pass more than 1 argument to the function wrap them in an object.",
+      "timestamp": "2025-11-06T05:33:03.820Z"
+    },
+    {
+      "problem": "Failed to fill unnamed_22: Too many arguments. If you need to pass more than 1 argument to the function wrap them in an object.",
+      "timestamp": "2025-11-06T05:33:03.820Z"
+    },
+    {
+      "problem": "Failed to fill question_61004373: Too many arguments. If you need to pass more than 1 argument to the function wrap them in an object.",
+      "timestamp": "2025-11-06T05:33:03.820Z"
+    },
+    {
+      "problem": "Failed to fill unnamed_24: Too many arguments. If you need to pass more than 1 argument to the function wrap them in an object.",
+      "timestamp": "2025-11-06T05:33:03.820Z"
+    },
+    {
+      "problem": "Failed to fill question_61004374: Too many arguments. If you need to pass more than 1 argument to the function wrap them in an object.",
+      "timestamp": "2025-11-06T05:33:03.820Z"
+    },
+    {
+      "problem": "Failed to fill unnamed_26: Too many arguments. If you need to pass more than 1 argument to the function wrap them in an object.",
+      "timestamp": "2025-11-06T05:33:03.820Z"
+    },
+    {
+      "problem": "Failed to fill question_61004375: Too many arguments. If you need to pass more than 1 argument to the function wrap them in an object.",
+      "timestamp": "2025-11-06T05:33:03.820Z"
+    },
+    {
+      "problem": "Failed to fill unnamed_28: Too many arguments. If you need to pass more than 1 argument to the function wrap them in an object.",
+      "timestamp": "2025-11-06T05:33:03.820Z"
+    }
+  ],
+  "patterns": {
+    "commonQuestions": [
+      {
+        "label": "What is your salary expectation? *",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What's your nationality?*",
+        "type": "text",
+        "category": "other"
+      }
+    ],
+    "fieldNamingConventions": {
+      "camelCase": 0,
+      "snake_case": 24,
+      "kebabCase": 0,
+      "standard": 4
+    },
+    "formLayout": {
+      "totalFields": 28,
+      "visibleFields": 28,
+      "requiredFields": 9,
+      "optionalFields": 19
+    }
+  }
+}

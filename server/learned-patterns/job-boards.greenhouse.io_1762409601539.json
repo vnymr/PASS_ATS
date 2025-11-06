@@ -1,0 +1,136 @@
+{
+  "metadata": {
+    "url": "https://job-boards.greenhouse.io/nubank/jobs/7345028",
+    "domain": "job-boards.greenhouse.io",
+    "company": "Not found",
+    "jobTitle": "Customer Excellence Analyst",
+    "timestamp": "2025-11-06T06:13:21.539Z",
+    "success": true
+  },
+  "formStructure": {
+    "totalFields": 28,
+    "fieldTypes": {
+      "text": 25,
+      "tel": 1,
+      "file": 2
+    },
+    "requiredFields": [
+      {
+        "name": "unnamed_12",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_14",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_16",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_18",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_20",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_22",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_24",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_26",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_28",
+        "type": "text",
+        "label": "Select..."
+      }
+    ]
+  },
+  "aiResponses": {
+    "first_name": "Sarah",
+    "last_name": "Martinez",
+    "preferred_name": "Sarah",
+    "email": "sarah.martinez@example.com",
+    "country": "United States",
+    "phone": "+1 (555) 345-6789",
+    "resume": "https://sarahmartinez.dev/resume.pdf",
+    "cover_letter": "I am excited to apply for the Customer Excellence Analyst role at Nu. As a Senior Software Engineer at TechCorp (2020–Present) and previously as a Software Engineer at StartupXYZ (2018–2020), I have built my career around delivering reliable, customer-focused products and tools. At TechCorp I led cross-functional initiatives partnering closely with customer support and product teams to surface the highest-impact customer issues, implement automated triage and monitoring, and ship features that reduced support escalations and improved customer satisfaction. My technical background (JavaScript/TypeScript, Python, AWS, Docker, Kubernetes) allows me to both understand the root causes of customer experiences and build solutions that prevent recurring incidents.\n\nBeyond delivering technical solutions, I have consistently prioritized clear, empathetic communication with stakeholders and customers. I built an internal dashboard at TechCorp that aggregated customer-reported issues, service health metrics, and product telemetry; this made it faster for support and engineering to diagnose problems collaboratively and allowed the support team to provide more precise, confident updates to customers. At StartupXYZ I worked directly with customer service teams to translate qualitative customer feedback into product improvements, contributing to feature decisions and documentation that reduced repeated inquiries and improved first-contact resolution.\n\nI am energized by Nu’s mission to fight complexity and empower customers — it aligns with my approach of simplifying technical complexity into actionable, customer-facing improvements. I bring a data-driven mindset, hands-on technical skills, and proven experience partnering with support teams to create measurable improvements in customer experience. I am available and flexible to work shifts such as Tuesday–Saturday and schedules that end at midnight. Thank you for considering my application; I’m enthusiastic about the opportunity to contribute to Nu’s Customer Excellence community and would welcome the chance to discuss how my background can help drive outstanding outcomes for your customers.",
+    "question_61001433": "https://linkedin.com/in/sarahmartinez",
+    "question_61001434": "https://sarahmartinez.dev",
+    "question_61001435": "Austin, TX",
+    "unnamed_12": "Austin, TX",
+    "question_61004368": "Fluent",
+    "unnamed_14": "Fluent",
+    "question_61004369": "USD 60,000 per year",
+    "unnamed_16": "Annual",
+    "question_61004370": "No",
+    "unnamed_18": "No",
+    "question_61004371": "Yes",
+    "unnamed_20": "Yes",
+    "question_61004372": "Yes",
+    "unnamed_22": "Yes",
+    "question_61004373": "United States",
+    "unnamed_24": "United States",
+    "question_61004374": "Bachelor's degree",
+    "unnamed_26": "Bachelor's degree",
+    "question_61004375": "Yes",
+    "unnamed_28": "Yes"
+  },
+  "problemsSolved": [
+    {
+      "problem": "Failed to fill resume: No resume file available - user must generate a resume before applying to jobs",
+      "solution": {
+        "issue": "Failed to analyze screenshot",
+        "solution": "Manual intervention required",
+        "needsManualIntervention": true
+      },
+      "timestamp": "2025-11-06T06:13:21.539Z"
+    },
+    {
+      "problem": "Failed to fill cover_letter: No resume file available - user must generate a resume before applying to jobs",
+      "timestamp": "2025-11-06T06:13:21.539Z"
+    }
+  ],
+  "patterns": {
+    "commonQuestions": [
+      {
+        "label": "What is your salary expectation? *",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What's your nationality?*",
+        "type": "text",
+        "category": "other"
+      }
+    ],
+    "fieldNamingConventions": {
+      "camelCase": 0,
+      "snake_case": 24,
+      "kebabCase": 0,
+      "standard": 4
+    },
+    "formLayout": {
+      "totalFields": 28,
+      "visibleFields": 28,
+      "requiredFields": 9,
+      "optionalFields": 19
+    }
+  }
+}

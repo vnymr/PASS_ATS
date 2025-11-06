@@ -1,0 +1,148 @@
+{
+  "metadata": {
+    "url": "https://job-boards.greenhouse.io/nubank/jobs/7345028",
+    "domain": "job-boards.greenhouse.io",
+    "company": "Not found",
+    "jobTitle": "Customer Excellence Analyst",
+    "timestamp": "2025-11-06T06:59:15.637Z",
+    "success": true
+  },
+  "formStructure": {
+    "totalFields": 28,
+    "fieldTypes": {
+      "text": 25,
+      "tel": 1,
+      "file": 2
+    },
+    "requiredFields": [
+      {
+        "name": "unnamed_12",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_14",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_16",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_18",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_20",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_22",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_24",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_26",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_28",
+        "type": "text",
+        "label": "Select..."
+      }
+    ]
+  },
+  "aiResponses": {
+    "first_name": "Sarah",
+    "last_name": "Martinez",
+    "preferred_name": "Sarah",
+    "email": "sarah.martinez@example.com",
+    "country": "United States",
+    "phone": "+1 (555) 345-6789",
+    "resume": "Sarah_Martinez_Resume_Senior_Software_Engineer.pdf",
+    "cover_letter": "Sarah_Martinez_Cover_Letter_Customer_Excellence_Analyst.pdf",
+    "question_61001433": "https://linkedin.com/in/sarahmartinez",
+    "question_61001434": "https://sarahmartinez.dev",
+    "question_61001435": "Austin, TX",
+    "unnamed_12": "No",
+    "question_61004368": "native",
+    "unnamed_14": "No",
+    "question_61004369": "USD 80,000 - 95,000 annually, negotiable based on the role, responsibilities, and local compensation and benefits",
+    "unnamed_16": "Yes",
+    "question_61004370": "No",
+    "unnamed_18": "Yes",
+    "question_61004371": "Yes",
+    "unnamed_20": "Remote",
+    "question_61004372": "Yes",
+    "unnamed_22": "Yes",
+    "question_61004373": "United States",
+    "unnamed_24": "United States",
+    "question_61004374": "Bachelor's degree",
+    "unnamed_26": "Computer Science",
+    "question_61004375": "Yes — I bring direct cross-functional customer-facing experience from my time as a Senior Software Engineer and earlier as a Software Engineer. At TechCorp (2020–Present) I partnered closely with customer support and success teams: I built and maintained integrations that surfaced production incidents and customer-reported problems directly into support tooling, created automated triage routines, and developed dashboards that helped reduce average time-to-first-response and resolution velocity. Those efforts required clear, empathetic communication with customers over email and chat while coordinating engineering fixes behind the scenes.\n\nAt StartupXYZ (2018–2020) I regularly participated in customer calls and technical support escalations, translating technical constraints into clear next steps for customers and internal stakeholders. I wrote and ran runbooks for common issues, implemented monitoring and alerting that enabled proactive outreach, and contributed to knowledgebase articles used by support agents and customers. These experiences gave me practical skills in handling inquiries through email, chat, and phone, maintaining calm under pressure, and turning customer feedback into product and process improvements.\n\nI’m excited to bring a technical background plus hands-on customer-service experience to a Customer Excellence Analyst role: I combine empathy and clear written communication with a strong ability to instrument and automate recurring problems so customers get fast, accurate resolutions. I enjoy coaching cross-functional teams on how to improve customer experience and would bring that mindset to Nu to help build a community of fanatical customers.",
+    "unnamed_28": "Yes"
+  },
+  "problemsSolved": [
+    {
+      "problem": "Failed to fill phone: Failed to fill custom dropdown \"phone\": No options available to select for custom dropdown. AI provided: \"+1 (555) 345-6789\"",
+      "solution": {
+        "issue": "Failed to analyze screenshot",
+        "solution": "Manual intervention required",
+        "needsManualIntervention": true
+      },
+      "timestamp": "2025-11-06T06:59:15.637Z"
+    },
+    {
+      "problem": "Failed to fill resume: No resume file available - user must generate a resume before applying to jobs",
+      "timestamp": "2025-11-06T06:59:15.637Z"
+    },
+    {
+      "problem": "Failed to fill cover_letter: No resume file available - user must generate a resume before applying to jobs",
+      "timestamp": "2025-11-06T06:59:15.637Z"
+    },
+    {
+      "problem": "Failed to fill unnamed_18: Failed to fill custom dropdown \"unnamed_18\": No options available to select for custom dropdown. AI provided: \"Yes\"",
+      "timestamp": "2025-11-06T06:59:15.637Z"
+    },
+    {
+      "problem": "Failed to fill unnamed_28: Field not found with any selector strategy: unnamed_28",
+      "timestamp": "2025-11-06T06:59:15.637Z"
+    }
+  ],
+  "patterns": {
+    "commonQuestions": [
+      {
+        "label": "What is your salary expectation? *",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What's your nationality?*",
+        "type": "text",
+        "category": "other"
+      }
+    ],
+    "fieldNamingConventions": {
+      "camelCase": 0,
+      "snake_case": 24,
+      "kebabCase": 0,
+      "standard": 4
+    },
+    "formLayout": {
+      "totalFields": 28,
+      "visibleFields": 28,
+      "requiredFields": 9,
+      "optionalFields": 19
+    }
+  }
+}

@@ -1,0 +1,172 @@
+{
+  "metadata": {
+    "url": "https://job-boards.greenhouse.io/nubank/jobs/7345028",
+    "domain": "job-boards.greenhouse.io",
+    "company": "Not found",
+    "jobTitle": "Customer Excellence Analyst",
+    "timestamp": "2025-11-06T06:21:05.159Z",
+    "success": true
+  },
+  "formStructure": {
+    "totalFields": 28,
+    "fieldTypes": {
+      "text": 25,
+      "tel": 1,
+      "file": 2
+    },
+    "requiredFields": [
+      {
+        "name": "unnamed_12",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_14",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_16",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_18",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_20",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_22",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_24",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_26",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_28",
+        "type": "text",
+        "label": "Select..."
+      }
+    ]
+  },
+  "aiResponses": {
+    "first_name": "Sarah",
+    "last_name": "Martinez",
+    "preferred_name": "Sarah",
+    "email": "sarah.martinez@example.com",
+    "country": "United States",
+    "phone": "+1 (555) 345-6789",
+    "resume": "Sarah_Martinez_Resume.pdf",
+    "cover_letter": "Sarah_Martinez_CoverLetter.pdf",
+    "question_61001433": "https://linkedin.com/in/sarahmartinez",
+    "question_61001434": "https://sarahmartinez.dev",
+    "question_61001435": "Austin, TX, United States",
+    "unnamed_12": "No",
+    "question_61004368": "Native",
+    "unnamed_14": "Intermediate",
+    "question_61004369": "60,000 USD per year",
+    "unnamed_16": "USD",
+    "question_61004370": "No",
+    "unnamed_18": "No",
+    "question_61004371": "Yes",
+    "unnamed_20": "Yes",
+    "question_61004372": "Yes",
+    "unnamed_22": "Yes",
+    "question_61004373": "United States",
+    "unnamed_24": "United States",
+    "question_61004374": "Bachelor's degree",
+    "unnamed_26": "Bachelor's degree",
+    "question_61004375": "Yes",
+    "unnamed_28": "Yes"
+  },
+  "problemsSolved": [
+    {
+      "problem": "Failed to fill resume: No resume file available - user must generate a resume before applying to jobs",
+      "solution": {
+        "issue": "Failed to analyze screenshot",
+        "solution": "Manual intervention required",
+        "needsManualIntervention": true
+      },
+      "timestamp": "2025-11-06T06:21:05.160Z"
+    },
+    {
+      "problem": "Failed to fill cover_letter: No resume file available - user must generate a resume before applying to jobs",
+      "timestamp": "2025-11-06T06:21:05.160Z"
+    },
+    {
+      "problem": "Failed to fill unnamed_12: Failed to fill custom dropdown \"unnamed_12\": locator.boundingBox: Error: strict mode violation: locator('div.application--questions > div > div.select > div.select__container > div.select-shell.remix-css-b62m3t-container > input.remix-css-1a0ro4n-requiredInput') resolved to 8 elements:\n    1) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('.remix-css-1a0ro4n-requiredInput').first()\n    2) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(6) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n    3) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(7) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n    4) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(8) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n    5) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(9) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n    6) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(10) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n    7) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(11) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n    8) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(12) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n\nCall log:\n\u001b[2m  - waiting for locator('div.application--questions > div > div.select > div.select__container > div.select-shell.remix-css-b62m3t-container > input.remix-css-1a0ro4n-requiredInput')\u001b[22m\n",
+      "timestamp": "2025-11-06T06:21:05.160Z"
+    },
+    {
+      "problem": "Failed to fill unnamed_14: Failed to fill custom dropdown \"unnamed_14\": locator.boundingBox: Error: strict mode violation: locator('div.application--questions > div > div.select > div.select__container > div.select-shell.remix-css-b62m3t-container > input.remix-css-1a0ro4n-requiredInput') resolved to 8 elements:\n    1) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('.remix-css-1a0ro4n-requiredInput').first()\n    2) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(6) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n    3) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(7) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n    4) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(8) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n    5) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(9) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n    6) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(10) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n    7) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(11) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n    8) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(12) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n\nCall log:\n\u001b[2m  - waiting for locator('div.application--questions > div > div.select > div.select__container > div.select-shell.remix-css-b62m3t-container > input.remix-css-1a0ro4n-requiredInput')\u001b[22m\n",
+      "timestamp": "2025-11-06T06:21:05.160Z"
+    },
+    {
+      "problem": "Failed to fill unnamed_16: Failed to fill custom dropdown \"unnamed_16\": locator.boundingBox: Error: strict mode violation: locator('div.application--questions > div > div.select > div.select__container > div.select-shell.remix-css-b62m3t-container > input.remix-css-1a0ro4n-requiredInput') resolved to 8 elements:\n    1) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('.remix-css-1a0ro4n-requiredInput').first()\n    2) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(6) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n    3) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(7) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n    4) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(8) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n    5) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(9) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n    6) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(10) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n    7) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(11) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n    8) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(12) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n\nCall log:\n\u001b[2m  - waiting for locator('div.application--questions > div > div.select > div.select__container > div.select-shell.remix-css-b62m3t-container > input.remix-css-1a0ro4n-requiredInput')\u001b[22m\n",
+      "timestamp": "2025-11-06T06:21:05.160Z"
+    },
+    {
+      "problem": "Failed to fill unnamed_18: Failed to fill custom dropdown \"unnamed_18\": locator.boundingBox: Error: strict mode violation: locator('div.application--questions > div > div.select > div.select__container > div.select-shell.remix-css-b62m3t-container > input.remix-css-1a0ro4n-requiredInput') resolved to 8 elements:\n    1) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('.remix-css-1a0ro4n-requiredInput').first()\n    2) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(6) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n    3) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(7) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n    4) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(8) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n    5) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(9) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n    6) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(10) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n    7) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(11) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n    8) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(12) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n\nCall log:\n\u001b[2m  - waiting for locator('div.application--questions > div > div.select > div.select__container > div.select-shell.remix-css-b62m3t-container > input.remix-css-1a0ro4n-requiredInput')\u001b[22m\n",
+      "timestamp": "2025-11-06T06:21:05.160Z"
+    },
+    {
+      "problem": "Failed to fill unnamed_20: Failed to fill custom dropdown \"unnamed_20\": locator.boundingBox: Error: strict mode violation: locator('div.application--questions > div > div.select > div.select__container > div.select-shell.remix-css-b62m3t-container > input.remix-css-1a0ro4n-requiredInput') resolved to 7 elements:\n    1) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('.remix-css-1a0ro4n-requiredInput').first()\n    2) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(6) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n    3) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(7) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n    4) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(9) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n    5) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(10) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n    6) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(11) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n    7) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(12) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n\nCall log:\n\u001b[2m  - waiting for locator('div.application--questions > div > div.select > div.select__container > div.select-shell.remix-css-b62m3t-container > input.remix-css-1a0ro4n-requiredInput')\u001b[22m\n",
+      "timestamp": "2025-11-06T06:21:05.160Z"
+    },
+    {
+      "problem": "Failed to fill unnamed_22: Failed to fill custom dropdown \"unnamed_22\": locator.boundingBox: Error: strict mode violation: locator('div.application--questions > div > div.select > div.select__container > div.select-shell.remix-css-b62m3t-container > input.remix-css-1a0ro4n-requiredInput') resolved to 6 elements:\n    1) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('.remix-css-1a0ro4n-requiredInput').first()\n    2) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(6) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n    3) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(7) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n    4) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(10) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n    5) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(11) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n    6) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(12) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n\nCall log:\n\u001b[2m  - waiting for locator('div.application--questions > div > div.select > div.select__container > div.select-shell.remix-css-b62m3t-container > input.remix-css-1a0ro4n-requiredInput')\u001b[22m\n",
+      "timestamp": "2025-11-06T06:21:05.160Z"
+    },
+    {
+      "problem": "Failed to fill unnamed_24: Failed to fill custom dropdown \"unnamed_24\": locator.boundingBox: Error: strict mode violation: locator('div.application--questions > div > div.select > div.select__container > div.select-shell.remix-css-b62m3t-container > input.remix-css-1a0ro4n-requiredInput') resolved to 6 elements:\n    1) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('.remix-css-1a0ro4n-requiredInput').first()\n    2) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(6) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n    3) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(7) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n    4) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(10) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n    5) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(11) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n    6) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(12) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n\nCall log:\n\u001b[2m  - waiting for locator('div.application--questions > div > div.select > div.select__container > div.select-shell.remix-css-b62m3t-container > input.remix-css-1a0ro4n-requiredInput')\u001b[22m\n",
+      "timestamp": "2025-11-06T06:21:05.160Z"
+    },
+    {
+      "problem": "Failed to fill unnamed_26: Failed to fill custom dropdown \"unnamed_26\": locator.boundingBox: Error: strict mode violation: locator('div.application--questions > div > div.select > div.select__container > div.select-shell.remix-css-b62m3t-container > input.remix-css-1a0ro4n-requiredInput') resolved to 5 elements:\n    1) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('.remix-css-1a0ro4n-requiredInput').first()\n    2) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(6) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n    3) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(7) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n    4) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(11) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n    5) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(12) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n\nCall log:\n\u001b[2m  - waiting for locator('div.application--questions > div > div.select > div.select__container > div.select-shell.remix-css-b62m3t-container > input.remix-css-1a0ro4n-requiredInput')\u001b[22m\n",
+      "timestamp": "2025-11-06T06:21:05.160Z"
+    },
+    {
+      "problem": "Failed to fill unnamed_28: Failed to fill custom dropdown \"unnamed_28\": locator.boundingBox: Error: strict mode violation: locator('div.application--questions > div > div.select > div.select__container > div.select-shell.remix-css-b62m3t-container > input.remix-css-1a0ro4n-requiredInput') resolved to 5 elements:\n    1) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('.remix-css-1a0ro4n-requiredInput').first()\n    2) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(6) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n    3) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(7) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n    4) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(11) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n    5) <input value=\"\" required=\"\" tabindex=\"-1\" aria-hidden=\"true\" class=\"remix-css-1a0ro4n-requiredInput\"/> aka locator('div:nth-child(12) > .select > .select__container > .select-shell > .remix-css-1a0ro4n-requiredInput')\n\nCall log:\n\u001b[2m  - waiting for locator('div.application--questions > div > div.select > div.select__container > div.select-shell.remix-css-b62m3t-container > input.remix-css-1a0ro4n-requiredInput')\u001b[22m\n",
+      "timestamp": "2025-11-06T06:21:05.160Z"
+    }
+  ],
+  "patterns": {
+    "commonQuestions": [
+      {
+        "label": "What is your salary expectation? *",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What's your nationality?*",
+        "type": "text",
+        "category": "other"
+      }
+    ],
+    "fieldNamingConventions": {
+      "camelCase": 0,
+      "snake_case": 24,
+      "kebabCase": 0,
+      "standard": 4
+    },
+    "formLayout": {
+      "totalFields": 28,
+      "visibleFields": 28,
+      "requiredFields": 9,
+      "optionalFields": 19
+    }
+  }
+}
