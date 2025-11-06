@@ -58,7 +58,7 @@ router.get('/jobs', async (req, res) => {
     // Check if personalized recommendations requested
     if (personalized === 'true' && req.userId) {
       // Create cache key from parameters
-      const cacheKey = `${filter}-${atsType || 'all'}-${company || 'all'}-${source || 'all'}-${search || 'all'}-${limit}-${offset}`;
+      const cacheKey = `${filter}-${atsType || 'all'}-${company || 'all'}-${source || 'all'}-${search || 'all'}-${limit}-${cursor || 'start'}`;
 
       // Try cache first
       const cached = await cacheManager.getRecommendations(req.userId, cacheKey);
@@ -134,7 +134,7 @@ router.get('/jobs', async (req, res) => {
     }
 
     // Create cache key from parameters
-    const cacheKey = `${filter}-${atsType || 'all'}-${company || 'all'}-${source || 'all'}-${search || 'all'}-${limit}-${offset}`;
+    const cacheKey = `${filter}-${atsType || 'all'}-${company || 'all'}-${source || 'all'}-${search || 'all'}-${limit}-${cursor || 'start'}`;
 
     // Try cache first
     const cached = await cacheManager.getJobList(cacheKey);

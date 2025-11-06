@@ -1,13 +1,19 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api } from '../api-adapter';
+import { useAuth } from '@clerk/clerk-react';
+import { api, type ResumeEntry } from '../api-clerk';
 import Icons from '../components/ui/icons';
 import logger from '../utils/logger';
 import MinimalTextArea from '../components/MinimalTextArea';
 import { motion, AnimatePresence } from 'framer-motion';
+import { SectionHeader } from '../ui/SectionHeader';
+import Card, { CardContent } from '../ui/Card';
+import { Input } from '../ui/Input';
+import { Button } from '../ui/Button';
 
 export default function GenerateResume() {
   const navigate = useNavigate();
+  const { getToken } = useAuth();
   const [resumeText, setResumeText] = useState('');
   const [jobDescription, setJobDescription] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -16,21 +22,103 @@ export default function GenerateResume() {
   const [generatedResume, setGeneratedResume] = useState('');
   const [jobId, setJobId] = useState('');
   const [tailoringDetails, setTailoringDetails] = useState<string[]>([]);
+  const [resumes, setResumes] = useState<ResumeEntry[]>([]);
+  const [loadingResumes, setLoadingResumes] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filter, setFilter] = useState<'all' | 'recent' | 'week'>('all');
 
   // Load user's resume text from profile
   useEffect(() => {
     loadProfile();
+    loadResumes();
   }, []);
 
   const loadProfile = async () => {
     try {
-      const profile = await api.getProfile();
+      const token = await getToken();
+      const profile = await api.getProfile(token || undefined);
       if (profile?.resumeText) {
         setResumeText(profile.resumeText);
       }
     } catch (err) {
       logger.error('Failed to load profile', err);
     }
+  };
+
+  const loadResumes = async () => {
+    try {
+      setLoadingResumes(true);
+      const token = await getToken();
+      const data = await api.getResumes(token || undefined);
+      let resumesList: ResumeEntry[] = [];
+      if (Array.isArray(data)) {
+        resumesList = data;
+      } else if (data && typeof data === 'object' && 'resumes' in data) {
+        resumesList = (data as any).resumes || [];
+      }
+      setResumes(resumesList);
+    } catch (err) {
+      logger.error('Failed to load resumes', err);
+    } finally {
+      setLoadingResumes(false);
+    }
+  };
+
+  const downloadResume = async (fileName: string) => {
+    try {
+      const token = await getToken();
+      const blob = await api.downloadResume(fileName, token || undefined);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err) {
+      logger.error('Failed to download resume', err);
+    }
+  };
+
+  const getFilteredResumes = () => {
+    let filtered = [...resumes];
+
+    if (searchTerm) {
+      filtered = filtered.filter(resume =>
+        (resume.company?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+         resume.role?.toLowerCase().includes(searchTerm.toLowerCase()))
+      );
+    }
+
+    const now = new Date();
+    if (filter === 'recent') {
+      filtered = filtered.slice(0, 5);
+    } else if (filter === 'week') {
+      const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      filtered = filtered.filter(resume =>
+        resume.createdAt && new Date(resume.createdAt) > oneWeekAgo
+      );
+    }
+
+    return filtered;
+  };
+
+  const formatFileSize = (bytes: number = 250000) => {
+    return (bytes / 1024).toFixed(0) + ' KB';
+  };
+
+  const formatDate = (dateStr?: string) => {
+    if (!dateStr) return 'Just now';
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+
+    if (diffHours < 1) return 'Just now';
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffHours < 48) return 'Yesterday';
+    return date.toLocaleDateString();
   };
 
   const handleGenerate = async () => {
@@ -49,6 +137,8 @@ export default function GenerateResume() {
     setGeneratedResume('');
 
     try {
+      const token = await getToken();
+
       // Show initial tailoring steps
       setTailoringDetails([
         'Analyzing job requirements and key skills',
@@ -56,32 +146,56 @@ export default function GenerateResume() {
         'Optimizing keywords for ATS compatibility'
       ]);
 
-      // Use api-adapter.ts signature: generateResume(jobUrl, jobDetails)
-      const result = await api.generateResume('', {
-        description: jobDescription,
-        role: '',
-        company: '',
-        matchMode: 'balanced'
-      });
+      // Start job processing
+      const { jobId } = await api.processJob(jobDescription, 'claude', 'Standard', token || undefined);
+      logger.info('Job started', { jobId });
 
-      if (result.jobId) {
-        setJobId(result.jobId);
-        setSuccess(true);
-        setGeneratedResume('Your tailored resume has been generated successfully!');
+      // Poll for job completion
+      let jobCompleted = false;
+      let pollCount = 0;
+      const maxPolls = 60; // Max 60 seconds
 
-        // Add completion details
-        setTailoringDetails([
-          'Job requirements analyzed',
-          'Experience matched and optimized',
-          'ATS keywords integrated',
-          'Resume formatted and ready for download'
-        ]);
+      while (!jobCompleted && pollCount < maxPolls) {
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
 
-        // Show success message
-        setTimeout(() => setSuccess(false), 5000);
-      } else {
-        setError('Failed to generate resume');
+        try {
+          const jobStatus = await api.getJobStatus(jobId, token || undefined);
+          logger.debug('Job status', { jobId, status: jobStatus.status });
+
+          if (jobStatus.status === 'COMPLETED') {
+            jobCompleted = true;
+          } else if (jobStatus.status === 'FAILED') {
+            throw new Error(jobStatus.error || 'Resume generation failed');
+          }
+        } catch (pollErr) {
+          logger.error('Error polling job status', pollErr);
+        }
+
+        pollCount++;
       }
+
+      if (!jobCompleted) {
+        throw new Error('Resume generation timed out. Please try again.');
+      }
+
+      // Job completed
+      setJobId(jobId);
+      setSuccess(true);
+      setGeneratedResume('Your tailored resume has been generated successfully!');
+
+      // Add completion details
+      setTailoringDetails([
+        'Job requirements analyzed',
+        'Experience matched and optimized',
+        'ATS keywords integrated',
+        'Resume formatted and ready for download'
+      ]);
+
+      // Reload resumes to show the new one
+      await loadResumes();
+
+      // Show success message
+      setTimeout(() => setSuccess(false), 5000);
     } catch (err: any) {
       setError(err.message || 'Failed to generate resume');
       setTailoringDetails([]);
@@ -103,7 +217,7 @@ export default function GenerateResume() {
       />
 
       {/* Content Area */}
-      <div className="max-w-[780px] mx-auto px-8 pb-8">
+      <div className="max-w-7xl mx-auto px-8 pb-8">
         {/* Resume Profile Status */}
         <AnimatePresence>
           {!resumeText && (
@@ -337,6 +451,108 @@ export default function GenerateResume() {
             </button>
           </motion.div>
         )}
+
+        {/* History Section */}
+        <div className="mt-10">
+          <SectionHeader
+            icon={<Icons.clock size={22} />}
+            title="Generation History"
+            count={getFilteredResumes().length}
+            right={
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <Input
+                    placeholder="Search resumes..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-9 w-64"
+                  />
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400">
+                    <Icons.search size={16} />
+                  </div>
+                </div>
+                <Button variant={filter === 'all' ? 'solid' : 'outline'} size="sm" onClick={() => setFilter('all')}>All</Button>
+                <Button variant={filter === 'recent' ? 'solid' : 'outline'} size="sm" onClick={() => setFilter('recent')}>Recent</Button>
+                <Button variant={filter === 'week' ? 'solid' : 'outline'} size="sm" onClick={() => setFilter('week')}>Week</Button>
+              </div>
+            }
+            className="mb-6"
+          />
+
+          {loadingResumes ? (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {[1, 2, 3].map((i) => (
+                <Card key={i}>
+                  <CardContent className="pt-5">
+                    <div className="flex items-start gap-3 animate-pulse">
+                      <div className="w-5 h-5 bg-gray-200 rounded"></div>
+                      <div className="flex-1 space-y-2">
+                        <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                        <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                        <div className="flex gap-3 mt-2">
+                          <div className="h-3 bg-gray-200 rounded w-20"></div>
+                          <div className="h-3 bg-gray-200 rounded w-16"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : getFilteredResumes().length > 0 ? (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {getFilteredResumes().map((resume, idx) => (
+                <Card key={idx}>
+                  <CardContent className="pt-5">
+                    <div className="flex items-start gap-3">
+                      <div className="text-primary-600 mt-0.5"><Icons.fileText size={20} /></div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <h3 className="font-semibold truncate">{resume.company || 'Unknown Company'}</h3>
+                            <p className="text-xs text-neutral-600 truncate">{resume.role || 'Position not specified'}</p>
+                          </div>
+                        </div>
+                        <div className="mt-2 flex items-center gap-3 text-xs text-neutral-500">
+                          <span className="inline-flex items-center gap-1">
+                            <Icons.calendar size={14} />
+                            {formatDate(resume.createdAt)}
+                          </span>
+                          <span className="inline-flex items-center gap-1">
+                            <Icons.file size={14} />
+                            {formatFileSize()}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="self-start">
+                        <Button
+                          aria-label="Download resume"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => downloadResume(resume.fileName)}
+                        >
+                          <Icons.download size={16} />
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <Card>
+              <CardContent className="pt-5">
+                <div className="text-center py-8">
+                  <div className="mx-auto mb-3 text-neutral-400"><Icons.inbox size={40} /></div>
+                  <h3 className="text-base font-semibold">No resumes found</h3>
+                  <p className="text-sm text-neutral-600">
+                    {searchTerm ? `No results matching "${searchTerm}"` : 'Generate your first resume to get started'}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
       </div>
     </div>
   );

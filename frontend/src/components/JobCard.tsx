@@ -80,7 +80,7 @@ export default function JobCard({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, delay }}
-      className="bg-card rounded-2xl p-6 border transition-all duration-300 hover:shadow-xl group relative"
+      className={`bg-card rounded-2xl border transition-all duration-300 hover:shadow-xl group relative ${compact ? 'p-4' : 'p-6'}`}
       style={{
         borderColor: 'var(--background-200)',
         boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
@@ -144,15 +144,6 @@ export default function JobCard({
                       }}
                     >
                       {job.company || 'Unknown Company'}
-                    </span>
-                    <span style={{ color: 'var(--text-400)' }}>•</span>
-                    <span
-                      style={{
-                        color: 'var(--text-500)',
-                        fontSize: '14px',
-                      }}
-                    >
-                      {job.source && job.source.charAt(0).toUpperCase() + job.source.slice(1)}
                     </span>
                   </div>
                 </div>
@@ -226,7 +217,7 @@ export default function JobCard({
           </div>
 
           {/* Why This Job Is A Match */}
-          {job.matchReasons && job.matchReasons.length > 0 && (
+          {!compact && job.matchReasons && job.matchReasons.length > 0 && (
             <div className="mb-4 p-4 rounded-xl" style={{ backgroundColor: 'var(--background-50)' }}>
               <div className="flex items-center gap-2 mb-3">
                 <Sparkles className="w-4 h-4" style={{ color: 'var(--primary-600)' }} />
@@ -345,7 +336,7 @@ export default function JobCard({
           )}
 
           {/* Matching Skills */}
-          {job.matchingSkills && job.matchingSkills.length > 0 && (
+          {!compact && job.matchingSkills && job.matchingSkills.length > 0 && (
             <div className="mb-4">
               <div className="flex items-center gap-2 mb-2">
                 <CheckCircle2 className="w-4 h-4" style={{ color: '#10B981' }} />
@@ -379,7 +370,7 @@ export default function JobCard({
           )}
 
           {/* Missing Skills & Improvement */}
-          {job.missingSkills && job.missingSkills.length > 0 && (
+          {!compact && job.missingSkills && job.missingSkills.length > 0 && (
             <div className="mb-4 p-4 rounded-xl" style={{ backgroundColor: 'rgba(249, 115, 22, 0.05)' }}>
               <div className="flex items-start gap-2 mb-2">
                 <TrendingUp className="w-4 h-4 mt-0.5" style={{ color: '#F97316' }} />

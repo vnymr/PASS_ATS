@@ -140,15 +140,6 @@ export default function ComprehensiveJobCard({
                     >
                       {job.company || 'Unknown Company'}
                     </span>
-                    <span style={{ color: 'var(--text-400)' }}>•</span>
-                    <span
-                      style={{
-                        color: 'var(--text-500)',
-                        fontSize: '14px',
-                      }}
-                    >
-                      {job.source && job.source.charAt(0).toUpperCase() + job.source.slice(1)}
-                    </span>
                   </div>
                 </div>
 
