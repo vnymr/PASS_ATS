@@ -66,17 +66,9 @@ class ImprovedAutoApply {
         timeout: 30000
       });
 
-      // Human-like delay and mouse movement to appear natural
-      await this.sleep(2000 + Math.random() * 2000);
-
-      // Add random mouse movements to simulate human behavior
-      const { moveMouseHumanLike } = await import('./browser-launcher.js');
-      for (let i = 0; i < 3; i++) {
-        const randomX = Math.random() * 800 + 200;
-        const randomY = Math.random() * 400 + 100;
-        await moveMouseHumanLike(page, randomX, randomY);
-        await this.sleep(300 + Math.random() * 700);
-      }
+      // Simulate human page visit with enhanced stealth behavior
+      const { simulateHumanPageVisit } = await import('./browser-launcher.js');
+      await simulateHumanPageVisit(page, { scrolls: 2 });
 
       // Step 3: Look for application form or Apply button FIRST (before checking CAPTCHA)
       // Many sites show CAPTCHA only AFTER clicking the Apply button
