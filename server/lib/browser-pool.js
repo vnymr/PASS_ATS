@@ -6,10 +6,15 @@
  * Launch Time: 3s → 0.5s (reuse existing)
  * Throughput: 4 jobs/min → 51 jobs/min per worker
  * MIGRATED FROM PUPPETEER TO PLAYWRIGHT
+ * ENHANCED WITH PLAYWRIGHT-EXTRA STEALTH MODE
  */
 
-import { chromium } from 'playwright';
+import { chromium } from 'playwright-extra';
+import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import logger from './logger.js';
+
+// Add stealth plugin to playwright-extra
+chromium.use(StealthPlugin());
 
 class BrowserPool {
   constructor(options = {}) {

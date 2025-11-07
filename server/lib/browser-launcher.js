@@ -2,11 +2,16 @@
  * Browser Launcher Helper
  * Centralized Playwright browser launching with production support
  * MIGRATED FROM PUPPETEER TO PLAYWRIGHT
+ * ENHANCED WITH PLAYWRIGHT-EXTRA STEALTH MODE
  */
 
-import { chromium } from 'playwright';
+import { chromium } from 'playwright-extra';
+import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import logger from './logger.js';
 import { execSync } from 'child_process';
+
+// Add stealth plugin to playwright-extra
+chromium.use(StealthPlugin());
 
 /**
  * Find Chromium executable path
@@ -428,6 +433,162 @@ export async function launchPooledBrowser(options = {}) {
   });
 }
 
+/**
+ * Human Behavior Simulation
+ * Adds realistic human-like interactions to avoid bot detection
+ */
+
+/**
+ * Random delay with human-like timing variance
+ * @param {number} min - Minimum delay in ms (default: 1000)
+ * @param {number} max - Maximum delay in ms (default: 3000)
+ */
+export async function humanDelay(min = 1000, max = 3000) {
+  const delay = min + Math.random() * (max - min);
+  await new Promise(resolve => setTimeout(resolve, delay));
+}
+
+/**
+ * Simulate random scrolling like a human reading a page
+ * @param {Page} page - Playwright page
+ * @param {Object} options - Scroll options
+ */
+export async function humanScroll(page, options = {}) {
+  const scrolls = options.scrolls || (2 + Math.floor(Math.random() * 3)); // 2-4 scrolls
+
+  logger.debug(`Simulating ${scrolls} human-like scrolls`);
+
+  for (let i = 0; i < scrolls; i++) {
+    // Scroll down a random amount (200-800px)
+    const scrollAmount = 200 + Math.random() * 600;
+
+    await page.evaluate((amount) => {
+      window.scrollBy({
+        top: amount,
+        left: 0,
+        behavior: 'smooth'
+      });
+    }, scrollAmount);
+
+    // Wait a bit (simulating reading)
+    await humanDelay(500, 1500);
+
+    // Occasionally scroll up a bit (like re-reading)
+    if (Math.random() > 0.7) {
+      const scrollBack = 50 + Math.random() * 150;
+      await page.evaluate((amount) => {
+        window.scrollBy({
+          top: -amount,
+          left: 0,
+          behavior: 'smooth'
+        });
+      }, scrollBack);
+      await humanDelay(300, 800);
+    }
+  }
+
+  logger.debug('✅ Human-like scrolling complete');
+}
+
+/**
+ * Random mouse movements to simulate human presence
+ * @param {Page} page - Playwright page
+ * @param {number} movements - Number of random movements (default: 3-5)
+ */
+export async function randomMouseJiggles(page, movements = null) {
+  const numMovements = movements || (3 + Math.floor(Math.random() * 3));
+
+  logger.debug(`Performing ${numMovements} random mouse movements`);
+
+  for (let i = 0; i < numMovements; i++) {
+    const x = 100 + Math.random() * 1720; // Random X within 1920px width
+    const y = 100 + Math.random() * 880;  // Random Y within 1080px height
+
+    await moveMouseHumanLike(page, x, y);
+    await humanDelay(300, 1000);
+  }
+
+  logger.debug('✅ Random mouse movements complete');
+}
+
+/**
+ * Type text like a human (with realistic delays and occasional typos)
+ * @param {Page} page - Playwright page
+ * @param {string} selector - Input field selector
+ * @param {string} text - Text to type
+ * @param {Object} options - Typing options
+ */
+export async function humanType(page, selector, text, options = {}) {
+  const element = await page.$(selector);
+  if (!element) {
+    logger.warn(`Element not found: ${selector}`);
+    return false;
+  }
+
+  // Clear existing content first
+  await element.click();
+  await page.keyboard.press('Control+A');
+  await page.keyboard.press('Backspace');
+
+  // Type with human-like delays
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+
+    // Occasional typo (5% chance) - type wrong char then backspace
+    if (Math.random() < 0.05 && i < text.length - 1) {
+      const wrongChar = String.fromCharCode(65 + Math.floor(Math.random() * 26));
+      await page.keyboard.type(wrongChar);
+      await humanDelay(100, 300);
+      await page.keyboard.press('Backspace');
+      await humanDelay(50, 150);
+    }
+
+    // Type the correct character
+    await page.keyboard.type(char);
+
+    // Variable typing speed (30-150ms between keys)
+    // Faster for common keys, slower for special chars
+    const isSpace = char === ' ';
+    const isPunctuation = /[.,!?;:]/.test(char);
+
+    let delay = 30 + Math.random() * 50; // Base delay: 30-80ms
+    if (isSpace) delay += 50; // Longer pause after space
+    if (isPunctuation) delay += 30; // Slightly longer for punctuation
+
+    await new Promise(resolve => setTimeout(resolve, delay));
+  }
+
+  logger.debug(`✅ Typed text into ${selector} with human-like behavior`);
+  return true;
+}
+
+/**
+ * Simulate complete human page visit behavior
+ * Includes: scrolling, mouse movements, random pauses
+ * @param {Page} page - Playwright page
+ * @param {Object} options - Behavior options
+ */
+export async function simulateHumanPageVisit(page, options = {}) {
+  logger.info('🤖 Simulating human page visit behavior...');
+
+  // Initial pause (like reading the page title/header)
+  await humanDelay(800, 1500);
+
+  // Random mouse movements (like moving cursor while reading)
+  await randomMouseJiggles(page, 2);
+
+  // Scroll down to explore the page
+  await humanScroll(page, { scrolls: options.scrolls || 2 });
+
+  // More mouse movements
+  await randomMouseJiggles(page, 1);
+
+  // Final pause before interaction
+  await humanDelay(500, 1200);
+
+  logger.info('✅ Human behavior simulation complete');
+}
+
 export default {
   launchBrowser,
   launchStealthBrowser,
@@ -435,5 +596,10 @@ export default {
   launchBrowserlessBrowser,
   applyStealthToPage,
   createStealthContext,
-  moveMouseHumanLike
+  moveMouseHumanLike,
+  humanDelay,
+  humanScroll,
+  randomMouseJiggles,
+  humanType,
+  simulateHumanPageVisit
 };
