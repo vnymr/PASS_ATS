@@ -398,7 +398,7 @@ export async function launchStealthBrowser(options = {}) {
   const browser = await launchBrowser({
     ...options,
     stealth: true,
-    headless: process.env.PLAYWRIGHT_HEADLESS !== 'false'
+    headless: options.headless !== undefined ? options.headless : process.env.PLAYWRIGHT_HEADLESS !== 'false'
   });
 
   logger.info('✅ Stealth browser launched with bot detection evasion');

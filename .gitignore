@@ -4,8 +4,12 @@ package-lock.json
 
 # Environment variables
 .env
+.env.*
 .env.local
 .env.*.local
+.env.railway
+.env.production
+.env.backup
 
 # IDE
 .vscode/
@@ -68,3 +72,6 @@ debug-*.png
 # Temp files
 *.tmp
 *.temp
+
+# Generated learned patterns (may contain sensitive job data)
+server/learned-patterns/*_*.json

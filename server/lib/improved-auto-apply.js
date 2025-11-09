@@ -50,7 +50,7 @@ class ImprovedAutoApply {
       } = await import('./browser-launcher.js');
       
       browser = await launchStealthBrowser({
-        headless: process.env.HEADLESS !== 'false'
+        headless: false
       });
 
       const context = await createStealthContext(browser);

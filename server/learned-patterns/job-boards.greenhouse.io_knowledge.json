@@ -1,7 +1,7 @@
 {
   "domain": "job-boards.greenhouse.io",
   "firstSeen": "2025-10-30T01:35:58.308Z",
-  "lastUpdated": "2025-11-06T21:12:08.244Z",
+  "lastUpdated": "2025-11-08T11:35:44.514Z",
   "applications": [
     {
       "timestamp": "2025-10-30T01:35:58.303Z",
@@ -257,6 +257,46 @@
       "timestamp": "2025-11-06T21:12:08.243Z",
       "fieldsCount": 3,
       "problemsSolved": 2
+    },
+    {
+      "timestamp": "2025-11-08T11:24:47.790Z",
+      "fieldsCount": 20,
+      "problemsSolved": 9
+    },
+    {
+      "timestamp": "2025-11-08T11:27:37.847Z",
+      "fieldsCount": 20,
+      "problemsSolved": 9
+    },
+    {
+      "timestamp": "2025-11-08T11:30:27.329Z",
+      "fieldsCount": 20,
+      "problemsSolved": 9
+    },
+    {
+      "timestamp": "2025-11-08T11:31:49.006Z",
+      "fieldsCount": 12,
+      "problemsSolved": 5
+    },
+    {
+      "timestamp": "2025-11-08T11:33:13.746Z",
+      "fieldsCount": 3,
+      "problemsSolved": 2
+    },
+    {
+      "timestamp": "2025-11-08T11:33:58.872Z",
+      "fieldsCount": 3,
+      "problemsSolved": 2
+    },
+    {
+      "timestamp": "2025-11-08T11:34:15.397Z",
+      "fieldsCount": 12,
+      "problemsSolved": 3
+    },
+    {
+      "timestamp": "2025-11-08T11:35:44.510Z",
+      "fieldsCount": 12,
+      "problemsSolved": 3
     }
   ],
   "commonPatterns": {
@@ -265,7 +305,7 @@
         "name": "unnamed_4",
         "type": "text",
         "label": "",
-        "count": 4
+        "count": 7
       },
       "question_60921384[]": {
         "name": "question_60921384[]",
@@ -289,7 +329,7 @@
         "name": "unnamed_14",
         "type": "text",
         "label": "Select...",
-        "count": 20
+        "count": 23
       },
       "unnamed_16": {
         "name": "unnamed_16",
@@ -337,7 +377,7 @@
         "name": "unnamed_7",
         "type": "text",
         "label": "",
-        "count": 16
+        "count": 19
       },
       "unnamed_15": {
         "name": "unnamed_15",
@@ -356,6 +396,18 @@
         "type": "text",
         "label": "Select...",
         "count": 16
+      },
+      "question_60994303[]": {
+        "name": "question_60994303[]",
+        "type": "checkbox",
+        "label": "Acknowledge/Confirm",
+        "count": 3
+      },
+      "unnamed_11": {
+        "name": "unnamed_11",
+        "type": "text",
+        "label": "",
+        "count": 3
       }
     },
     "questionTypes": [
@@ -746,6 +798,21 @@
       },
       {
         "label": "What is your GitLab username?",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "How did you hear about this job?*",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "How did you hear about this job?*",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "How did you hear about this job?*",
         "type": "text",
         "category": "other"
       }
@@ -2074,6 +2141,214 @@
       {
         "problem": "Failed to fill office-filter: Failed to fill custom dropdown \"office-filter\": Cannot read properties of undefined (reading 'click')",
         "timestamp": "2025-11-06T21:12:08.243Z"
+      },
+      {
+        "problem": "Dropdown \"country\" failed: Failed to fill custom dropdown \"country\" after 3 attempts. AI provided: \"United States\". Error: Dropdown menu did not open after multiple attempts",
+        "solution": {
+          "issue": "Failed to analyze screenshot",
+          "solution": "Manual intervention required",
+          "needsManualIntervention": true
+        },
+        "timestamp": "2025-11-08T11:24:47.791Z"
+      },
+      {
+        "problem": "Dropdown \"unnamed_4\" failed: Failed to fill custom dropdown \"unnamed_4\" after 3 attempts. AI provided: \"6 years\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-11-08T11:24:47.791Z"
+      },
+      {
+        "problem": "Dropdown \"unnamed_7\" failed: Failed to fill custom dropdown \"unnamed_7\" after 3 attempts. AI provided: \"I am a technology-focused product and data practitioner with a Master of Science in Information Technology Management from the University of Texas at Dallas and a Bachelor of Technology in Electronics and Communication Engineering from Lovely Professional University. At SYNYCS TECHNOLOGIES and theworkgallery.com I partnered with engineering, design, and business stakeholders to deliver customer-centric solutions using Agile practices (Scrum, Kanban) and Lean Startup principles. I bring hands-on analytical skills (Python, SQL, R) together with product tooling experience (Jira, Trello) to translate business needs into measurable outcomes.\n\nIn my recent roles I developed and operationalized analytics and reporting solutions using Tableau and Power BI to inform strategic decisions for product roadmaps and marketing initiatives. I automated data pipelines and built dashboards that enabled stakeholders to quickly understand performance metrics and prioritize work. I’ve used Google Analytics to surface user behavior insights and combined those with backend data analysis to drive feature prioritization. My technical fluency in HTML and React JS helps me communicate effectively with engineering teams while contributing to product-level technical discussions.\n\nI am excited by roles that require both strategic thinking and hands-on execution. I thrive in collaborative, fast-paced environments where continuous improvement and measurement are core values. I am confident that my blend of product management practices, analytics expertise, and technical experience will allow me to make immediate, measurable contributions to the team.\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-11-08T11:24:47.791Z"
+      },
+      {
+        "problem": "Dropdown \"question_60994302\" failed: Failed to fill custom dropdown \"question_60994302\" after 3 attempts. AI provided: \"No\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-11-08T11:24:47.791Z"
+      },
+      {
+        "problem": "Dropdown \"unnamed_14\" failed: Failed to fill custom dropdown \"unnamed_14\" after 3 attempts. AI provided: \"Yes\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-11-08T11:24:47.791Z"
+      },
+      {
+        "problem": "Dropdown \"gender\" failed: Failed to fill custom dropdown \"gender\" after 3 attempts. AI provided: \"Male\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-11-08T11:24:47.791Z"
+      },
+      {
+        "problem": "Dropdown \"hispanic_ethnicity\" failed: Failed to fill custom dropdown \"hispanic_ethnicity\" after 3 attempts. AI provided: \"No\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-11-08T11:24:47.791Z"
+      },
+      {
+        "problem": "Dropdown \"veteran_status\" failed: Failed to fill custom dropdown \"veteran_status\" after 3 attempts. AI provided: \"Not a veteran\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-11-08T11:24:47.791Z"
+      },
+      {
+        "problem": "Dropdown \"disability_status\" failed: Failed to fill custom dropdown \"disability_status\" after 3 attempts. AI provided: \"No\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-11-08T11:24:47.791Z"
+      },
+      {
+        "problem": "Dropdown \"country\" failed: Failed to fill custom dropdown \"country\" after 3 attempts. AI provided: \"United States\". Error: Dropdown menu did not open after multiple attempts",
+        "solution": {
+          "issue": "Failed to analyze screenshot",
+          "solution": "Manual intervention required",
+          "needsManualIntervention": true
+        },
+        "timestamp": "2025-11-08T11:27:37.847Z"
+      },
+      {
+        "problem": "Dropdown \"unnamed_4\" failed: Failed to fill custom dropdown \"unnamed_4\" after 3 attempts. AI provided: \"Product Manager\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-11-08T11:27:37.847Z"
+      },
+      {
+        "problem": "Dropdown \"unnamed_7\" failed: Failed to fill custom dropdown \"unnamed_7\" after 3 attempts. AI provided: \"I am a results-driven Product Manager with over 6 years of experience combining technical fluency and data-driven decision making to deliver customer-focused products. I hold an M.S. in Information Technology Management from the University of Texas at Dallas and a B.Tech in Electronics and Communication Engineering from Lovely Professional University. My background bridges analytics (Tableau, Power BI, Google Analytics), engineering (Python, SQL, HTML, React), and Agile product delivery (Scrum, Jira, Trello, Lean Startup), enabling me to lead cross-functional teams from discovery through launch.\n\nAt SYNYCS TECHNOLOGIES I led product initiatives that improved cross-team alignment and sped up delivery by implementing structured Agile rituals and a prioritized backlog using Jira and Trello. I worked closely with engineering to translate business needs into technical requirements, leveraged data analysis in Python and SQL to validate hypotheses, and built executive dashboards in Power BI to keep stakeholders informed. At theworkgallery.com I collaborated with design, marketing, and analytics to deliver user-focused enhancements—using Google Analytics and A/B testing to guide feature prioritization and Tableau to create actionable dashboards that informed roadmap decisions.\n\nI thrive in fast-paced environments that value customer empathy, measurable outcomes, and continuous improvement. I am excited by opportunities to work at scale and would bring a pragmatic, data-informed approach, strong stakeholder communication, and hands-on technical experience to the role. I am eager to contribute immediately and partner with engineering and design to deliver products that drive business impact.\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-11-08T11:27:37.847Z"
+      },
+      {
+        "problem": "Dropdown \"question_60994302\" failed: Failed to fill custom dropdown \"question_60994302\" after 3 attempts. AI provided: \"No\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-11-08T11:27:37.847Z"
+      },
+      {
+        "problem": "Dropdown \"unnamed_14\" failed: Failed to fill custom dropdown \"unnamed_14\" after 3 attempts. AI provided: \"Full-time\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-11-08T11:27:37.847Z"
+      },
+      {
+        "problem": "Dropdown \"gender\" failed: Failed to fill custom dropdown \"gender\" after 3 attempts. AI provided: \"Male\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-11-08T11:27:37.847Z"
+      },
+      {
+        "problem": "Dropdown \"hispanic_ethnicity\" failed: Failed to fill custom dropdown \"hispanic_ethnicity\" after 3 attempts. AI provided: \"No\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-11-08T11:27:37.847Z"
+      },
+      {
+        "problem": "Dropdown \"veteran_status\" failed: Failed to fill custom dropdown \"veteran_status\" after 3 attempts. AI provided: \"Not a veteran\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-11-08T11:27:37.847Z"
+      },
+      {
+        "problem": "Dropdown \"disability_status\" failed: Failed to fill custom dropdown \"disability_status\" after 3 attempts. AI provided: \"No disability\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-11-08T11:27:37.847Z"
+      },
+      {
+        "problem": "Dropdown \"country\" failed: Failed to fill custom dropdown \"country\" after 3 attempts. AI provided: \"United States\". Error: Dropdown menu did not open after multiple attempts",
+        "solution": {
+          "issue": "Failed to analyze screenshot",
+          "solution": "Manual intervention required",
+          "needsManualIntervention": true
+        },
+        "timestamp": "2025-11-08T11:30:27.329Z"
+      },
+      {
+        "problem": "Dropdown \"unnamed_4\" failed: Failed to fill custom dropdown \"unnamed_4\" after 3 attempts. AI provided: \"I am an experienced product-focused technologist with a strong mix of data analytics, product management practices, and software development familiarity. At SYNYCS TECHNOLOGIES I collaborated with cross-functional teams using Scrum and Kanban to prioritize roadmaps, manage sprints in Jira, and deliver customer-facing features. I partnered closely with engineering and design to run Lean Startup experiments, analyze user behavior with Google Analytics, and build actionable dashboards in Tableau and Power BI to inform product decisions. At theworkgallery.com I applied SQL and Python to extract and analyze user and transaction data, turning insights into prioritized product improvements and A/B tests.\n\nMy technical toolkit includes Python, SQL, R, HTML and React JS, which I combine with product practices (Scrum, Lean Startup) to bridge the gap between business goals and engineering execution. I hold a Master of Science in Information Technology Management from the University of Texas at Dallas and a B.Tech in Electronics and Communication Engineering from Lovely Professional University. I am enthusiastic about roles where I can improve user outcomes through data-driven product decisions, streamline delivery with modern agile practices, and mentor teams to adopt measurable, customer-led development.\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-11-08T11:30:27.329Z"
+      },
+      {
+        "problem": "Dropdown \"unnamed_7\" failed: Failed to fill custom dropdown \"unnamed_7\" after 3 attempts. AI provided: \"6\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-11-08T11:30:27.329Z"
+      },
+      {
+        "problem": "Dropdown \"question_60994302\" failed: Failed to fill custom dropdown \"question_60994302\" after 3 attempts. AI provided: \"No\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-11-08T11:30:27.329Z"
+      },
+      {
+        "problem": "Dropdown \"unnamed_14\" failed: Failed to fill custom dropdown \"unnamed_14\" after 3 attempts. AI provided: \"Full-time\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-11-08T11:30:27.329Z"
+      },
+      {
+        "problem": "Dropdown \"gender\" failed: Failed to fill custom dropdown \"gender\" after 3 attempts. AI provided: \"Male\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-11-08T11:30:27.329Z"
+      },
+      {
+        "problem": "Dropdown \"hispanic_ethnicity\" failed: Failed to fill custom dropdown \"hispanic_ethnicity\" after 3 attempts. AI provided: \"No\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-11-08T11:30:27.329Z"
+      },
+      {
+        "problem": "Dropdown \"veteran_status\" failed: Failed to fill custom dropdown \"veteran_status\" after 3 attempts. AI provided: \"Not a veteran\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-11-08T11:30:27.329Z"
+      },
+      {
+        "problem": "Dropdown \"disability_status\" failed: Failed to fill custom dropdown \"disability_status\" after 3 attempts. AI provided: \"No\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-11-08T11:30:27.329Z"
+      },
+      {
+        "problem": "Dropdown \"country\" failed: Failed to fill custom dropdown \"country\" after 3 attempts. AI provided: \"United States\". Error: Dropdown menu did not open after multiple attempts",
+        "solution": {
+          "issue": "Failed to analyze screenshot",
+          "solution": "Manual intervention required",
+          "needsManualIntervention": true
+        },
+        "timestamp": "2025-11-08T11:31:49.006Z"
+      },
+      {
+        "problem": "Failed to fill resume: No resume file available - user must generate a resume before applying to jobs",
+        "timestamp": "2025-11-08T11:31:49.006Z"
+      },
+      {
+        "problem": "Failed to fill cover_letter: No resume file available - user must generate a resume before applying to jobs",
+        "timestamp": "2025-11-08T11:31:49.006Z"
+      },
+      {
+        "problem": "Dropdown \"question_61132508\" failed: Failed to fill custom dropdown \"question_61132508\" after 3 attempts. AI provided: \"I currently reside in Dallas, TX and I am willing to relocate to Austin, London, or Lisbon. Austin is my top immediate preference due to proximity and an existing professional network in Texas, and I can relocate there on a short timeline. I am also open to relocating to London or Lisbon for the right role; I understand international moves can require work authorization and am prepared to work with an employer on visa or sponsorship processes.\n\nMy educational background (M.S. in Information Technology Management from The University of Texas at Dallas) and hands-on experience with SYNYCS TECHNOLOGIES and theworkgallery.com position me to onboard quickly in any of these cities and contribute to cross-functional teams from day one. I am flexible on timing and open to hybrid or remote-first transitions if that best supports continuity of work.\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-11-08T11:31:49.006Z"
+      },
+      {
+        "problem": "Dropdown \"unnamed_11\" failed: Failed to fill custom dropdown \"unnamed_11\" after 3 attempts. AI provided: \"I bring over 6 years of professional experience combining product, data analytics, and full-stack development principles—experience I developed across roles at SYNYCS TECHNOLOGIES and theworkgallery.com. At SYNYCS TECHNOLOGIES I led Agile delivery activities using Jira and Scrum, coordinated cross-functional teams, and built repeatable reporting processes that improved stakeholder visibility. I regularly leveraged SQL and Python for data extraction and transformation, and produced dashboards in Tableau and Power BI to turn complex data into actionable insights for business and product stakeholders.\n\nAt theworkgallery.com I contributed to web feature development using React JS and HTML, collaborating closely with designers and backend engineers to deliver performant user-facing components. I also applied analytics tools (Google Analytics, custom SQL queries) to measure user engagement and iterate on product prioritization. These combined experiences allow me to bridge technical implementation and business strategy—translating product goals into measurable engineering and analytics deliverables.\n\nI hold a Master of Science in Information Technology Management from The University of Texas at Dallas and a Bachelor of Technology in Electronics and Communication Engineering from Lovely Professional University. My portfolio (https://vinay.portfolio) highlights representative projects, and I am excited to bring my blend of data-driven decision-making, Agile delivery experience, and front-end implementation skills to a team that values collaboration, measurable impact, and continuous improvement.\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-11-08T11:31:49.006Z"
+      },
+      {
+        "problem": "Dropdown \"department-filter\" failed: Failed to fill custom dropdown \"department-filter\" after 3 attempts. AI provided: \"Product Management\". Error: Dropdown menu did not open after multiple attempts",
+        "solution": {
+          "issue": "Failed to analyze screenshot",
+          "solution": "Manual intervention required",
+          "needsManualIntervention": true
+        },
+        "timestamp": "2025-11-08T11:33:13.747Z"
+      },
+      {
+        "problem": "Dropdown \"office-filter\" failed: Failed to fill custom dropdown \"office-filter\" after 3 attempts. AI provided: \"Dallas, TX\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-11-08T11:33:13.747Z"
+      },
+      {
+        "problem": "Dropdown \"department-filter\" failed: Failed to fill custom dropdown \"department-filter\" after 3 attempts. AI provided: \"Product Management\". Error: Dropdown menu did not open after multiple attempts",
+        "solution": {
+          "issue": "Failed to analyze screenshot",
+          "solution": "Manual intervention required",
+          "needsManualIntervention": true
+        },
+        "timestamp": "2025-11-08T11:33:58.872Z"
+      },
+      {
+        "problem": "Dropdown \"office-filter\" failed: Failed to fill custom dropdown \"office-filter\" after 3 attempts. AI provided: \"Dallas, TX\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-11-08T11:33:58.872Z"
+      },
+      {
+        "problem": "Dropdown \"country\" failed: Failed to fill custom dropdown \"country\" after 3 attempts. AI provided: \"United States\". Error: Dropdown menu did not open after multiple attempts",
+        "solution": {
+          "issue": "Failed to analyze screenshot",
+          "solution": "Manual intervention required",
+          "needsManualIntervention": true
+        },
+        "timestamp": "2025-11-08T11:34:15.398Z"
+      },
+      {
+        "problem": "Dropdown \"question_61132508\" failed: Failed to fill custom dropdown \"question_61132508\" after 3 attempts. AI provided: \"Yes — I currently reside in Dallas, TX and I am willing to relocate to Austin. I am also open to relocating to London or Lisbon for the right opportunity and will secure any necessary visas/permits as required.\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-11-08T11:34:15.398Z"
+      },
+      {
+        "problem": "Dropdown \"unnamed_11\" failed: Failed to fill custom dropdown \"unnamed_11\" after 3 attempts. AI provided: \"I bring 8+ years of experience applying data-driven product and project management to deliver measurable business impact. With a Master of Science in Information Technology Management from the University of Texas at Dallas and a Bachelor of Technology in Electronics and Communication Engineering from Lovely Professional University, I combine formal training with hands-on experience across analytics, engineering, and product teams. My technical toolkit includes SQL, Python, R, Tableau, Power BI, React, HTML, and strong Agile practice using Jira, Scrum, and Kanban.\n\nAt SYNYCS TECHNOLOGIES I led cross-functional teams of engineers and analysts to deliver production analytics and product features. I implemented automated SQL data pipelines and built Tableau/Power BI dashboards that reduced reporting time by approximately 40% and enabled timely decision-making for pricing and go-to-market strategies. I introduced Jira-driven sprint planning and Scrum ceremonies that tightened feedback loops and improved delivery predictability. These efforts translated directly into clearer KPI visibility and faster iterations on revenue-impacting work.\n\nWhile at theworkgallery.com I partnered closely with product, design, and marketing to build customer-facing features using React and backend integrations. Using Lean Startup principles and A/B testing with Google Analytics, I prioritized experiments that increased user engagement and conversion metrics (improving conversion by nearly 18% on targeted flows). I have led roadmap planning, defined success metrics, and translated analytics into actionable product changes. My experience enables me to bridge technical implementation and business outcomes—quickly turning data into prioritized product work and measurable results.\n\nI am excited about opportunities where I can apply this mix of analytics, engineering familiarity, and Agile product leadership. My portfolio (https://vinay.portfolio) contains examples of dashboards, experiments, and product work I’ve led. I’m reachable at ivinaymr@gmail.com or 9452447733 and eager to discuss how my background at SYNYCS TECHNOLOGIES and theworkgallery.com can contribute to your team.\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-11-08T11:34:15.398Z"
+      },
+      {
+        "problem": "Dropdown \"country\" failed: Failed to fill custom dropdown \"country\" after 3 attempts. AI provided: \"United States\". Error: Dropdown menu did not open after multiple attempts",
+        "solution": {
+          "issue": "Failed to analyze screenshot",
+          "solution": "Manual intervention required",
+          "needsManualIntervention": true
+        },
+        "timestamp": "2025-11-08T11:35:44.511Z"
+      },
+      {
+        "problem": "Dropdown \"question_61132508\" failed: Failed to fill custom dropdown \"question_61132508\" after 3 attempts. AI provided: \"Yes — I currently reside in Dallas, TX and am willing to relocate to Austin. I am also open to considering relocation to London or Lisbon given appropriate support for international relocation and visas.\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-11-08T11:35:44.511Z"
+      },
+      {
+        "problem": "Dropdown \"unnamed_11\" failed: Failed to fill custom dropdown \"unnamed_11\" after 3 attempts. AI provided: \"I bring a practical blend of technical expertise, analytics-driven decision making, and product delivery experience grounded in my MS in Information Technology Management from the University of Texas at Dallas and hands-on roles at SYNYCS TECHNOLOGIES and theworkgallery.com. At SYNYCS TECHNOLOGIES I worked closely with engineering and product teams to adopt Agile practices (Scrum and Kanban) and Jira for sprint planning and tracking, which improved delivery predictability and cross-team communication. I built and maintained Power BI and Tableau reporting layers and used SQL and Python for ETL and data transformation to surface actionable KPIs for stakeholders.\n\nAt theworkgallery.com I led front-end initiatives using React and collaborated with designers and backend engineers to modernize user experiences. I implemented Google Analytics event tracking and created dashboards that clarified user funnels and informed iterative product changes using Lean Startup principles. My technical skillset (Python, SQL, R, HTML, React) combined with analytics tools (Tableau, Power BI, Google Analytics) allows me to both prototype solutions and operationalize them for measurable business impact.\n\nI am excited by roles that sit at the intersection of product, data, and engineering where I can drive outcomes by translating customer needs into prioritized roadmaps, mentoring cross-functional teams in Agile practices, and delivering clear, data-backed insights. I am enthusiastic about joining teams that value continuous improvement, ownership, and user-centered design; with my background I will contribute immediately by improving delivery cadence, building scalable dashboards, and helping shape product strategy informed by analytics.\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-11-08T11:35:44.511Z"
       }
     ]
   }

@@ -63,7 +63,7 @@ async function applyWithAI(jobUrl, user, jobData, resumePath = null) {
       createStealthContext, 
       applyStealthToPage 
     } = await import('./browser-launcher.js');
-    browser = await launchStealthBrowser();
+    browser = await launchStealthBrowser({ headless: false });
 
     // Create stealth context with realistic browser properties
     const context = await createStealthContext(browser);
