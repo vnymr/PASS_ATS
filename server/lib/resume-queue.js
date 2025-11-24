@@ -14,64 +14,94 @@ let resumeWorker = null;
 const MAX_REDIS_RETRIES = 5;
 let redisRetryCount = 0;
 
+// Check if Redis URL is an internal Railway URL that might not be accessible
+function isInternalRedisUrl(url) {
+  if (!url) return false;
+  try {
+    const parsed = new URL(url);
+    return parsed.hostname.endsWith('.railway.internal');
+  } catch {
+    return false;
+  }
+}
+
 // Initialize Redis connection with retry limit
 function initializeRedis() {
-  const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+  const redisUrl = process.env.REDIS_URL;
 
-  // Skip if Redis URL contains 'railway.internal' and we've exceeded retries
-  // This prevents infinite loops when Redis service doesn't exist
+  // In production without REDIS_URL, don't try to connect to localhost
+  if (!redisUrl) {
+    if (process.env.NODE_ENV === 'production') {
+      logger.warn('REDIS_URL not set in production, running without Redis queue');
+      return null;
+    }
+    // In development, use localhost
+  }
+
+  const finalUrl = redisUrl || 'redis://localhost:6379';
+
+  // Skip if we've exceeded retries
   if (redisRetryCount >= MAX_REDIS_RETRIES) {
     logger.warn('Redis max retries exceeded, running without Redis queue');
     return null;
   }
 
-  const conn = new Redis(redisUrl, {
-    maxRetriesPerRequest: null,
-    enableReadyCheck: false,
-    connectTimeout: 5000, // 5 second timeout
-    retryStrategy(times) {
-      redisRetryCount = times;
-      if (times > MAX_REDIS_RETRIES) {
-        logger.warn({ attempt: times }, 'Redis max retries exceeded, stopping reconnection');
-        return null; // Stop retrying
+  try {
+    const conn = new Redis(finalUrl, {
+      maxRetriesPerRequest: null,
+      enableReadyCheck: false,
+      connectTimeout: 5000, // 5 second timeout
+      lazyConnect: true, // Don't connect immediately
+      retryStrategy(times) {
+        redisRetryCount = times;
+        if (times > MAX_REDIS_RETRIES) {
+          logger.warn({ attempt: times }, 'Redis max retries exceeded, stopping reconnection');
+          redisAvailable = false;
+          return null; // Stop retrying
+        }
+        const delay = Math.min(times * 500, 3000);
+        logger.warn({ attempt: times, delay, maxRetries: MAX_REDIS_RETRIES }, 'Redis retry attempt');
+        return delay;
       }
-      const delay = Math.min(times * 500, 3000);
-      logger.warn({ attempt: times, delay, maxRetries: MAX_REDIS_RETRIES }, 'Redis retry attempt');
-      return delay;
-    }
-  });
+    });
 
-  conn.on('connect', () => {
-    redisAvailable = true;
-    redisRetryCount = 0;
-    logger.info('Redis connected for resume queue');
-  });
+    conn.on('connect', () => {
+      redisAvailable = true;
+      redisRetryCount = 0;
+      logger.info('Redis connected for resume queue');
+    });
 
-  conn.on('ready', () => {
-    redisAvailable = true;
-    logger.info('Redis ready for resume queue');
-  });
+    conn.on('ready', () => {
+      redisAvailable = true;
+      logger.info('Redis ready for resume queue');
+    });
 
-  conn.on('error', (error) => {
-    // Only log once per error type to avoid spam
-    if (redisRetryCount <= MAX_REDIS_RETRIES) {
-      logger.error({ error: error.message }, 'Redis connection error');
-    }
-  });
+    conn.on('error', (error) => {
+      redisAvailable = false;
+      // Only log once per error type to avoid spam
+      if (redisRetryCount <= MAX_REDIS_RETRIES) {
+        logger.error({ error: error.message }, 'Redis connection error');
+      }
+      // Don't rethrow - let retry strategy handle it
+    });
 
-  conn.on('close', () => {
-    redisAvailable = false;
-    if (redisRetryCount <= MAX_REDIS_RETRIES) {
-      logger.warn('Redis connection closed');
-    }
-  });
+    conn.on('close', () => {
+      redisAvailable = false;
+      if (redisRetryCount <= MAX_REDIS_RETRIES) {
+        logger.warn('Redis connection closed');
+      }
+    });
 
-  conn.on('end', () => {
-    redisAvailable = false;
-    logger.warn('Redis connection ended, queue features disabled');
-  });
+    conn.on('end', () => {
+      redisAvailable = false;
+      logger.warn('Redis connection ended, queue features disabled');
+    });
 
-  return conn;
+    return conn;
+  } catch (error) {
+    logger.error({ error: error.message }, 'Failed to create Redis connection');
+    return null;
+  }
 }
 
 // Initialize queue and worker if Redis is available

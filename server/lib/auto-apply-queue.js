@@ -26,10 +26,34 @@ if (!redisUrl && process.env.NODE_ENV === 'production') {
   logger.warn('REDIS_URL not set in production - auto-apply queue will be disabled');
 }
 
+// Check if Redis URL is an internal Railway URL that might not be accessible
+function isInternalRedisUrl(url) {
+  if (!url) return false;
+  try {
+    const parsed = new URL(url);
+    // Railway internal URLs use .railway.internal domain
+    return parsed.hostname.endsWith('.railway.internal');
+  } catch {
+    return false;
+  }
+}
+
 function parseRedisConfig(url) {
   if (!url) {
+    // Don't return localhost config in production - just return null to disable queue
+    if (process.env.NODE_ENV === 'production') {
+      return null;
+    }
     return { host: '127.0.0.1', port: 6379 };
   }
+
+  // In production, check if the Redis URL is reachable first
+  // Internal Railway URLs might not be accessible if Redis service isn't deployed
+  if (isInternalRedisUrl(url) && process.env.SKIP_REDIS_ON_INTERNAL_URL === 'true') {
+    logger.warn({ url: url.replace(/\/\/.*@/, '//**:**@') }, 'Skipping internal Railway Redis URL - SKIP_REDIS_ON_INTERNAL_URL is set');
+    return null;
+  }
+
   try {
     const parsed = new URL(url);
     const config = {
@@ -40,6 +64,8 @@ function parseRedisConfig(url) {
         redisRetryCount = times;
         if (times > MAX_REDIS_RETRIES) {
           logger.warn({ attempt: times, maxRetries: MAX_REDIS_RETRIES }, 'Auto-apply queue: Redis max retries exceeded');
+          // Mark queue as unavailable and stop retrying
+          queueAvailable = false;
           return null; // Stop retrying
         }
         const delay = Math.min(times * 500, 3000);
@@ -51,9 +77,13 @@ function parseRedisConfig(url) {
       maxRetriesPerRequest: 3, // Limit retries per request
       connectTimeout: 5000, // 5 second timeout
       enableOfflineQueue: false, // Don't queue commands when disconnected
+      lazyConnect: true, // Don't connect immediately - wait for first command
     };
     if (parsed.password) {
-      config.password = parsed.password;
+      config.password = decodeURIComponent(parsed.password);
+    }
+    if (parsed.username) {
+      config.username = decodeURIComponent(parsed.username);
     }
     if (parsed.protocol === 'rediss:') {
       config.tls = { rejectUnauthorized: false };
@@ -68,7 +98,9 @@ function parseRedisConfig(url) {
 const redisConfig = parseRedisConfig(redisUrl);
 if (!redisUrl) {
   logger.warn('REDIS_URL not set; auto-apply queue disabled');
-} else if (redisConfig) {
+} else if (!redisConfig) {
+  logger.warn('Redis configuration invalid or skipped; auto-apply queue disabled');
+} else {
   logger.info({ host: redisConfig.host, port: redisConfig.port }, 'Auto-apply queue using configured Redis');
 }
 
@@ -499,6 +531,23 @@ async function applyWithAI(jobUrl, user, jobData, resumePath = null) {
 // Create auto-apply queue (only if Redis config is valid)
 let autoApplyQueue = null;
 
+// Global handler for unhandled Redis rejections to prevent crashes
+function setupRedisErrorHandlers(client, name) {
+  if (!client) return;
+
+  client.on('error', (error) => {
+    if (redisRetryCount <= MAX_REDIS_RETRIES) {
+      logger.error({ error: error.message, client: name }, 'Redis client error');
+    }
+    // Don't rethrow - let retry strategy handle it
+  });
+
+  client.on('end', () => {
+    queueAvailable = false;
+    logger.warn({ client: name }, 'Redis client connection ended');
+  });
+}
+
 if (redisConfig) {
   try {
     autoApplyQueue = new Queue('auto-apply', {
@@ -522,15 +571,26 @@ if (redisConfig) {
     });
 
     autoApplyQueue.on('error', (error) => {
+      // Mark queue as unavailable on any error
+      queueAvailable = false;
       if (redisRetryCount <= MAX_REDIS_RETRIES) {
         logger.error({ error: error.message }, 'Auto-apply queue error');
       }
+      // Don't rethrow - prevent unhandled rejection
     });
 
-    autoApplyQueue.client.on('end', () => {
-      queueAvailable = false;
-      logger.warn('Auto-apply queue Redis connection ended');
+    // Setup error handlers for all Redis clients used by Bull
+    // Bull uses multiple Redis connections: client, subscriber, bclient
+    setupRedisErrorHandlers(autoApplyQueue.client, 'queue-client');
+
+    // Subscriber client is created lazily, wait for it
+    autoApplyQueue.on('waiting', () => {
+      if (autoApplyQueue.eclient && !autoApplyQueue.eclient._eventsHandled) {
+        setupRedisErrorHandlers(autoApplyQueue.eclient, 'queue-subscriber');
+        autoApplyQueue.eclient._eventsHandled = true;
+      }
     });
+
   } catch (error) {
     logger.error({ error: error.message }, 'Failed to create auto-apply queue');
     autoApplyQueue = null;

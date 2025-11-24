@@ -1,3 +1,43 @@
+// Global error handlers - MUST be first to catch all errors
+// Prevents process crash from unhandled Redis/queue errors
+process.on('unhandledRejection', (reason, promise) => {
+  // Check if this is a Redis-related error that we can safely ignore
+  const errorMessage = reason?.message || String(reason);
+  const isRedisError = errorMessage.includes('ENOTFOUND') ||
+                       errorMessage.includes('ECONNREFUSED') ||
+                       errorMessage.includes('Redis') ||
+                       errorMessage.includes('redis') ||
+                       errorMessage.includes('enableOfflineQueue');
+
+  if (isRedisError) {
+    console.warn('[Redis] Non-fatal unhandled rejection (Redis unavailable):', errorMessage);
+    // Don't crash - Redis is optional
+    return;
+  }
+
+  // Log other unhandled rejections but don't crash immediately
+  console.error('[CRITICAL] Unhandled rejection:', reason);
+});
+
+process.on('uncaughtException', (error) => {
+  // Check if this is a Redis-related error
+  const errorMessage = error?.message || String(error);
+  const isRedisError = errorMessage.includes('ENOTFOUND') ||
+                       errorMessage.includes('ECONNREFUSED') ||
+                       errorMessage.includes('Redis') ||
+                       errorMessage.includes('redis');
+
+  if (isRedisError) {
+    console.warn('[Redis] Non-fatal uncaught exception (Redis unavailable):', errorMessage);
+    // Don't crash - Redis is optional
+    return;
+  }
+
+  // For other errors, log and exit gracefully
+  console.error('[CRITICAL] Uncaught exception:', error);
+  process.exit(1);
+});
+
 import express from 'express';
 import cors from 'cors';
 import jwt from 'jsonwebtoken';
@@ -129,7 +169,9 @@ const jobProcessingLimiter = rateLimit({
 
 // Environment validation
 function validateEnvironment() {
-  const required = ['JWT_SECRET', 'OPENAI_API_KEY', 'DATABASE_URL', 'REDIS_URL', 'STRIPE_SECRET_KEY'];
+  // Redis is now optional - app will work without it (queue features disabled)
+  const required = ['JWT_SECRET', 'OPENAI_API_KEY', 'DATABASE_URL', 'STRIPE_SECRET_KEY'];
+  const optional = ['REDIS_URL'];
   const missing = required.filter(key => !process.env[key]);
 
   if (missing.length > 0) {
@@ -142,7 +184,7 @@ function validateEnvironment() {
   logger.info('   - Port:', process.env.PORT || '3000');
   logger.info('   - OpenAI API Key:', '✅ Present');
   logger.info('   - Database URL:', '✅ Present');
-  logger.info('   - Redis URL:', '✅ Present');
+  logger.info('   - Redis URL:', process.env.REDIS_URL ? '✅ Present' : '⚠️ Not configured (queue features disabled)');
   logger.info('   - Stripe Secret:', '✅ Present');
 }
 
