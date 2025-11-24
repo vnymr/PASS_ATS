@@ -1,0 +1,80 @@
+version: '3.8'
+
+services:
+  # Main Node.js application
+  node-app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      # Camoufox configuration
+      - USE_CAMOUFOX=true
+      - CAMOUFOX_WS_ENDPOINT=ws://python-browser:3000/ws
+
+      # Database
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+
+      # API Keys
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - TWOCAPTCHA_API_KEY=${TWOCAPTCHA_API_KEY}
+
+      # Proxy (optional)
+      - PROXY_SERVER=${PROXY_SERVER}
+      - PROXY_USERNAME=${PROXY_USERNAME}
+      - PROXY_PASSWORD=${PROXY_PASSWORD}
+
+      # Other settings
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=3000
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    depends_on:
+      - python-browser
+      - redis
+    networks:
+      - app-network
+    volumes:
+      - ./:/app
+      - /app/node_modules
+    command: npm start
+
+  # Python Camoufox browser server
+  python-browser:
+    build: ./python-service
+    ports:
+      - "3001:3000"  # Expose for debugging/monitoring
+    networks:
+      - app-network
+    restart: unless-stopped
+    environment:
+      - ENVIRONMENT=${NODE_ENV:-development}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.connect(('localhost', 3000)); s.close()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Redis for Bull queue and caching
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - app-network
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  redis-data:

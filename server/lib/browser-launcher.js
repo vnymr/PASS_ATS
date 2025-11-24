@@ -6,6 +6,7 @@
  */
 
 import { chromium } from 'playwright-extra';
+import { firefox } from 'playwright-core'; // For Camoufox remote connection
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import logger from './logger.js';
 import { execSync } from 'child_process';
@@ -372,14 +373,127 @@ export async function launchBrowserlessBrowser(options = {}) {
 }
 
 /**
+ * Launch Camoufox browser via remote WebSocket connection
+ * Connects to Python microservice running Camoufox browser server
+ * @param {Object} options - Launch options
+ * @returns {Promise<Browser>} Playwright browser instance
+ */
+export async function launchCamoufoxBrowser(options = {}) {
+  const wsEndpoint = process.env.CAMOUFOX_WS_ENDPOINT || 'ws://localhost:3000/ws';
+
+  logger.info({ wsEndpoint: wsEndpoint.replace(/\/\/.*@/, '//***@') }, '🦊 Connecting to Camoufox remote browser...');
+
+  try {
+    // Connect to Python Camoufox service via WebSocket
+    // Camoufox is Firefox-based, so we use firefox.connect()
+    const browser = await firefox.connect({
+      wsEndpoint,
+      timeout: 30000 // 30 second timeout for connection
+    });
+
+    logger.info('✅ Connected to Camoufox browser server');
+
+    // Add disconnect handler for monitoring
+    browser.on('disconnected', () => {
+      logger.warn('⚠️ Browser disconnected from Camoufox server');
+    });
+
+    return browser;
+  } catch (error) {
+    logger.error({
+      error: error.message,
+      wsEndpoint: wsEndpoint.replace(/\/\/.*@/, '//***@')
+    }, '❌ Failed to connect to Camoufox browser');
+
+    throw new Error(`Camoufox connection failed: ${error.message}`);
+  }
+}
+
+/**
+ * Create stealth context for Camoufox browser
+ * Includes proxy support and realistic browser fingerprinting
+ * @param {Browser} browser - Camoufox browser instance
+ * @param {Object} options - Context options
+ * @returns {Promise<BrowserContext>} Stealth browser context
+ */
+export async function createStealthContextCamoufox(browser, options = {}) {
+  // Firefox user agents for Camoufox
+  const userAgents = [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/115.0',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/115.0',
+    'Mozilla/5.0 (X11; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/115.0',
+  ];
+
+  const randomUserAgent = userAgents[Math.floor(Math.random() * userAgents.length)];
+
+  const contextOptions = {
+    viewport: { width: 1920, height: 1080 },
+    userAgent: options.userAgent || randomUserAgent,
+    locale: 'en-US',
+    timezoneId: 'America/New_York',
+    permissions: ['geolocation'],
+    geolocation: { latitude: 40.7128, longitude: -74.0060 }, // NYC coordinates
+    colorScheme: 'light',
+    extraHTTPHeaders: {
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+      'Connection': 'keep-alive',
+      'Upgrade-Insecure-Requests': '1',
+      'Sec-Fetch-Dest': 'document',
+      'Sec-Fetch-Mode': 'navigate',
+      'Sec-Fetch-Site': 'none',
+      'Sec-Fetch-User': '?1',
+    },
+    ...options
+  };
+
+  // Add proxy configuration if environment variables are set
+  // The proxy runs in the Python container, but Node.js configures it
+  if (process.env.PROXY_SERVER) {
+    contextOptions.proxy = {
+      server: process.env.PROXY_SERVER,
+      username: process.env.PROXY_USERNAME,
+      password: process.env.PROXY_PASSWORD
+    };
+
+    logger.info({
+      proxyServer: process.env.PROXY_SERVER.replace(/\/\/.*@/, '//***@')
+    }, '🔒 Proxy configured for Camoufox context');
+  }
+
+  const context = await browser.newContext(contextOptions);
+
+  logger.debug({ userAgent: randomUserAgent }, 'Created Camoufox stealth context');
+  return context;
+}
+
+/**
  * Launch browser for stealth mode (auto-apply, form filling)
  * Includes comprehensive bot detection evasion
- * Optionally uses Browserless Cloud if configured
+ * Priority: Camoufox → Browserless Cloud → Local Playwright
  */
 export async function launchStealthBrowser(options = {}) {
-  // Check if Browserless Cloud is configured
-  const useBrowserless = process.env.USE_BROWSERLESS === 'true' || 
-                         process.env.BROWSERLESS_URL || 
+  // Priority 1: Check if Camoufox is configured
+  const useCamoufox = process.env.USE_CAMOUFOX === 'true';
+
+  if (useCamoufox) {
+    logger.info('🦊 Using Camoufox for maximum stealth (C++ level detection evasion)');
+    try {
+      const browser = await launchCamoufoxBrowser(options);
+      logger.info('✅ Camoufox browser connected successfully');
+      return browser;
+    } catch (error) {
+      logger.warn({
+        error: error.message
+      }, '⚠️ Camoufox connection failed, falling back to Browserless/local');
+      // Fall through to next option
+    }
+  }
+
+  // Priority 2: Check if Browserless Cloud is configured
+  const useBrowserless = process.env.USE_BROWSERLESS === 'true' ||
+                         process.env.BROWSERLESS_URL ||
                          process.env.BROWSERLESS_ENDPOINT;
 
   if (useBrowserless) {
@@ -394,7 +508,7 @@ export async function launchStealthBrowser(options = {}) {
     }
   }
 
-  // Use local browser with stealth techniques
+  // Priority 3: Use local browser with stealth techniques
   const browser = await launchBrowser({
     ...options,
     stealth: true,
@@ -594,8 +708,10 @@ export default {
   launchStealthBrowser,
   launchPooledBrowser,
   launchBrowserlessBrowser,
+  launchCamoufoxBrowser,
   applyStealthToPage,
   createStealthContext,
+  createStealthContextCamoufox,
   moveMouseHumanLike,
   humanDelay,
   humanScroll,
