@@ -14,7 +14,7 @@
  * Total Jobs: 10,000+ with auto-discovery
  */
 
-import fetch from 'node-fetch';
+// Node 18+ has native fetch - no need for node-fetch
 import Parser from 'rss-parser';
 import { chromium } from 'playwright';
 import crypto from 'crypto';

@@ -14,7 +14,7 @@
  * Output: Discovers 100-500 NEW companies per day automatically!
  */
 
-import fetch from 'node-fetch';
+// Node 18+ has native fetch - no need for node-fetch
 import { chromium } from 'playwright';
 import { prisma } from '../prisma-client.js';
 import logger from '../logger.js';
