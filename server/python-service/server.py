@@ -31,11 +31,15 @@ async def startup_event():
     print(f"🔧 Environment: {os.getenv('ENVIRONMENT', 'development')}")
 
     try:
-        # Launch Camoufox browser
-        async with async_playwright() as p:
-            camoufox = AsyncCamoufox(headless=True, geoip=True)
-            browser = await camoufox.__aenter__()
-            context = await browser.default_context
+        # Launch Camoufox browser with persistent context
+        camoufox = AsyncCamoufox(
+            headless=True,
+            geoip=True,
+            addons=[],
+            os=None  # Auto-detect OS for best fingerprint
+        )
+        browser = await camoufox.start()
+        context = browser.contexts[0] if browser.contexts else await browser.new_context()
 
         print(f"✅ Camoufox browser launched successfully")
         print(f"📡 Server listening on port 3000")
