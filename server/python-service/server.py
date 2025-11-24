@@ -36,16 +36,22 @@ def main():
     try:
         # Launch Camoufox remote server
         # This blocks forever - Node.js can connect to ws://host:port/ws_path
-        launch_server(
-            headless=headless,
-            geoip=True,  # Enable realistic IP geolocation
-            proxy=proxy_config,
-            port=port,
-            ws_path=ws_path,
-            # Stealth options
-            os=None,  # Auto-detect OS for best fingerprint
-            addons=[],
-        )
+
+        # Build launch arguments (only include proxy if configured)
+        launch_args = {
+            'headless': headless,
+            'geoip': True,  # Enable realistic IP geolocation
+            'port': port,
+            'ws_path': ws_path,
+            'os': None,  # Auto-detect OS for best fingerprint
+            'addons': [],
+        }
+
+        # Only add proxy if it's configured (Camoufox doesn't accept None)
+        if proxy_config:
+            launch_args['proxy'] = proxy_config
+
+        launch_server(**launch_args)
 
         print("✅ Camoufox server started successfully", flush=True)
         print(f"📞 Node.js can connect to: ws://localhost:{port}/{ws_path}", flush=True)
