@@ -1,6 +1,6 @@
 FROM python:3.10-slim
 
-# Install system dependencies for Firefox (Camoufox is Firefox-based)
+# Install system dependencies for Firefox/Camoufox (includes GTK)
 RUN apt-get update && apt-get install -y \
     wget \
     gnupg \
@@ -17,6 +17,16 @@ RUN apt-get update && apt-get install -y \
     libxrandr2 \
     libgbm1 \
     libasound2 \
+    libgtk-3-0 \
+    libgtk-3-dev \
+    libgdk-pixbuf2.0-0 \
+    libcairo2 \
+    libpango-1.0-0 \
+    libpangocairo-1.0-0 \
+    libdbus-glib-1-2 \
+    libxt6 \
+    libx11-xcb1 \
+    xvfb \
     && rm -rf /var/lib/apt/lists/*
 
 # Upgrade pip
