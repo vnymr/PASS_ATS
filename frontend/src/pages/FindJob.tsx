@@ -909,8 +909,6 @@ export default function FindJob() {
                 onGenerateResume={handleGenerateResume}
                 onViewJob={(url) => window.open(url, '_blank', 'noopener')}
                 onAutoApply={selectedJob.aiApplyable ? (j) => handleAutoApply(j.id) : undefined}
-                isGenerating={generatingResumes[selectedJob.id]}
-                resumeJobId={generatedResumes[selectedJob.id]}
               />
             </div>
           )}
