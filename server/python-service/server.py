@@ -37,19 +37,21 @@ def main():
         # Launch Camoufox remote server
         # This blocks forever - Node.js can connect to ws://host:port/ws_path
 
-        # Build launch arguments (only include proxy if configured)
+        # Build launch arguments (only include optional params if configured)
         launch_args = {
             'headless': headless,
             'geoip': True,  # Enable realistic IP geolocation
             'port': port,
             'ws_path': ws_path,
-            'os': None,  # Auto-detect OS for best fingerprint
-            'addons': [],
         }
 
-        # Only add proxy if it's configured (Camoufox doesn't accept None)
+        # Only add proxy if it's configured (Camoufox rejects None values)
         if proxy_config:
             launch_args['proxy'] = proxy_config
+
+        # Debug: Show what we're passing
+        print(f"📋 Launch arguments: {list(launch_args.keys())}", flush=True)
+        print("Launching server...", flush=True)
 
         launch_server(**launch_args)
 
