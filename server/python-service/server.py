@@ -1,100 +1,62 @@
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel
-from typing import Optional, Dict, Any
-from contextlib import asynccontextmanager
-import asyncio
-import uvicorn
+"""
+Camoufox Remote Browser Server
+Launches Camoufox in server mode for Node.js Playwright to connect to
+"""
+
 import os
-from camoufox.async_api import AsyncCamoufox
-from playwright.async_api import async_playwright
+import sys
+from camoufox.server import launch_server
 
-# Global browser instance
-browser = None
-context = None
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Lifespan context manager for startup and shutdown"""
-    global browser, context
-
-    # Startup
-    print("🚀 Starting Camoufox Stealth Server...", flush=True)
+def main():
+    print("🚀 Starting Camoufox Remote Browser Server...", flush=True)
     print(f"🔧 Environment: {os.getenv('ENVIRONMENT', 'development')}", flush=True)
 
-    try:
-        # Launch Camoufox browser with persistent context
-        print("📦 Initializing Camoufox browser...", flush=True)
-        camoufox = AsyncCamoufox(
-            headless=True,
-            geoip=True,
-            addons=[],
-            os=None  # Auto-detect OS for best fingerprint
-        )
-        browser = await camoufox.start()
-        context = browser.contexts[0] if browser.contexts else await browser.new_context()
+    # Get configuration from environment
+    port = int(os.getenv('CAMOUFOX_PORT', '3000'))
+    ws_path = os.getenv('CAMOUFOX_WS_PATH', 'browser')
+    headless = os.getenv('CAMOUFOX_HEADLESS', 'true').lower() == 'true'
 
-        print(f"✅ Camoufox browser launched successfully", flush=True)
-        print(f"📡 Server ready on port 3000", flush=True)
-
-    except Exception as e:
-        print(f"❌ Failed to start browser: {e}", flush=True)
-        raise
-
-    yield  # Server runs here
-
-    # Shutdown
-    print("🔌 Shutting down...", flush=True)
-    if browser:
-        await browser.close()
-        print("✅ Browser closed", flush=True)
-
-app = FastAPI(lifespan=lifespan)
-
-class NavigateRequest(BaseModel):
-    url: str
-    timeout: Optional[int] = 30000
-
-class FormDataRequest(BaseModel):
-    url: str
-    form_data: Dict[str, Any]
-    timeout: Optional[int] = 300000
-
-@app.get("/health")
-async def health_check():
-    """Health check endpoint"""
-    return {"status": "healthy", "browser": "ready" if browser else "not ready"}
-
-@app.post("/api/browser/apply-job")
-async def apply_job(request: FormDataRequest):
-    """
-    Complete job application automation
-    This endpoint receives a job URL and form data,
-    navigates to the page, fills the form, and submits
-    """
-    if not browser:
-        raise HTTPException(status_code=503, detail="Browser not initialized")
-
-    try:
-        page = await context.new_page()
-
-        # Navigate to job URL
-        await page.goto(request.url, timeout=request.timeout)
-
-        # TODO: Implement form filling logic here
-        # For now, just return success
-
-        await page.close()
-
-        return {
-            "success": True,
-            "message": "Job application completed",
-            "url": request.url
+    # Proxy configuration (optional)
+    proxy_config = None
+    if os.getenv('PROXY_SERVER'):
+        proxy_config = {
+            'server': os.getenv('PROXY_SERVER'),
         }
+        if os.getenv('PROXY_USERNAME'):
+            proxy_config['username'] = os.getenv('PROXY_USERNAME')
+        if os.getenv('PROXY_PASSWORD'):
+            proxy_config['password'] = os.getenv('PROXY_PASSWORD')
 
+    print(f"📡 Launching server on ws://0.0.0.0:{port}/{ws_path}", flush=True)
+    print(f"🦊 Headless: {headless}", flush=True)
+    print(f"🌍 GeoIP: enabled", flush=True)
+    if proxy_config:
+        print(f"🔐 Proxy: {proxy_config['server']}", flush=True)
+
+    try:
+        # Launch Camoufox remote server
+        # This blocks forever - Node.js can connect to ws://host:port/ws_path
+        launch_server(
+            headless=headless,
+            geoip=True,  # Enable realistic IP geolocation
+            proxy=proxy_config,
+            port=port,
+            ws_path=ws_path,
+            # Stealth options
+            os=None,  # Auto-detect OS for best fingerprint
+            addons=[],
+        )
+
+        print("✅ Camoufox server started successfully", flush=True)
+        print(f"📞 Node.js can connect to: ws://localhost:{port}/{ws_path}", flush=True)
+        print("⏳ Server will run indefinitely...", flush=True)
+
+    except KeyboardInterrupt:
+        print("\n🔌 Shutting down Camoufox server...", flush=True)
+        sys.exit(0)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"❌ Failed to start server: {e}", flush=True)
+        sys.exit(1)
 
 if __name__ == "__main__":
-    print("🚀 Starting Camoufox Stealth Server...")
-    uvicorn.run(app, host="0.0.0.0", port=3000)
+    main()

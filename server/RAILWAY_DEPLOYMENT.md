@@ -51,7 +51,7 @@ Your Node.js app is already on Railway. Just add environment variables:
 
 ```bash
 USE_CAMOUFOX=true
-CAMOUFOX_API_ENDPOINT=http://python-browser.railway.internal:3000
+CAMOUFOX_WS_ENDPOINT=ws://python-browser.railway.internal:3000/browser
 ```
 
 4. **Click "Deploy"** to restart with new config
@@ -91,18 +91,22 @@ After deployment, you should see:
 
 **Python Service Logs:**
 ```
-🚀 Starting Camoufox Stealth Server...
+🚀 Starting Camoufox Remote Browser Server...
 🔧 Environment: production
-✅ Camoufox browser launched successfully
-📡 Server listening on port 3000
-INFO:     Application startup complete.
+📡 Launching server on ws://0.0.0.0:3000/browser
+🦊 Headless: True
+🌍 GeoIP: enabled
+✅ Camoufox server started successfully
+📞 Node.js can connect to: ws://localhost:3000/browser
+⏳ Server will run indefinitely...
 ```
 
 **Node.js Service Logs:**
 ```
-🦊 Using Camoufox for maximum stealth
-📡 Camoufox API endpoint: http://python-browser.railway.internal:3000
-✅ Ready to process job applications
+🦊 Using Camoufox for maximum stealth (C++ level detection evasion)
+🦊 Connecting to Camoufox remote browser (Firefox-based stealth)...
+✅ Connected to Camoufox browser server successfully
+📌 All auto-apply logic runs in Node.js - Python only provides stealth browser
 Server started on port 3000
 ```
 
@@ -131,15 +135,15 @@ railway logs --service python-browser
 **Check:**
 1. Both services are in the **same Railway project**
 2. Private networking is enabled (default)
-3. `CAMOUFOX_API_ENDPOINT` uses `.railway.internal` domain
+3. `CAMOUFOX_WS_ENDPOINT` uses `.railway.internal` domain
 
 **Fix:**
 ```bash
 # Correct format (internal Railway network):
-CAMOUFOX_API_ENDPOINT=http://python-browser.railway.internal:3000
+CAMOUFOX_WS_ENDPOINT=ws://python-browser.railway.internal:3000/browser
 
 # NOT (public URL):
-CAMOUFOX_API_ENDPOINT=http://python-browser.railway.app:3000
+CAMOUFOX_WS_ENDPOINT=ws://python-browser.railway.app:3000/browser
 ```
 
 ### Issue: Connection timeout
@@ -160,8 +164,8 @@ Commit and push to redeploy.
 ### Check Service Health
 
 ```bash
-# Python service (internal only, use railway CLI)
-railway run --service python-browser curl localhost:3000/health
+# Check if Python service is running (WebSocket, no HTTP health endpoint)
+railway logs --service python-browser
 
 # Node.js service (public)
 curl https://your-app.railway.app/health

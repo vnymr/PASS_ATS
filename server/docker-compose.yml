@@ -9,7 +9,7 @@ services:
     environment:
       # Camoufox configuration
       - USE_CAMOUFOX=true
-      - CAMOUFOX_API_ENDPOINT=http://python-browser:3000
+      - CAMOUFOX_WS_ENDPOINT=ws://python-browser:3000/browser
 
       # Database
       - DATABASE_URL=${DATABASE_URL}

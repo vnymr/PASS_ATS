@@ -379,19 +379,23 @@ export async function launchBrowserlessBrowser(options = {}) {
  * @returns {Promise<Browser>} Playwright browser instance
  */
 export async function launchCamoufoxBrowser(options = {}) {
-  const wsEndpoint = process.env.CAMOUFOX_WS_ENDPOINT || 'ws://localhost:3000/ws';
+  // Default: ws://localhost:3000/browser
+  // Production: ws://python-browser.railway.internal:3000/browser
+  const wsEndpoint = process.env.CAMOUFOX_WS_ENDPOINT || 'ws://localhost:3000/browser';
 
-  logger.info({ wsEndpoint: wsEndpoint.replace(/\/\/.*@/, '//***@') }, '🦊 Connecting to Camoufox remote browser...');
+  logger.info({
+    wsEndpoint: wsEndpoint.replace(/\/\/.*@/, '//***@')
+  }, '🦊 Connecting to Camoufox remote browser (Firefox-based stealth)...');
 
   try {
     // Connect to Python Camoufox service via WebSocket
-    // Camoufox is Firefox-based, so we use firefox.connect()
-    const browser = await firefox.connect({
-      wsEndpoint,
+    // Camoufox is Firefox-based, so we use firefox.connect() (NOT chromium)
+    const browser = await firefox.connect(wsEndpoint, {
       timeout: 30000 // 30 second timeout for connection
     });
 
-    logger.info('✅ Connected to Camoufox browser server');
+    logger.info('✅ Connected to Camoufox browser server successfully');
+    logger.info('📌 All auto-apply logic runs in Node.js - Python only provides stealth browser');
 
     // Add disconnect handler for monitoring
     browser.on('disconnected', () => {
@@ -402,6 +406,7 @@ export async function launchCamoufoxBrowser(options = {}) {
   } catch (error) {
     logger.error({
       error: error.message,
+      stack: error.stack,
       wsEndpoint: wsEndpoint.replace(/\/\/.*@/, '//***@')
     }, '❌ Failed to connect to Camoufox browser');
 
