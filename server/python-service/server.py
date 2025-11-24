@@ -2,36 +2,29 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
+from contextlib import asynccontextmanager
 import asyncio
 import uvicorn
 import os
 from camoufox.async_api import AsyncCamoufox
 from playwright.async_api import async_playwright
 
-app = FastAPI()
-
 # Global browser instance
 browser = None
 context = None
 
-class NavigateRequest(BaseModel):
-    url: str
-    timeout: Optional[int] = 30000
-
-class FormDataRequest(BaseModel):
-    url: str
-    form_data: Dict[str, Any]
-    timeout: Optional[int] = 300000
-
-@app.on_event("startup")
-async def startup_event():
-    """Initialize Camoufox browser on startup"""
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for startup and shutdown"""
     global browser, context
-    print("🚀 Starting Camoufox Stealth Server...")
-    print(f"🔧 Environment: {os.getenv('ENVIRONMENT', 'development')}")
+
+    # Startup
+    print("🚀 Starting Camoufox Stealth Server...", flush=True)
+    print(f"🔧 Environment: {os.getenv('ENVIRONMENT', 'development')}", flush=True)
 
     try:
         # Launch Camoufox browser with persistent context
+        print("📦 Initializing Camoufox browser...", flush=True)
         camoufox = AsyncCamoufox(
             headless=True,
             geoip=True,
@@ -41,12 +34,31 @@ async def startup_event():
         browser = await camoufox.start()
         context = browser.contexts[0] if browser.contexts else await browser.new_context()
 
-        print(f"✅ Camoufox browser launched successfully")
-        print(f"📡 Server listening on port 3000")
+        print(f"✅ Camoufox browser launched successfully", flush=True)
+        print(f"📡 Server ready on port 3000", flush=True)
 
     except Exception as e:
-        print(f"❌ Failed to start browser: {e}")
+        print(f"❌ Failed to start browser: {e}", flush=True)
         raise
+
+    yield  # Server runs here
+
+    # Shutdown
+    print("🔌 Shutting down...", flush=True)
+    if browser:
+        await browser.close()
+        print("✅ Browser closed", flush=True)
+
+app = FastAPI(lifespan=lifespan)
+
+class NavigateRequest(BaseModel):
+    url: str
+    timeout: Optional[int] = 30000
+
+class FormDataRequest(BaseModel):
+    url: str
+    form_data: Dict[str, Any]
+    timeout: Optional[int] = 300000
 
 @app.get("/health")
 async def health_check():
@@ -82,14 +94,6 @@ async def apply_job(request: FormDataRequest):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Cleanup on shutdown"""
-    global browser
-    if browser:
-        await browser.close()
-        print("🔌 Browser closed")
 
 if __name__ == "__main__":
     print("🚀 Starting Camoufox Stealth Server...")
