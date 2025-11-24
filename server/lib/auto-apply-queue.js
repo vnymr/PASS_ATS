@@ -2,6 +2,8 @@
  * Auto-Apply Queue Worker
  * Processes queued job applications using AI-powered form filling
  * MIGRATED FROM PUPPETEER TO PLAYWRIGHT
+ *
+ * Now with graceful Redis handling - won't crash if Redis is unavailable
  */
 
 import Queue from 'bull';
@@ -12,10 +14,16 @@ import { classifyError, shouldRetryError } from './error-classifier.js';
 
 const aiFormFiller = new AIFormFiller();
 
+// Maximum retry attempts for Redis connection
+const MAX_REDIS_RETRIES = 5;
+let redisRetryCount = 0;
+let queueAvailable = false;
+
 const redisUrl = process.env.REDIS_URL || '';
 
+// Don't throw error - just warn and continue without queue
 if (!redisUrl && process.env.NODE_ENV === 'production') {
-  throw new Error('REDIS_URL environment variable is required in production. Set REDIS_URL to a reachable Redis instance.');
+  logger.warn('REDIS_URL not set in production - auto-apply queue will be disabled');
 }
 
 function parseRedisConfig(url) {
@@ -26,7 +34,23 @@ function parseRedisConfig(url) {
     const parsed = new URL(url);
     const config = {
       host: parsed.hostname,
-      port: parsed.port ? Number(parsed.port) : 6379
+      port: parsed.port ? Number(parsed.port) : 6379,
+      // Add retry settings
+      retryStrategy: (times) => {
+        redisRetryCount = times;
+        if (times > MAX_REDIS_RETRIES) {
+          logger.warn({ attempt: times, maxRetries: MAX_REDIS_RETRIES }, 'Auto-apply queue: Redis max retries exceeded');
+          return null; // Stop retrying
+        }
+        const delay = Math.min(times * 500, 3000);
+        if (times <= MAX_REDIS_RETRIES) {
+          logger.warn({ attempt: times, delay, maxRetries: MAX_REDIS_RETRIES }, 'Auto-apply queue: Redis retry');
+        }
+        return delay;
+      },
+      maxRetriesPerRequest: 3, // Limit retries per request
+      connectTimeout: 5000, // 5 second timeout
+      enableOfflineQueue: false, // Don't queue commands when disconnected
     };
     if (parsed.password) {
       config.password = parsed.password;
@@ -37,14 +61,14 @@ function parseRedisConfig(url) {
     return config;
   } catch (error) {
     logger.error({ error: error.message }, 'Invalid REDIS_URL value');
-    throw error;
+    return null;
   }
 }
 
 const redisConfig = parseRedisConfig(redisUrl);
 if (!redisUrl) {
-  logger.warn('REDIS_URL not set; defaulting to redis://127.0.0.1:6379 for auto-apply queue');
-} else {
+  logger.warn('REDIS_URL not set; auto-apply queue disabled');
+} else if (redisConfig) {
   logger.info({ host: redisConfig.host, port: redisConfig.port }, 'Auto-apply queue using configured Redis');
 }
 
@@ -472,26 +496,56 @@ async function applyWithAI(jobUrl, user, jobData, resumePath = null) {
   }
 }
 
-// Create auto-apply queue
-const autoApplyQueue = new Queue('auto-apply', {
-  redis: redisConfig,
-  defaultJobOptions: {
-    attempts: 3,
-    backoff: {
-      type: 'exponential',
-      delay: 2000
-    },
-    removeOnComplete: 100, // Keep last 100 completed jobs
-    removeOnFail: false // Keep failed jobs for debugging
+// Create auto-apply queue (only if Redis config is valid)
+let autoApplyQueue = null;
+
+if (redisConfig) {
+  try {
+    autoApplyQueue = new Queue('auto-apply', {
+      redis: redisConfig,
+      defaultJobOptions: {
+        attempts: 3,
+        backoff: {
+          type: 'exponential',
+          delay: 2000
+        },
+        removeOnComplete: 100,
+        removeOnFail: false
+      }
+    });
+
+    // Track queue availability
+    autoApplyQueue.on('ready', () => {
+      queueAvailable = true;
+      redisRetryCount = 0;
+      logger.info('Auto-apply queue connected to Redis');
+    });
+
+    autoApplyQueue.on('error', (error) => {
+      if (redisRetryCount <= MAX_REDIS_RETRIES) {
+        logger.error({ error: error.message }, 'Auto-apply queue error');
+      }
+    });
+
+    autoApplyQueue.client.on('end', () => {
+      queueAvailable = false;
+      logger.warn('Auto-apply queue Redis connection ended');
+    });
+  } catch (error) {
+    logger.error({ error: error.message }, 'Failed to create auto-apply queue');
+    autoApplyQueue = null;
   }
-});
+} else {
+  logger.warn('Auto-apply queue disabled - no valid Redis configuration');
+}
 
 /**
  * Process an auto-apply job
  * Concurrency set to 10 for better throughput (each browser ~300MB RAM)
  * Can handle 10 concurrent applications = ~3GB RAM total
  */
-autoApplyQueue.process(10, async (job) => {
+if (autoApplyQueue) {
+  autoApplyQueue.process(10, async (job) => {
   const { applicationId, jobUrl, atsType, userId } = job.data;
 
   // Declare at function scope so finally block can access it
@@ -776,11 +830,13 @@ autoApplyQueue.process(10, async (job) => {
     }
   }
 });
+} // End if (autoApplyQueue) for process
 
 /**
  * Queue event listeners
  */
-autoApplyQueue.on('completed', (job, result) => {
+if (autoApplyQueue) {
+  autoApplyQueue.on('completed', (job, result) => {
   logger.info({
     jobId: job.id,
     applicationId: job.data.applicationId
@@ -822,17 +878,23 @@ autoApplyQueue.on('failed', async (job, error) => {
   }
 });
 
-autoApplyQueue.on('stalled', (job) => {
-  logger.warn({
-    jobId: job.id,
-    applicationId: job.data.applicationId
-  }, 'Auto-apply job stalled');
-});
+  autoApplyQueue.on('stalled', (job) => {
+    logger.warn({
+      jobId: job.id,
+      applicationId: job.data.applicationId
+    }, 'Auto-apply job stalled');
+  });
+} // End if (autoApplyQueue) for event listeners
 
 /**
  * Add a job to the queue
  */
 export async function queueAutoApply({ applicationId, jobUrl, atsType, userId }) {
+  if (!autoApplyQueue || !queueAvailable) {
+    logger.warn({ applicationId }, 'Auto-apply queue not available, cannot queue job');
+    throw new Error('Auto-apply queue not available. Please try again later or check Redis configuration.');
+  }
+
   logger.info({
     applicationId,
     jobUrl,
@@ -846,7 +908,7 @@ export async function queueAutoApply({ applicationId, jobUrl, atsType, userId })
     atsType,
     userId
   }, {
-    jobId: `auto-apply-${applicationId}`, // Unique job ID
+    jobId: `auto-apply-${applicationId}`,
     attempts: 3
   });
 
@@ -859,53 +921,77 @@ export async function queueAutoApply({ applicationId, jobUrl, atsType, userId })
  * Get queue statistics
  */
 export async function getQueueStats() {
-  const [waiting, active, completed, failed, delayed] = await Promise.all([
-    autoApplyQueue.getWaitingCount(),
-    autoApplyQueue.getActiveCount(),
-    autoApplyQueue.getCompletedCount(),
-    autoApplyQueue.getFailedCount(),
-    autoApplyQueue.getDelayedCount()
-  ]);
+  if (!autoApplyQueue) {
+    return { waiting: 0, active: 0, completed: 0, failed: 0, delayed: 0, total: 0, available: false };
+  }
 
-  return {
-    waiting,
-    active,
-    completed,
-    failed,
-    delayed,
-    total: waiting + active + completed + failed + delayed
-  };
+  try {
+    const [waiting, active, completed, failed, delayed] = await Promise.all([
+      autoApplyQueue.getWaitingCount(),
+      autoApplyQueue.getActiveCount(),
+      autoApplyQueue.getCompletedCount(),
+      autoApplyQueue.getFailedCount(),
+      autoApplyQueue.getDelayedCount()
+    ]);
+
+    return {
+      waiting,
+      active,
+      completed,
+      failed,
+      delayed,
+      total: waiting + active + completed + failed + delayed,
+      available: queueAvailable
+    };
+  } catch (error) {
+    logger.error({ error: error.message }, 'Failed to get queue stats');
+    return { waiting: 0, active: 0, completed: 0, failed: 0, delayed: 0, total: 0, available: false };
+  }
 }
 
 /**
  * Get job status
  */
 export async function getJobStatus(jobId) {
-  const job = await autoApplyQueue.getJob(jobId);
-
-  if (!job) {
-    return { status: 'NOT_FOUND' };
+  if (!autoApplyQueue) {
+    return { status: 'QUEUE_UNAVAILABLE' };
   }
 
-  const state = await job.getState();
-  const progress = job.progress();
+  try {
+    const job = await autoApplyQueue.getJob(jobId);
 
-  return {
-    id: job.id,
-    state,
-    progress,
-    attemptsMade: job.attemptsMade,
-    finishedOn: job.finishedOn,
-    processedOn: job.processedOn,
-    failedReason: job.failedReason,
-    returnvalue: job.returnvalue
-  };
+    if (!job) {
+      return { status: 'NOT_FOUND' };
+    }
+
+    const state = await job.getState();
+    const progress = job.progress();
+
+    return {
+      id: job.id,
+      state,
+      progress,
+      attemptsMade: job.attemptsMade,
+      finishedOn: job.finishedOn,
+      processedOn: job.processedOn,
+      failedReason: job.failedReason,
+      returnvalue: job.returnvalue
+    };
+  } catch (error) {
+    logger.error({ jobId, error: error.message }, 'Failed to get job status');
+    return { status: 'ERROR', error: error.message };
+  }
 }
 
 /**
  * Clean up old completed/failed jobs
  */
 export async function cleanQueue() {
+  if (!autoApplyQueue) {
+    logger.warn('Cannot clean queue - queue not available');
+    return;
+  }
+
   const grace = 24 * 60 * 60 * 1000; // 24 hours
 
   await autoApplyQueue.clean(grace, 'completed');
@@ -915,17 +1001,42 @@ export async function cleanQueue() {
 }
 
 export async function checkAutoApplyQueueConnection() {
-  // Wait for queue to be ready
-  await new Promise((resolve) => {
-    if (autoApplyQueue.isReady()) {
-      resolve();
-    } else {
-      autoApplyQueue.on('ready', resolve);
-    }
-  });
-  
-  const client = autoApplyQueue.client;
-  await client.ping();
+  if (!autoApplyQueue) {
+    return { connected: false, message: 'Queue not initialized' };
+  }
+
+  try {
+    // Wait for queue to be ready with timeout
+    await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error('Queue ready timeout'));
+      }, 5000);
+
+      if (autoApplyQueue.isReady()) {
+        clearTimeout(timeout);
+        resolve();
+      } else {
+        autoApplyQueue.once('ready', () => {
+          clearTimeout(timeout);
+          resolve();
+        });
+        autoApplyQueue.once('error', (err) => {
+          clearTimeout(timeout);
+          reject(err);
+        });
+      }
+    });
+
+    const client = autoApplyQueue.client;
+    await client.ping();
+    return { connected: true };
+  } catch (error) {
+    return { connected: false, message: error.message };
+  }
+}
+
+export function isQueueAvailable() {
+  return queueAvailable && autoApplyQueue !== null;
 }
 
 export default autoApplyQueue;
