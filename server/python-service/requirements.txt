@@ -1,3 +1,4 @@
-camoufox[geoip]>=0.4.0
+# Pin camoufox to 0.4.8 to avoid "proxy: expected object, got null" bug in newer versions
+camoufox[geoip]==0.4.8
 playwright>=1.40.0
 patchright>=1.40.0
