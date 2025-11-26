@@ -10,6 +10,7 @@ import { firefox } from 'playwright-core'; // For Camoufox remote connection
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import logger from './logger.js';
 import { execSync } from 'child_process';
+import proxyRotator from './proxy-rotator.js';
 
 // Add stealth plugin to playwright-extra
 chromium.use(StealthPlugin());
@@ -285,6 +286,9 @@ export async function moveMouseHumanLike(page, x, y) {
  * Create a stealth browser context with realistic settings
  * @param {Browser} browser - Playwright browser instance
  * @param {Object} options - Context options
+ * @param {string} options.applicationId - Application ID for sticky proxy sessions
+ * @param {string} options.jobBoardDomain - Job board domain for proxy selection
+ * @param {Object} options.proxy - Override proxy configuration
  * @returns {Promise<BrowserContext>} Stealth browser context
  */
 export async function createStealthContext(browser, options = {}) {
@@ -297,7 +301,7 @@ export async function createStealthContext(browser, options = {}) {
 
   const randomUserAgent = userAgents[Math.floor(Math.random() * userAgents.length)];
 
-  const context = await browser.newContext({
+  const contextOptions = {
     viewport: { width: 1920, height: 1080 },
     userAgent: options.userAgent || randomUserAgent,
     locale: 'en-US',
@@ -316,9 +320,47 @@ export async function createStealthContext(browser, options = {}) {
       'Sec-Fetch-Site': 'none',
       'Sec-Fetch-User': '?1',
       'Cache-Control': 'max-age=0',
-    },
-    ...options
-  });
+    }
+  };
+
+  // Get proxy configuration - Priority: options.proxy > proxyRotator > env vars
+  let proxy = options.proxy;
+
+  if (!proxy && proxyRotator.isConfigured()) {
+    // Use proxy rotator for automatic rotation
+    if (options.jobBoardDomain && options.applicationId) {
+      // Job board specific proxy with sticky session
+      proxy = proxyRotator.getProxyForJobBoard(options.jobBoardDomain, options.applicationId);
+    } else if (options.applicationId) {
+      // Sticky proxy for multi-page forms
+      proxy = proxyRotator.getStickyProxy(options.applicationId);
+    } else {
+      // Rotating proxy (new IP)
+      proxy = proxyRotator.getRotatingProxy();
+    }
+  } else if (!proxy && process.env.PROXY_SERVER) {
+    // Fallback to environment variables (legacy support)
+    proxy = {
+      server: process.env.PROXY_SERVER,
+      username: process.env.PROXY_USERNAME,
+      password: process.env.PROXY_PASSWORD
+    };
+  }
+
+  // Add proxy to context if configured
+  if (proxy && proxy.server) {
+    contextOptions.proxy = proxy;
+    logger.info({
+      proxyServer: proxy.server,
+      hasCredentials: !!proxy.username
+    }, '🔒 Proxy configured for browser context');
+  }
+
+  // Spread remaining options (but don't override proxy)
+  const { applicationId, jobBoardDomain, proxy: _, ...restOptions } = options;
+  Object.assign(contextOptions, restOptions);
+
+  const context = await browser.newContext(contextOptions);
 
   logger.debug({ userAgent: randomUserAgent }, 'Created stealth browser context');
   return context;
@@ -372,46 +414,142 @@ export async function launchBrowserlessBrowser(options = {}) {
   }
 }
 
+// Browser pool state for round-robin selection
+let browserPoolIndex = 0;
+let cachedBrowserEndpoints = null;
+let endpointsCachedAt = 0;
+const ENDPOINTS_CACHE_TTL = 30000; // 30 seconds
+
+/**
+ * Fetch available browser endpoints from Camoufox service
+ * @returns {Promise<string[]>} Array of WebSocket endpoints
+ */
+async function fetchBrowserEndpoints() {
+  const serviceUrl = process.env.CAMOUFOX_SERVICE_URL;
+
+  // Return cached endpoints if still fresh
+  if (cachedBrowserEndpoints && (Date.now() - endpointsCachedAt) < ENDPOINTS_CACHE_TTL) {
+    return cachedBrowserEndpoints;
+  }
+
+  if (serviceUrl) {
+    try {
+      const response = await fetch(`${serviceUrl}/browsers`);
+      if (response.ok) {
+        const data = await response.json();
+        const endpoints = data.browsers
+          .filter(b => b.status === 'ready' && b.endpoint)
+          .map(b => b.endpoint);
+
+        if (endpoints.length > 0) {
+          cachedBrowserEndpoints = endpoints;
+          endpointsCachedAt = Date.now();
+          logger.info({ count: endpoints.length }, '🔄 Fetched browser pool endpoints from service');
+          return endpoints;
+        }
+      }
+    } catch (e) {
+      logger.warn({ error: e.message }, 'Failed to fetch browser endpoints from service');
+    }
+  }
+
+  // Fallback: Try file-based endpoint (local development)
+  const endpointFile = '/tmp/camoufox_endpoint.txt';
+  try {
+    const fs = await import('fs');
+    if (fs.existsSync(endpointFile)) {
+      const dynamicEndpoint = fs.readFileSync(endpointFile, 'utf8').trim();
+      if (dynamicEndpoint && dynamicEndpoint.startsWith('ws://')) {
+        logger.info({ dynamicEndpoint: true }, '📂 Using dynamic endpoint from file');
+        return [dynamicEndpoint];
+      }
+    }
+  } catch (e) {
+    // File doesn't exist or can't be read
+  }
+
+  // Final fallback: Environment variable
+  const envEndpoint = process.env.CAMOUFOX_WS_ENDPOINT;
+  if (envEndpoint) {
+    return [envEndpoint];
+  }
+
+  return ['ws://localhost:3000/browser'];
+}
+
+/**
+ * Select next browser from pool using round-robin
+ * @param {string[]} endpoints - Available browser endpoints
+ * @returns {string} Selected endpoint
+ */
+function selectBrowserFromPool(endpoints) {
+  if (endpoints.length === 0) {
+    throw new Error('No browser endpoints available');
+  }
+
+  const endpoint = endpoints[browserPoolIndex % endpoints.length];
+  browserPoolIndex = (browserPoolIndex + 1) % endpoints.length;
+  return endpoint;
+}
+
 /**
  * Launch Camoufox browser via remote WebSocket connection
  * Connects to Python microservice running Camoufox browser server
+ * Supports browser pool with automatic failover
  * @param {Object} options - Launch options
  * @returns {Promise<Browser>} Playwright browser instance
  */
 export async function launchCamoufoxBrowser(options = {}) {
-  // Default: ws://localhost:3000/browser
-  // Production: ws://python-browser.railway.internal:3000/browser
-  const wsEndpoint = process.env.CAMOUFOX_WS_ENDPOINT || 'ws://localhost:3000/browser';
+  // Get available browser endpoints
+  const endpoints = await fetchBrowserEndpoints();
+  const maxRetries = Math.min(endpoints.length, 3);
 
-  logger.info({
-    wsEndpoint: wsEndpoint.replace(/\/\/.*@/, '//***@')
-  }, '🦊 Connecting to Camoufox remote browser (Firefox-based stealth)...');
+  let lastError = null;
 
-  try {
-    // Connect to Python Camoufox service via WebSocket
-    // Camoufox is Firefox-based, so we use firefox.connect() (NOT chromium)
-    const browser = await firefox.connect(wsEndpoint, {
-      timeout: 30000 // 30 second timeout for connection
-    });
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const wsEndpoint = selectBrowserFromPool(endpoints);
 
-    logger.info('✅ Connected to Camoufox browser server successfully');
-    logger.info('📌 All auto-apply logic runs in Node.js - Python only provides stealth browser');
+    logger.info({
+      wsEndpoint: wsEndpoint.replace(/\/\/.*@/, '//***@'),
+      attempt: attempt + 1,
+      poolSize: endpoints.length
+    }, '🦊 Connecting to Camoufox remote browser (Firefox-based stealth)...');
 
-    // Add disconnect handler for monitoring
-    browser.on('disconnected', () => {
-      logger.warn('⚠️ Browser disconnected from Camoufox server');
-    });
+    try {
+      // Connect to Python Camoufox service via WebSocket
+      // Camoufox is Firefox-based, so we use firefox.connect() (NOT chromium)
+      const browser = await firefox.connect(wsEndpoint, {
+        timeout: 30000 // 30 second timeout for connection
+      });
 
-    return browser;
-  } catch (error) {
-    logger.error({
-      error: error.message,
-      stack: error.stack,
-      wsEndpoint: wsEndpoint.replace(/\/\/.*@/, '//***@')
-    }, '❌ Failed to connect to Camoufox browser');
+      logger.info('✅ Connected to Camoufox browser server successfully');
+      logger.info('📌 All auto-apply logic runs in Node.js - Python only provides stealth browser');
 
-    throw new Error(`Camoufox connection failed: ${error.message}`);
+      // Add disconnect handler for monitoring
+      browser.on('disconnected', () => {
+        logger.warn('⚠️ Browser disconnected from Camoufox server');
+      });
+
+      return browser;
+    } catch (error) {
+      lastError = error;
+      logger.warn({
+        error: error.message,
+        endpoint: wsEndpoint.replace(/\/\/.*@/, '//***@'),
+        attempt: attempt + 1
+      }, '⚠️ Browser connection failed, trying next in pool...');
+
+      // Invalidate cache on connection failure
+      cachedBrowserEndpoints = null;
+    }
   }
+
+  logger.error({
+    error: lastError?.message,
+    attempts: maxRetries
+  }, '❌ Failed to connect to any Camoufox browser in pool');
+
+  throw new Error(`Camoufox connection failed after ${maxRetries} attempts: ${lastError?.message}`);
 }
 
 /**
@@ -419,6 +557,9 @@ export async function launchCamoufoxBrowser(options = {}) {
  * Includes proxy support and realistic browser fingerprinting
  * @param {Browser} browser - Camoufox browser instance
  * @param {Object} options - Context options
+ * @param {string} options.applicationId - Application ID for sticky proxy sessions
+ * @param {string} options.jobBoardDomain - Job board domain for proxy selection
+ * @param {Object} options.proxy - Override proxy configuration
  * @returns {Promise<BrowserContext>} Stealth browser context
  */
 export async function createStealthContextCamoufox(browser, options = {}) {
@@ -449,23 +590,21 @@ export async function createStealthContextCamoufox(browser, options = {}) {
       'Sec-Fetch-Mode': 'navigate',
       'Sec-Fetch-Site': 'none',
       'Sec-Fetch-User': '?1',
-    },
-    ...options
+    }
   };
 
-  // Add proxy configuration if environment variables are set
-  // The proxy runs in the Python container, but Node.js configures it
-  if (process.env.PROXY_SERVER) {
-    contextOptions.proxy = {
-      server: process.env.PROXY_SERVER,
-      username: process.env.PROXY_USERNAME,
-      password: process.env.PROXY_PASSWORD
-    };
+  // NOTE: Firefox/Camoufox has issues with Playwright-level proxy authentication
+  // (NS_ERROR_PROXY_AUTHENTICATION_FAILED). Camoufox provides C++-level stealth
+  // which is more effective than proxy rotation for avoiding bot detection.
+  // If proxy is needed for Camoufox, configure it at the Python Camoufox server level.
+  //
+  // For now, we skip proxy configuration for Camoufox contexts.
+  // Camoufox's fingerprint randomization provides excellent stealth without proxy.
+  logger.info('🦊 Camoufox context created without proxy (stealth provided at browser level)');
 
-    logger.info({
-      proxyServer: process.env.PROXY_SERVER.replace(/\/\/.*@/, '//***@')
-    }, '🔒 Proxy configured for Camoufox context');
-  }
+  // Spread remaining options (but don't override proxy)
+  const { applicationId, jobBoardDomain, proxy: _, ...restOptions } = options;
+  Object.assign(contextOptions, restOptions);
 
   const context = await browser.newContext(contextOptions);
 
@@ -708,6 +847,9 @@ export async function simulateHumanPageVisit(page, options = {}) {
   logger.info('✅ Human behavior simulation complete');
 }
 
+// Re-export proxy rotator for convenience
+export { default as proxyRotator } from './proxy-rotator.js';
+
 export default {
   launchBrowser,
   launchStealthBrowser,
@@ -722,5 +864,6 @@ export default {
   humanScroll,
   randomMouseJiggles,
   humanType,
-  simulateHumanPageVisit
+  simulateHumanPageVisit,
+  proxyRotator
 };

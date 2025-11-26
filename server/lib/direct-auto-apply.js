@@ -1,0 +1,292 @@
+/**
+ * Direct Auto-Apply Processor
+ * Processes job applications directly without Redis queue
+ * Uses centralized browser-launcher for consistent browser management
+ */
+
+import { prisma } from './prisma-client.js';
+import logger from './logger.js';
+import AIFormFiller from './ai-form-filler.js';
+import {
+  launchStealthBrowser,
+  createStealthContext,
+  createStealthContextCamoufox,
+  applyStealthToPage,
+  proxyRotator
+} from './browser-launcher.js';
+
+const aiFormFiller = new AIFormFiller();
+
+/**
+ * Process auto-apply directly without queue
+ * @param {Object} params - Application parameters
+ */
+export async function processAutoApplyDirect({ applicationId, jobUrl, atsType, userId, user }) {
+  let browser = null;
+  let resumePath = null;
+
+  logger.info({
+    applicationId,
+    jobUrl,
+    atsType,
+    userId
+  }, 'Processing auto-apply directly (no queue)');
+
+  try {
+    // Update status to APPLYING
+    await prisma.autoApplication.update({
+      where: { id: applicationId },
+      data: {
+        status: 'APPLYING',
+        startedAt: new Date()
+      }
+    });
+
+    // Get user data if not provided
+    if (!user) {
+      user = await prisma.user.findUnique({
+        where: { id: userId },
+        include: { profile: true }
+      });
+    }
+
+    if (!user || !user.profile) {
+      throw new Error('User or profile not found');
+    }
+
+    // Check profile data
+    const profileData = user.profile.data;
+    const applicationData = profileData?.applicationData;
+
+    const hasNewStructure = applicationData && applicationData.personalInfo;
+    const hasOldStructure = profileData && (profileData.name || profileData.email || profileData.experiences);
+
+    if (!hasNewStructure && !hasOldStructure) {
+      throw new Error('User profile missing required data. Please complete profile setup.');
+    }
+
+    // Launch browser using centralized launcher (handles Camoufox → Browserless → Local fallback)
+    logger.info('🚀 Launching stealth browser via centralized launcher...');
+    browser = await launchStealthBrowser({ headless: false });
+    logger.info('✅ Stealth browser launched successfully');
+
+    // Extract job board domain for proxy selection
+    const jobBoardDomain = new URL(jobUrl).hostname;
+
+    // Create stealth context with proxy rotation
+    // Use Camoufox context if available, otherwise standard context
+    const useCamoufox = process.env.USE_CAMOUFOX === 'true';
+    const context = useCamoufox
+      ? await createStealthContextCamoufox(browser, { applicationId, jobBoardDomain })
+      : await createStealthContext(browser, { applicationId, jobBoardDomain });
+
+    logger.info({
+      applicationId,
+      jobBoardDomain,
+      proxyEnabled: proxyRotator.isConfigured(),
+      useCamoufox
+    }, '🔗 Browser context created with proxy rotation');
+
+    const page = await context.newPage();
+
+    // Apply additional stealth techniques to the page
+    await applyStealthToPage(page);
+
+    // Prepare resume file
+    const uploadedResume = profileData?.uploadedResume;
+    let pdfContent, filename;
+
+    if (uploadedResume?.content) {
+      pdfContent = Buffer.from(uploadedResume.content, 'base64');
+      filename = uploadedResume.filename || `resume_${user.id}.pdf`;
+      logger.info({ filename }, '📄 Using user-uploaded resume');
+    } else {
+      // Fall back to AI-generated resume
+      const latestResumeJob = await prisma.job.findFirst({
+        where: {
+          userId: user.id,
+          status: 'COMPLETED'
+        },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          artifacts: {
+            where: { type: 'PDF_OUTPUT' },
+            orderBy: { version: 'desc' },
+            take: 1
+          }
+        }
+      });
+
+      if (!latestResumeJob?.artifacts?.[0]) {
+        throw new Error('No resume found - please upload a resume or generate one first');
+      }
+
+      const pdfArtifact = latestResumeJob.artifacts[0];
+      pdfContent = pdfArtifact.content;
+      filename = pdfArtifact.metadata?.filename || `resume_${user.id}.pdf`;
+      logger.info({ filename }, '📄 Using AI-generated resume');
+    }
+
+    // Save PDF to temp file
+    const fs = await import('fs');
+    const path = await import('path');
+    const os = await import('os');
+
+    const tempDir = path.join(os.tmpdir(), 'resume-auto-apply');
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true });
+    }
+
+    resumePath = path.join(tempDir, filename);
+    fs.writeFileSync(resumePath, pdfContent);
+    logger.info({ resumePath }, '📄 Resume file ready');
+
+    // Navigate to job application page
+    logger.info(`📄 Navigating to ${jobUrl}...`);
+    await page.goto(jobUrl, {
+      waitUntil: 'networkidle',
+      timeout: 30000
+    });
+
+    // Human-like delay
+    const randomDelay = Math.floor(Math.random() * 2000) + 2000;
+    await new Promise(resolve => setTimeout(resolve, randomDelay));
+
+    // Prepare user profile for form filling
+    const appData = profileData?.applicationData;
+    const userProfile = {
+      fullName: appData?.personalInfo?.fullName ||
+                profileData?.name ||
+                `${profileData?.firstName || ''} ${profileData?.lastName || ''}`.trim(),
+      email: appData?.personalInfo?.email || profileData?.email || user.email,
+      phone: appData?.personalInfo?.phone || profileData?.phone || '',
+      location: appData?.personalInfo?.location || profileData?.location || '',
+      linkedIn: appData?.personalInfo?.linkedin || profileData?.linkedin || '',
+      portfolio: appData?.personalInfo?.website || profileData?.website || '',
+      experience: appData?.experience || profileData?.experiences || [],
+      education: appData?.education || profileData?.education || [],
+      skills: appData?.skills || profileData?.skills || [],
+      applicationQuestions: profileData?.applicationQuestions || {}
+    };
+
+    // Use AI to fill the form
+    logger.info('🤖 AI analyzing and filling form...');
+    const fillResult = await aiFormFiller.fillFormIntelligently(page, userProfile, { jobUrl, atsType }, resumePath);
+
+    if (!fillResult.success) {
+      throw new Error(fillResult.errors?.join('; ') || 'Form filling failed');
+    }
+
+    logger.info(`✅ Form filled: ${fillResult.fieldsFilled}/${fillResult.fieldsExtracted} fields`);
+
+    // Submit the form
+    let submitResult = { success: false, error: 'No submit button found' };
+
+    if (fillResult.submitButton) {
+      logger.info('📤 Submitting application...');
+      submitResult = await aiFormFiller.submitForm(page, fillResult.submitButton, userProfile);
+    }
+
+    // Take screenshot
+    let screenshot = null;
+    try {
+      const screenshotBuffer = await page.screenshot({ encoding: 'base64', fullPage: true });
+      screenshot = `data:image/png;base64,${screenshotBuffer}`;
+    } catch (e) {
+      logger.warn({ error: e.message }, 'Failed to capture screenshot');
+    }
+
+    // Sanitize strings to remove null bytes that PostgreSQL can't handle
+    const sanitize = (str) => typeof str === 'string' ? str.replace(/\x00/g, '') : str;
+
+    // Update application status
+    if (submitResult.success) {
+      const sanitizedMessages = submitResult.successMessages?.map(sanitize) || [];
+
+      await prisma.autoApplication.update({
+        where: { id: applicationId },
+        data: {
+          status: 'SUBMITTED',
+          method: 'AI_DIRECT',
+          submittedAt: new Date(),
+          completedAt: new Date(),
+          confirmationUrl: sanitize(screenshot),
+          confirmationData: {
+            fieldsExtracted: fillResult.fieldsExtracted,
+            fieldsFilled: fillResult.fieldsFilled,
+            successMessages: sanitizedMessages,
+            finalUrl: sanitize(submitResult.currentUrl)
+          }
+        }
+      });
+
+      logger.info({ applicationId }, '✅ Application submitted successfully');
+    } else {
+      await prisma.autoApplication.update({
+        where: { id: applicationId },
+        data: {
+          status: 'FAILED',
+          error: sanitize(submitResult.error || 'Form submission failed'),
+          completedAt: new Date(),
+          confirmationUrl: sanitize(screenshot)
+        }
+      });
+
+      logger.error({ applicationId, error: submitResult.error }, '❌ Application submission failed');
+    }
+
+    return {
+      success: submitResult.success,
+      applicationId,
+      method: 'AI_DIRECT'
+    };
+
+  } catch (error) {
+    logger.error({
+      applicationId,
+      error: error.message,
+      stack: error.stack
+    }, '❌ Direct auto-apply failed');
+
+    // Update application as failed
+    try {
+      await prisma.autoApplication.update({
+        where: { id: applicationId },
+        data: {
+          status: 'FAILED',
+          error: error.message,
+          errorType: 'PROCESSING_ERROR',
+          completedAt: new Date()
+        }
+      });
+    } catch (dbError) {
+      logger.error({ error: dbError.message }, 'Failed to update application status');
+    }
+
+    throw error;
+
+  } finally {
+    // Cleanup
+    if (browser) {
+      try {
+        await browser.close();
+        logger.debug('Browser closed');
+      } catch (e) {
+        logger.warn({ error: e.message }, 'Failed to close browser');
+      }
+    }
+
+    if (resumePath) {
+      try {
+        const fs = await import('fs');
+        if (fs.existsSync(resumePath)) {
+          fs.unlinkSync(resumePath);
+        }
+      } catch (e) {
+        logger.warn({ error: e.message }, 'Failed to cleanup resume file');
+      }
+    }
+  }
+}
+
+export default { processAutoApplyDirect };

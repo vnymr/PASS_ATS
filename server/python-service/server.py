@@ -1,141 +1,312 @@
 """
-Camoufox Remote Browser Server
-Launches Camoufox in server mode for Node.js Playwright to connect to
+Camoufox Remote Browser Server - Production Ready
+Launches Camoufox browser pool for Node.js Playwright to connect to
 
-Tries multiple approaches to launch the server:
-1. Python launch_server API
-2. CLI subprocess as fallback
+Features:
+- HTTP health endpoint for container health checks
+- Browser pool for concurrent applications
+- Fixed WebSocket endpoints for service discovery
+- Graceful shutdown handling
 """
 
 import os
 import sys
-import time
+import re
+import asyncio
 import subprocess
+import signal
+import json
+from pathlib import Path
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from threading import Thread
+from datetime import datetime
+from typing import Optional, Dict, List
 
-def launch_via_cli(port, ws_path, headless):
-    """Launch camoufox server via CLI as fallback"""
-    print("🔄 Attempting CLI launch method...", flush=True)
+# Configuration
+ENDPOINT_FILE = Path("/tmp/camoufox_endpoint.txt")
+HEALTH_PORT = int(os.getenv('HEALTH_PORT', '8080'))
+BROWSER_PORT = int(os.getenv('BROWSER_PORT', '3000'))
+POOL_SIZE = int(os.getenv('BROWSER_POOL_SIZE', '3'))
+ENVIRONMENT = os.getenv('ENVIRONMENT', 'development')
 
-    cmd = [
-        sys.executable, "-m", "camoufox", "server",
-        "--port", str(port),
-        "--ws-path", ws_path,
-    ]
+# Global state
+browser_pool: Dict[str, dict] = {}
+server_ready = False
+shutdown_requested = False
 
-    if headless:
-        cmd.append("--headless")
 
-    print(f"📋 CLI command: {' '.join(cmd)}", flush=True)
+class HealthHandler(BaseHTTPRequestHandler):
+    """HTTP handler for health checks and metrics"""
 
-    # Run the CLI command - this should block
-    process = subprocess.Popen(
-        cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        bufsize=1
-    )
+    def log_message(self, format, *args):
+        # Suppress default logging to reduce noise
+        pass
 
-    # Stream output
-    for line in process.stdout:
-        print(line.rstrip(), flush=True)
+    def do_GET(self):
+        if self.path == '/health' or self.path == '/healthz':
+            self._handle_health()
+        elif self.path == '/ready' or self.path == '/readiness':
+            self._handle_ready()
+        elif self.path == '/metrics':
+            self._handle_metrics()
+        elif self.path == '/browsers':
+            self._handle_browsers()
+        else:
+            self.send_response(404)
+            self.end_headers()
 
-    return process.wait()
+    def _handle_health(self):
+        """Liveness probe - is the service running?"""
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        response = {
+            'status': 'healthy',
+            'timestamp': datetime.utcnow().isoformat(),
+            'service': 'camoufox-browser',
+            'version': '2.0.0'
+        }
+        self.wfile.write(json.dumps(response).encode())
 
-def launch_via_api(port, ws_path, headless, proxy_config, use_geoip):
-    """Launch camoufox server via Python API"""
-    from camoufox.server import launch_server
+    def _handle_ready(self):
+        """Readiness probe - is the service ready to accept traffic?"""
+        if server_ready and len(browser_pool) > 0:
+            self.send_response(200)
+            status = 'ready'
+        else:
+            self.send_response(503)
+            status = 'not_ready'
+
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        response = {
+            'status': status,
+            'browsers_available': len([b for b in browser_pool.values() if b.get('status') == 'ready']),
+            'browsers_total': len(browser_pool),
+            'pool_size': POOL_SIZE
+        }
+        self.wfile.write(json.dumps(response).encode())
+
+    def _handle_metrics(self):
+        """Prometheus-style metrics endpoint"""
+        self.send_response(200)
+        self.send_header('Content-Type', 'text/plain')
+        self.end_headers()
+
+        ready_count = len([b for b in browser_pool.values() if b.get('status') == 'ready'])
+        busy_count = len([b for b in browser_pool.values() if b.get('status') == 'busy'])
+
+        metrics = f"""# HELP camoufox_browsers_total Total number of browser instances
+# TYPE camoufox_browsers_total gauge
+camoufox_browsers_total {len(browser_pool)}
+
+# HELP camoufox_browsers_ready Number of ready browser instances
+# TYPE camoufox_browsers_ready gauge
+camoufox_browsers_ready {ready_count}
+
+# HELP camoufox_browsers_busy Number of busy browser instances
+# TYPE camoufox_browsers_busy gauge
+camoufox_browsers_busy {busy_count}
+
+# HELP camoufox_pool_size Configured pool size
+# TYPE camoufox_pool_size gauge
+camoufox_pool_size {POOL_SIZE}
+"""
+        self.wfile.write(metrics.encode())
+
+    def _handle_browsers(self):
+        """List all browser endpoints"""
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+
+        browsers = []
+        for browser_id, info in browser_pool.items():
+            browsers.append({
+                'id': browser_id,
+                'endpoint': info.get('endpoint'),
+                'status': info.get('status', 'unknown'),
+                'started_at': info.get('started_at')
+            })
+
+        response = {
+            'browsers': browsers,
+            'primary_endpoint': browser_pool.get('browser_0', {}).get('endpoint')
+        }
+        self.wfile.write(json.dumps(response).encode())
+
+
+def start_health_server():
+    """Start HTTP health check server in background thread"""
+    server = HTTPServer(('0.0.0.0', HEALTH_PORT), HealthHandler)
+    print(f"Health server started on port {HEALTH_PORT}", flush=True)
+    server.serve_forever()
+
+
+def launch_browser_instance(browser_id: str, port: int, headless: bool = True) -> Optional[subprocess.Popen]:
+    """Launch a single Camoufox browser instance"""
+    from camoufox.server import launch_options, get_nodejs, to_camel_case_dict, LAUNCH_SCRIPT
+    import base64
+    import orjson
 
     # Build launch arguments
     launch_args = {
         'headless': headless,
-        'port': port,
-        'ws_path': ws_path,
     }
 
     # Configure proxy if provided
-    if proxy_config:
-        launch_args['proxy'] = proxy_config
-        if use_geoip:
-            launch_args['geoip'] = True
-
-    print(f"📋 Launch arguments: {list(launch_args.keys())}", flush=True)
-    print("Launching server...", flush=True)
-
-    launch_server(**launch_args)
-
-def main():
-    print("🚀 Starting Camoufox Remote Browser Server...", flush=True)
-    print(f"🔧 Environment: {os.getenv('ENVIRONMENT', 'development')}", flush=True)
-
-    # Get configuration from environment
-    port = int(os.getenv('CAMOUFOX_PORT', '3000'))
-    ws_path = os.getenv('CAMOUFOX_WS_PATH', 'browser')
-    headless = os.getenv('CAMOUFOX_HEADLESS', 'true').lower() == 'true'
-
-    # Proxy configuration (optional)
-    proxy_config = None
-    if os.getenv('PROXY_SERVER'):
-        proxy_config = {
-            'server': os.getenv('PROXY_SERVER'),
-        }
+    proxy_server = os.getenv('PROXY_SERVER')
+    if proxy_server:
+        proxy_config = {'server': proxy_server}
         if os.getenv('PROXY_USERNAME'):
             proxy_config['username'] = os.getenv('PROXY_USERNAME')
         if os.getenv('PROXY_PASSWORD'):
             proxy_config['password'] = os.getenv('PROXY_PASSWORD')
+        launch_args['proxy'] = proxy_config
 
-    # GeoIP - only with proxy
-    use_geoip = os.getenv('CAMOUFOX_GEOIP', 'false').lower() == 'true'
-    if use_geoip and not proxy_config:
-        print("⚠️  GeoIP requested but no proxy configured - disabling GeoIP", flush=True)
-        use_geoip = False
+        if os.getenv('CAMOUFOX_GEOIP', 'false').lower() == 'true':
+            launch_args['geoip'] = True
 
-    print(f"📡 Launching server on ws://0.0.0.0:{port}/{ws_path}", flush=True)
-    print(f"🦊 Headless: {headless}", flush=True)
-    print(f"🌍 GeoIP: {'enabled' if use_geoip else 'disabled'}", flush=True)
-    if proxy_config:
-        print(f"🔐 Proxy: {proxy_config['server']}", flush=True)
+    try:
+        config = launch_options(**launch_args)
+        nodejs = get_nodejs()
+        data = orjson.dumps(to_camel_case_dict(config))
 
-    # Try Python API first, then CLI as fallback
-    methods = [
-        ("Python API", lambda: launch_via_api(port, ws_path, headless, proxy_config, use_geoip)),
-        ("CLI subprocess", lambda: launch_via_cli(port, ws_path, headless)),
-    ]
+        # Launch browser process
+        process = subprocess.Popen(
+            [nodejs, str(LAUNCH_SCRIPT)],
+            cwd=Path(nodejs).parent / "package",
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
 
-    for method_name, launch_func in methods:
-        print(f"\n🔄 Trying {method_name} method...", flush=True)
+        if process.stdin:
+            process.stdin.write(base64.b64encode(data).decode())
+            process.stdin.close()
 
-        max_retries = 2
-        retry_count = 0
+        # Capture WebSocket endpoint
+        ws_endpoint = None
+        for line in process.stdout:
+            if not shutdown_requested:
+                print(f"[{browser_id}] {line.rstrip()}", flush=True)
 
-        while retry_count < max_retries:
-            try:
-                launch_func()
-                print(f"✅ Camoufox server started successfully via {method_name}!", flush=True)
-                return  # Success
+            if 'ws://' in line or 'wss://' in line:
+                match = re.search(r'(wss?://[^\s\x1b]+)', line)
+                if match:
+                    ws_endpoint = match.group(1).strip()
+                    browser_pool[browser_id] = {
+                        'endpoint': ws_endpoint,
+                        'process': process,
+                        'status': 'ready',
+                        'started_at': datetime.utcnow().isoformat()
+                    }
+                    print(f"[{browser_id}] Ready at: {ws_endpoint}", flush=True)
 
-            except KeyboardInterrupt:
-                print("\n🔌 Shutting down Camoufox server...", flush=True)
-                sys.exit(0)
-            except Exception as e:
-                error_msg = str(e)
-                print(f"Error with {method_name}: {error_msg}", flush=True)
-                retry_count += 1
-
-                if retry_count < max_retries:
-                    print(f"🔄 Retrying {method_name} ({retry_count}/{max_retries})...", flush=True)
-                    time.sleep(2)
-                else:
-                    print(f"❌ {method_name} failed after {max_retries} attempts", flush=True)
+                    # Write primary endpoint to file for backward compatibility
+                    if browser_id == 'browser_0':
+                        ENDPOINT_FILE.write_text(ws_endpoint)
+                        print(f"Primary endpoint written to: {ENDPOINT_FILE}", flush=True)
                     break
 
-    # All methods failed
-    print("\n❌ All launch methods failed. Exiting...", flush=True)
-    print("\nPossible solutions:", flush=True)
-    print("  1. Check if all dependencies are installed: pip install 'camoufox[geoip]'", flush=True)
-    print("  2. Re-fetch browser binaries: python -m camoufox fetch", flush=True)
-    print("  3. Check for camoufox updates: pip install --upgrade camoufox", flush=True)
-    sys.exit(1)
+        return process
+
+    except Exception as e:
+        print(f"[{browser_id}] Failed to launch: {e}", flush=True)
+        return None
+
+
+def cleanup_browsers():
+    """Gracefully shutdown all browser instances"""
+    global shutdown_requested
+    shutdown_requested = True
+
+    print("\nShutting down browser pool...", flush=True)
+
+    for browser_id, info in browser_pool.items():
+        process = info.get('process')
+        if process and process.poll() is None:
+            print(f"Terminating {browser_id}...", flush=True)
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+
+    # Clean up endpoint file
+    if ENDPOINT_FILE.exists():
+        ENDPOINT_FILE.unlink()
+
+    print("Cleanup complete", flush=True)
+
+
+def signal_handler(signum, frame):
+    """Handle shutdown signals"""
+    cleanup_browsers()
+    sys.exit(0)
+
+
+def main():
+    global server_ready
+
+    print("=" * 60, flush=True)
+    print("Camoufox Browser Pool Server v2.0.0", flush=True)
+    print("=" * 60, flush=True)
+    print(f"Environment: {ENVIRONMENT}", flush=True)
+    print(f"Pool Size: {POOL_SIZE}", flush=True)
+    print(f"Health Port: {HEALTH_PORT}", flush=True)
+    print(f"Browser Port: {BROWSER_PORT}", flush=True)
+
+    headless = os.getenv('CAMOUFOX_HEADLESS', 'true').lower() == 'true'
+    print(f"Headless Mode: {headless}", flush=True)
+
+    # Register signal handlers
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+
+    # Start health server in background
+    health_thread = Thread(target=start_health_server, daemon=True)
+    health_thread.start()
+
+    print("\nLaunching browser pool...", flush=True)
+
+    # Launch browser pool
+    processes = []
+    for i in range(POOL_SIZE):
+        browser_id = f"browser_{i}"
+        port = BROWSER_PORT + i
+        print(f"\nStarting {browser_id}...", flush=True)
+
+        process = launch_browser_instance(browser_id, port, headless)
+        if process:
+            processes.append(process)
+
+        # Small delay between launches to avoid resource contention
+        if i < POOL_SIZE - 1:
+            import time
+            time.sleep(2)
+
+    if not processes:
+        print("ERROR: No browsers launched successfully!", flush=True)
+        sys.exit(1)
+
+    server_ready = True
+    print(f"\n{'=' * 60}", flush=True)
+    print(f"Browser pool ready! {len(processes)}/{POOL_SIZE} instances running", flush=True)
+    print(f"Health endpoint: http://localhost:{HEALTH_PORT}/health", flush=True)
+    print(f"Primary browser: {browser_pool.get('browser_0', {}).get('endpoint')}", flush=True)
+    print(f"{'=' * 60}\n", flush=True)
+
+    # Wait for all processes
+    try:
+        for process in processes:
+            process.wait()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        cleanup_browsers()
+
 
 if __name__ == "__main__":
     main()

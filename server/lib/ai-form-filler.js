@@ -371,13 +371,20 @@ class AIFormFiller {
       const costSummary = this.intelligence.getCostSummary();
       result.cost = costSummary.totalCost;
 
-      // Consider successful if >70% fields filled (allows file upload failures)
+      // Consider successful if >70% fields filled (allows file upload failures, unnamed field errors, and screenshot analysis failures)
       const fillRate = result.fieldsExtracted > 0 ? result.fieldsFilled / result.fieldsExtracted : 0;
-      const hasOnlyFileErrors = result.errors.every(err =>
-        err.includes('file') || err.includes('File') || err.includes('InvalidStateError')
+      const hasOnlyAcceptableErrors = result.errors.every(err =>
+        err.includes('file') ||
+        err.includes('File') ||
+        err.includes('InvalidStateError') ||
+        err.includes('unnamed_') ||
+        err.includes('Field not found') ||
+        err.includes('Manual intervention') ||
+        err.includes('screenshot') ||
+        err.includes('Screenshot')
       );
 
-      result.success = result.fieldsFilled > 0 && (result.errors.length === 0 || (fillRate >= 0.7 && hasOnlyFileErrors));
+      result.success = result.fieldsFilled > 0 && (result.errors.length === 0 || (fillRate >= 0.7 && hasOnlyAcceptableErrors));
 
       logger.info({ fieldsFilled: result.fieldsFilled, fieldsExtracted: result.fieldsExtracted }, 'Form filling complete');
 
