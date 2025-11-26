@@ -5,6 +5,24 @@
 
 import logger from './logger.js';
 
+/**
+ * Escape CSS selector for IDs that start with numbers or contain special characters
+ * CSS selectors like #123 are invalid - need to use [id="123"] or escape properly
+ * @param {string} selector - The selector to escape
+ * @returns {string} Safe CSS selector
+ */
+function escapeCssSelector(selector) {
+  if (!selector) return selector;
+
+  // If it's an ID selector starting with # followed by a digit, convert to attribute selector
+  if (selector.match(/^#\d/)) {
+    const id = selector.slice(1); // Remove the #
+    return `[id="${id}"]`;
+  }
+
+  return selector;
+}
+
 class AIFormExtractor {
   constructor() {
     this.fieldTypes = [
@@ -32,12 +50,18 @@ class AIFormExtractor {
   async detectCustomDropdowns(page, fields) {
     logger.info('🔍 Detecting custom dropdowns...');
 
+    // Pre-process selectors to escape numeric IDs
+    const fieldsWithSafeSelectors = fields.map(f => ({
+      ...f,
+      safeSelector: escapeCssSelector(f.selector)
+    }));
+
     // Identify potential custom dropdowns using multiple detection strategies
     const customDropdownCandidates = await page.evaluate((fieldsList) => {
       return fieldsList.filter(field => {
         if (field.type !== 'text') return false;
 
-        const elem = document.querySelector(field.selector);
+        const elem = document.querySelector(field.safeSelector);
         if (!elem) return false;
 
         // Strategy 1: Role-based detection (Greenhouse, modern sites)
@@ -62,7 +86,7 @@ class AIFormExtractor {
 
         return false;
       }).map(f => f.name);
-    }, fields);
+    }, fieldsWithSafeSelectors);
 
     // Filter original fields array based on detected names
     const detectedFields = fields.filter(f => customDropdownCandidates.includes(f.name));
@@ -101,6 +125,9 @@ class AIFormExtractor {
    * @returns {Array} Dropdown options
    */
   async extractCustomDropdownOptions(page, field) {
+    // Escape selector for numeric IDs
+    const safeSelector = escapeCssSelector(field.selector);
+
     const options = await page.evaluate((fieldSelector) => {
       const input = document.querySelector(fieldSelector);
       if (!input) return null;
@@ -183,7 +210,7 @@ class AIFormExtractor {
       document.body.click(); // Click elsewhere to close
 
       return extractedOptions;
-    }, field.selector);
+    }, safeSelector);
 
     // Give page a moment to close dropdown
     await this.sleep(100);
@@ -332,6 +359,13 @@ class AIFormExtractor {
       return { fields, context };
     });
 
+    // Post-process fields to escape numeric ID selectors
+    // CSS selectors like #123 are invalid - need to use [id="123"]
+    extraction.fields = extraction.fields.map(field => ({
+      ...field,
+      selector: escapeCssSelector(field.selector)
+    }));
+
     logger.info(`✅ Extracted ${extraction.fields.length} form fields`);
     return extraction;
   }
@@ -465,8 +499,12 @@ class AIFormExtractor {
       });
 
       if (submitBtn) {
+        // Use attribute selector for numeric IDs
+        const btnSelector = submitBtn.id
+          ? (submitBtn.id.match(/^\d/) ? `[id="${submitBtn.id}"]` : `#${submitBtn.id}`)
+          : 'button';
         return {
-          selector: submitBtn.id ? `#${submitBtn.id}` : 'button',
+          selector: btnSelector,
           text: submitBtn.textContent || submitBtn.value,
           visible: submitBtn.offsetParent !== null
         };

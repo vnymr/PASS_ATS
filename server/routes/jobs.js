@@ -52,6 +52,7 @@ router.get('/jobs', async (req, res) => {
       search,                   // Search in title/description
       personalized = 'false',   // Use personalized recommendations
       limit = '50',
+      offset = '0',             // Offset for pagination
       cursor,                   // Cursor for pagination (job ID)
       // New filters (ATS best practices 2024-2025)
       experienceLevel,          // Comma-separated: 'entry,mid,senior'
@@ -75,8 +76,8 @@ router.get('/jobs', async (req, res) => {
 
     // Check if personalized recommendations requested
     if (personalized === 'true' && req.userId) {
-      // Create cache key from parameters
-      const cacheKey = `${filter}-${atsType || 'all'}-${company || 'all'}-${source || 'all'}-${search || 'all'}-${limit}-${cursor || 'start'}`;
+      // Create cache key from parameters (include offset)
+      const cacheKey = `${filter}-${atsType || 'all'}-${company || 'all'}-${source || 'all'}-${search || 'all'}-${limit}-${offset}-${cursor || 'start'}`;
 
       // Try cache first
       const cached = await cacheManager.getRecommendations(req.userId, cacheKey);
@@ -101,6 +102,7 @@ router.get('/jobs', async (req, res) => {
         source,
         search,
         limit: parseInt(limit),
+        offset: parseInt(offset),
         cursor,
         // New filters
         experienceLevel: parseArray(experienceLevel),

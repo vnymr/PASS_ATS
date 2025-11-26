@@ -7,9 +7,10 @@
 import express from 'express';
 import { prisma } from '../lib/prisma-client.js';
 import logger from '../lib/logger.js';
-import { queueAutoApply, getQueueStats, getJobStatus } from '../lib/auto-apply-queue.js';
+import { queueAutoApply, getQueueStats, getJobStatus, isQueueAvailable } from '../lib/auto-apply-queue.js';
 import { rateLimitMiddleware } from '../lib/rate-limiter.js';
 import { validateJobUrl } from '../lib/url-validator.js';
+import { processAutoApplyDirect } from '../lib/direct-auto-apply.js';
 
 const router = express.Router();
 
@@ -191,22 +192,50 @@ router.post('/auto-apply', autoApplyLimiter, async (req, res) => {
 
     logger.info({ applicationId: application.id }, 'Auto-application created');
 
-    // Queue for processing with recipe engine
-    await queueAutoApply({
-      applicationId: application.id,
-      jobUrl: job.applyUrl,
-      atsType: job.atsType,
-      userId
-    });
+    // Check if Redis queue is available
+    const queueAvailable = isQueueAvailable();
 
-    res.json({
-      success: true,
-      applicationId: application.id,
-      status: 'QUEUED',
-      message: 'Application queued - will be submitted automatically',
-      estimatedTime: '2-5 minutes',
-      estimatedCost: 0.05 // Assuming recipe exists
-    });
+    if (queueAvailable) {
+      // Queue for processing with recipe engine
+      await queueAutoApply({
+        applicationId: application.id,
+        jobUrl: job.applyUrl,
+        atsType: job.atsType,
+        userId
+      });
+
+      res.json({
+        success: true,
+        applicationId: application.id,
+        status: 'QUEUED',
+        message: 'Application queued - will be submitted automatically',
+        estimatedTime: '2-5 minutes',
+        estimatedCost: 0.05
+      });
+    } else {
+      // Direct mode - process immediately using Railway Python browser
+      logger.info({ applicationId: application.id }, 'Redis queue unavailable, using direct mode');
+
+      // Respond immediately, process in background
+      res.json({
+        success: true,
+        applicationId: application.id,
+        status: 'PROCESSING',
+        message: 'Application is being processed directly (no queue)',
+        estimatedTime: '1-3 minutes'
+      });
+
+      // Process in background (don't await)
+      processAutoApplyDirect({
+        applicationId: application.id,
+        jobUrl: job.applyUrl,
+        atsType: job.atsType,
+        userId,
+        user
+      }).catch(error => {
+        logger.error({ applicationId: application.id, error: error.message }, 'Direct auto-apply failed');
+      });
+    }
 
   } catch (error) {
     logger.error({ error: error.message, code: error.code }, 'Auto-apply failed');

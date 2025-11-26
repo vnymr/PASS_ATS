@@ -114,15 +114,34 @@ async function applyWithAI(jobUrl, user, jobData, resumePath = null) {
     logger.info('🚀 Launching Playwright browser for AI application (stealth mode)...');
 
     // Use centralized browser launcher with stealth mode (now returns Playwright browser)
-    const { 
-      launchStealthBrowser, 
-      createStealthContext, 
-      applyStealthToPage 
+    const {
+      launchStealthBrowser,
+      createStealthContext,
+      createStealthContextCamoufox,
+      applyStealthToPage,
+      proxyRotator
     } = await import('./browser-launcher.js');
     browser = await launchStealthBrowser({ headless: false });
 
-    // Create stealth context with realistic browser properties
-    const context = await createStealthContext(browser);
+    // Extract job board domain for proxy selection
+    const jobBoardDomain = new URL(jobUrl).hostname;
+
+    // Generate application ID for sticky proxy session
+    const applicationId = `${jobData.id || 'unknown'}-${user.id || 'user'}-${Date.now()}`;
+
+    // Create stealth context with proxy rotation
+    // Use Camoufox context if available, otherwise standard context
+    const useCamoufox = process.env.USE_CAMOUFOX === 'true';
+    const context = useCamoufox
+      ? await createStealthContextCamoufox(browser, { applicationId, jobBoardDomain })
+      : await createStealthContext(browser, { applicationId, jobBoardDomain });
+
+    logger.info({
+      applicationId,
+      jobBoardDomain,
+      proxyEnabled: proxyRotator.isConfigured(),
+      useCamoufox
+    }, '🔗 Browser context created');
 
     const page = await context.newPage();
 
