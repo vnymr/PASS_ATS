@@ -28,6 +28,8 @@ HEALTH_PORT = int(os.getenv('HEALTH_PORT', '8080'))
 BROWSER_PORT = int(os.getenv('BROWSER_PORT', '3000'))
 POOL_SIZE = int(os.getenv('BROWSER_POOL_SIZE', '3'))
 ENVIRONMENT = os.getenv('ENVIRONMENT', 'development')
+# Hostname to advertise for WebSocket connections (for Railway internal networking)
+ADVERTISE_HOST = os.getenv('ADVERTISE_HOST', 'localhost')
 
 # Global state
 browser_pool: Dict[str, dict] = {}
@@ -120,18 +122,24 @@ camoufox_pool_size {POOL_SIZE}
         self.send_header('Content-Type', 'application/json')
         self.end_headers()
 
+        def rewrite_endpoint(endpoint):
+            """Replace localhost with ADVERTISE_HOST for external access"""
+            if endpoint and ADVERTISE_HOST != 'localhost':
+                return endpoint.replace('localhost', ADVERTISE_HOST).replace('127.0.0.1', ADVERTISE_HOST)
+            return endpoint
+
         browsers = []
         for browser_id, info in browser_pool.items():
             browsers.append({
                 'id': browser_id,
-                'endpoint': info.get('endpoint'),
+                'endpoint': rewrite_endpoint(info.get('endpoint')),
                 'status': info.get('status', 'unknown'),
                 'started_at': info.get('started_at')
             })
 
         response = {
             'browsers': browsers,
-            'primary_endpoint': browser_pool.get('browser_0', {}).get('endpoint')
+            'primary_endpoint': rewrite_endpoint(browser_pool.get('browser_0', {}).get('endpoint'))
         }
         self.wfile.write(json.dumps(response).encode())
 
@@ -257,6 +265,7 @@ def main():
     print(f"Pool Size: {POOL_SIZE}", flush=True)
     print(f"Health Port: {HEALTH_PORT}", flush=True)
     print(f"Browser Port: {BROWSER_PORT}", flush=True)
+    print(f"Advertise Host: {ADVERTISE_HOST}", flush=True)
 
     headless = os.getenv('CAMOUFOX_HEADLESS', 'true').lower() == 'true'
     print(f"Headless Mode: {headless}", flush=True)
