@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import ChatInterface, { ContentType, StreamingCallbacks } from '../components/ChatInterface';
 
+// Use empty string for development to leverage Vite proxy, or explicit URL for production
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+
 export default function Happy() {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -58,7 +61,7 @@ export default function Happy() {
     let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
 
     try {
-      const response = await fetch('/api/chat', {
+      const response = await fetch(`${API_BASE_URL}/api/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

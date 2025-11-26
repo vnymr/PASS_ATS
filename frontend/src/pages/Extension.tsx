@@ -19,6 +19,8 @@ import {
 import logoImg from '../logo.svg';
 import { useState } from 'react';
 
+const CHROME_EXTENSION_URL = 'https://chromewebstore.google.com/detail/happyresumes-ai-resume-bu/enddmomfdfphcppmhbpbnpmkfjekiled';
+
 export default function Extension() {
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -108,7 +110,12 @@ export default function Extension() {
               </p>
 
               <div className="flex flex-col sm:flex-row gap-3 mb-10">
-                <Button size="lg" className="group px-7 h-12 text-[0.9375rem] shadow-sm" style={{ backgroundColor: '#3eaca7', color: '#ffffff' }}>
+                <Button
+                  size="lg"
+                  className="group px-7 h-12 text-[0.9375rem] shadow-sm"
+                  style={{ backgroundColor: '#3eaca7', color: '#ffffff' }}
+                  onClick={() => window.open(CHROME_EXTENSION_URL, '_blank')}
+                >
                   <Chrome className="mr-2 w-5 h-5" />
                   Add to Chrome - It's Free
                   <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" />
@@ -501,7 +508,12 @@ export default function Extension() {
                 Install the free Chrome extension today and revolutionize your job search.
               </p>
 
-              <Button size="lg" className="px-8 h-12 text-[0.9375rem]" style={{ backgroundColor: '#ffffff', color: '#3eaca7' }}>
+              <Button
+                size="lg"
+                className="px-8 h-12 text-[0.9375rem]"
+                style={{ backgroundColor: '#ffffff', color: '#3eaca7' }}
+                onClick={() => window.open(CHROME_EXTENSION_URL, '_blank')}
+              >
                 <Chrome className="mr-2 w-5 h-5" />
                 Add to Chrome Now
               </Button>

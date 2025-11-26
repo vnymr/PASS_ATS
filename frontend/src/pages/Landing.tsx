@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SignedIn, SignedOut, SignInButton, SignUpButton, UserButton, useAuth } from '@clerk/clerk-react';
-import { Menu, CheckCircle, Zap, Shield, FileText, MousePointer, Clock } from 'lucide-react';
+import { Menu, CheckCircle, Zap, Shield, FileText, MousePointer, Clock, Chrome } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { HeroSection, FeatureSection, CareerCoachSection, CTASection } from '@/components/landing';
 import logoImg from '../logo.svg';
 import { trackCTAClick } from '../utils/analytics';
 import logger from '../utils/logger';
+
+const CHROME_EXTENSION_URL = 'https://chromewebstore.google.com/detail/happyresumes-ai-resume-bu/enddmomfdfphcppmhbpbnpmkfjekiled';
 
 export default function Landing() {
   const navigate = useNavigate();
@@ -397,6 +399,18 @@ export default function Landing() {
                   >
                     Chrome Extension
                   </button>
+                </li>
+                <li>
+                  <a
+                    href={CHROME_EXTENSION_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:opacity-70 transition-opacity inline-flex items-center gap-1.5"
+                    style={{ color: '#3eaca7', fontSize: '0.8125rem', fontWeight: 500 }}
+                  >
+                    <Chrome className="w-3.5 h-3.5" />
+                    Install Extension
+                  </a>
                 </li>
               </ul>
             </div>
