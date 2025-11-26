@@ -1,8 +1,8 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { UserButton } from '@clerk/clerk-react';
-import { motion } from 'framer-motion';
-import { FileText, User, Download, Home, CreditCard, History, Briefcase } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { FileText, User, Download, Briefcase, Sparkles, MessageSquare } from 'lucide-react';
 import type { Quota } from '../api-adapter';
 
 export default function Navbar({ quota }: { quota: Quota | null }) {
@@ -11,86 +11,108 @@ export default function Navbar({ quota }: { quota: Quota | null }) {
   const location = useLocation();
 
   const navItems = [
-    { id: 'home', label: 'Home', icon: Home, path: '/' },
-    { id: 'generate', label: 'Generate', icon: FileText, path: '/generate' },
-    { id: 'jobs', label: 'Jobs', icon: Briefcase, path: '/find-jobs' },
+    { id: 'generate', label: 'Resume Generator', icon: FileText, path: '/generate' },
+    { id: 'coach', label: 'AI Coach', icon: MessageSquare, path: '/chat' },
     { id: 'profile', label: 'Profile', icon: User, path: '/profile' },
-    { id: 'history', label: 'History', icon: History, path: '/history' },
+    { id: 'jobs', label: 'Jobs', icon: Briefcase, path: '/find-jobs' },
   ];
 
   return (
     <div className="nav">
       <div className="hstack">
-        <Link to="/" className="title" style={{ marginRight: '1.5rem' }}>
-          PASS ATS
+        {/* Logo */}
+        <Link to="/" className="flex items-center gap-2 mr-4 group">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-teal-500 to-teal-600 flex items-center justify-center shadow-sm group-hover:shadow-md transition-shadow">
+            <Sparkles className="w-4 h-4 text-white" />
+          </div>
+          <span className="font-bold text-lg tracking-tight text-gray-900 hidden sm:block">
+            PASS<span className="text-teal-600">ATS</span>
+          </span>
         </Link>
 
-        <motion.div
+        {/* Main Navigation */}
+        <motion.nav
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.1 }}
-          className="flex items-center gap-1 bg-white/80 backdrop-blur-sm rounded-2xl p-1.5"
-          style={{
-            boxShadow: '0 1px 3px rgba(0,0,0,0.06)'
-          }}
+          transition={{ duration: 0.3, delay: 0.1 }}
+          className="flex items-center gap-0.5 bg-gray-100/80 backdrop-blur-sm rounded-xl p-1"
         >
           {navItems.map((item) => {
             const Icon = item.icon;
-            const isActive = location.pathname === item.path;
+            const isActive = location.pathname === item.path ||
+              (item.path !== '/' && location.pathname.startsWith(item.path));
 
             return (
               <Link
                 key={item.id}
                 to={item.path}
-                className="relative p-2.5 rounded-xl transition-all duration-200"
-                style={{
-                  backgroundColor: isActive ? 'rgba(0,0,0,0.04)' : 'transparent',
-                  color: isActive ? 'var(--text-900, #1a1a1a)' : 'var(--text-500, #666)',
-                }}
-                title={item.label}
+                className={`relative flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  isActive
+                    ? 'text-teal-700'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/60'
+                }`}
               >
-                <Icon className="w-4.5 h-4.5" />
-
-                {isActive && (
-                  <motion.div
-                    layoutId="activeTab"
-                    className="absolute inset-0 rounded-xl"
-                    style={{
-                      backgroundColor: 'rgba(0,0,0,0.04)',
-                      zIndex: -1,
-                    }}
-                    transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                  />
-                )}
+                <AnimatePresence>
+                  {isActive && (
+                    <motion.div
+                      layoutId="navActiveBackground"
+                      className="absolute inset-0 bg-white rounded-lg shadow-sm"
+                      style={{ zIndex: -1 }}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ type: "spring", bounce: 0.15, duration: 0.5 }}
+                    />
+                  )}
+                </AnimatePresence>
+                <Icon className="w-4 h-4" />
+                <span className="hidden md:inline">{item.label}</span>
               </Link>
             );
           })}
-        </motion.div>
+        </motion.nav>
 
+        {/* Extension Link */}
         <a
-          className="muted flex items-center gap-2 ml-3 px-3 py-2 rounded-xl hover:bg-black/5 transition-all duration-200"
+          className="hidden lg:flex items-center gap-2 ml-3 px-3 py-2 text-sm text-gray-600 rounded-lg hover:bg-gray-100 hover:text-gray-900 transition-all duration-200"
           href="https://chrome.google.com/webstore"
           target="_blank"
           rel="noreferrer"
         >
           <Download className="w-4 h-4" />
-          <span className="hidden lg:inline">Extension</span>
+          <span>Extension</span>
         </a>
       </div>
 
-      <div className="right flex items-center gap-3">
-        <div className="flex items-center gap-3 bg-white/80 backdrop-blur-sm rounded-2xl px-4 py-2" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-          <div className="flex items-center gap-2">
-            <CreditCard className="w-4 h-4 text-gray-500" />
-            <span className="muted text-sm">Free Plan</span>
+      <div className="right flex items-center gap-2">
+        {/* Usage/Plan Badge */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.3, delay: 0.2 }}
+          className="hidden sm:flex items-center gap-2 bg-gray-100/80 backdrop-blur-sm rounded-lg px-3 py-1.5"
+        >
+          <div className="flex items-center gap-1.5">
+            <div className="w-2 h-2 rounded-full bg-teal-500 animate-pulse" />
+            <span className="text-xs font-medium text-gray-600">Free</span>
           </div>
-          {limit ? (
-            <div className="flex items-center gap-2 border-l border-gray-200 pl-3">
-              <span className="muted text-sm">{used}/{limit}</span>
-            </div>
-          ) : null}
-        </div>
-        <UserButton afterSignOutUrl="/" />
+          {limit > 0 && (
+            <>
+              <div className="w-px h-3 bg-gray-300" />
+              <span className="text-xs font-medium text-gray-900">{used}/{limit}</span>
+            </>
+          )}
+        </motion.div>
+
+        {/* User Button */}
+        <UserButton
+          afterSignOutUrl="/"
+          appearance={{
+            elements: {
+              avatarBox: "w-8 h-8 ring-2 ring-white shadow-sm"
+            }
+          }}
+        />
       </div>
     </div>
   );

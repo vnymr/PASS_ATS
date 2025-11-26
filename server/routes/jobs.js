@@ -587,4 +587,153 @@ router.get('/jobs/:id/match-analysis', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/jobs/refresh-profile
+ * Clear profile cache to force re-analysis of skills
+ */
+router.post('/jobs/refresh-profile', async (req, res) => {
+  try {
+    if (!req.userId) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    // Clear the cached profile
+    await cacheManager.invalidateUserProfile(req.userId);
+
+    logger.info({ userId: req.userId }, 'Profile cache cleared, will re-analyze on next request');
+
+    res.json({
+      success: true,
+      message: 'Profile cache cleared. Your next job search will use freshly analyzed skills.'
+    });
+
+  } catch (error) {
+    logger.error({ error: error.message, userId: req.userId }, 'Failed to refresh profile');
+    return res.status(500).json({ error: 'Failed to refresh profile' });
+  }
+});
+
+/**
+ * GET /api/jobs/profile-insights
+ * Get profile insights for personalized job feed
+ * Returns profile completeness, top skills, and matching stats
+ */
+router.get('/jobs/profile-insights', async (req, res) => {
+  try {
+    if (!req.userId) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    // Get user profile
+    const profile = await prisma.profile.findUnique({
+      where: { userId: req.userId }
+    });
+
+    if (!profile || !profile.data) {
+      return res.json({
+        hasProfile: false,
+        completeness: 0,
+        missingFields: ['summary', 'experiences', 'skills', 'education'],
+        topSkills: [],
+        seniorityLevel: null,
+        matchingJobsCount: 0
+      });
+    }
+
+    const data = profile.data;
+
+    // Calculate profile completeness
+    const fields = {
+      summary: Boolean(data.summary && data.summary.length > 50),
+      experiences: Boolean(data.experiences && data.experiences.length > 0),
+      skills: Boolean(data.skills && data.skills.length >= 3),
+      education: Boolean(data.education && data.education.length > 0),
+      location: Boolean(data.location),
+      resumeText: Boolean(data.resumeText && data.resumeText.length > 100)
+    };
+
+    const completedFields = Object.values(fields).filter(Boolean).length;
+    const completeness = Math.round((completedFields / Object.keys(fields).length) * 100);
+
+    const missingFields = Object.entries(fields)
+      .filter(([_, completed]) => !completed)
+      .map(([field]) => field);
+
+    // Get top skills
+    const topSkills = (data.skills || []).slice(0, 6);
+
+    // Infer seniority level
+    const totalYears = (data.experiences || []).reduce((total, exp) => {
+      if (!exp.dates) return total;
+      const yearMatches = exp.dates.match(/\d{4}/g);
+      if (!yearMatches || yearMatches.length === 0) return total + 1;
+      const startYear = parseInt(yearMatches[0]);
+      const endYear = yearMatches.length > 1 ? parseInt(yearMatches[1]) : new Date().getFullYear();
+      return total + Math.max(endYear - startYear, 0.5);
+    }, 0);
+
+    let seniorityLevel = 'mid';
+    if (totalYears < 2) seniorityLevel = 'entry';
+    else if (totalYears < 4) seniorityLevel = 'junior';
+    else if (totalYears < 7) seniorityLevel = 'mid';
+    else if (totalYears < 10) seniorityLevel = 'senior';
+    else seniorityLevel = 'lead';
+
+    // Detect career domain using recommendation engine logic
+    const careerDomain = jobRecommendationEngine.detectCareerDomain({
+      experiences: data.experiences || [],
+      allSkills: data.skills || [],
+      skills: data.skills || [],
+      domains: []
+    });
+
+    // Count matching jobs in user's domain
+    let matchingJobsCount = 0;
+    if (careerDomain && careerDomain.keywords.length > 0) {
+      // Count jobs in user's career domain
+      const domainFilters = careerDomain.keywords.slice(0, 5).map(keyword => ({
+        title: { contains: keyword, mode: 'insensitive' }
+      }));
+
+      matchingJobsCount = await prisma.aggregatedJob.count({
+        where: {
+          isActive: true,
+          OR: domainFilters
+        }
+      });
+    } else if (topSkills.length > 0) {
+      // Fallback to skill-based count
+      const skillPatterns = topSkills.slice(0, 3).map(skill => ({
+        OR: [
+          { extractedSkills: { has: skill } },
+          { description: { contains: skill, mode: 'insensitive' } }
+        ]
+      }));
+
+      matchingJobsCount = await prisma.aggregatedJob.count({
+        where: {
+          isActive: true,
+          OR: skillPatterns
+        }
+      });
+    }
+
+    res.json({
+      hasProfile: true,
+      completeness,
+      missingFields,
+      topSkills,
+      seniorityLevel,
+      totalYearsExperience: Math.round(totalYears),
+      matchingJobsCount,
+      location: data.location || null,
+      careerDomain: careerDomain ? careerDomain.name : null
+    });
+
+  } catch (error) {
+    logger.error({ error: error.message, userId: req.userId }, 'Failed to get profile insights');
+    return res.status(500).json({ error: 'Failed to get profile insights' });
+  }
+});
+
 export default router;

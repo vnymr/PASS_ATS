@@ -14,8 +14,187 @@ import {
   applyStealthToPage,
   proxyRotator
 } from './browser-launcher.js';
+import { processResumeJob } from './job-processor.js';
 
 const aiFormFiller = new AIFormFiller();
+
+/**
+ * Find or generate a tailored resume for the job
+ * Strategy:
+ * 1. Check for existing resume generated for this exact job
+ * 2. Check for recent resume for same company (within 7 days)
+ * 3. Generate new tailored resume if nothing relevant exists
+ * 4. Fall back to uploaded resume or latest resume if generation fails
+ */
+async function getOrGenerateTailoredResume(userId, aggregatedJob, profileData) {
+  const { id: jobId, company, title, description, requirements } = aggregatedJob;
+
+  // Combine description and requirements for full job context
+  const fullJobDescription = [description, requirements].filter(Boolean).join('\n\n');
+
+  logger.info({
+    userId,
+    jobId,
+    company,
+    title
+  }, '🔍 Finding or generating tailored resume');
+
+  // Strategy 1: Check if we already generated a resume for this exact job
+  const existingForJob = await prisma.job.findFirst({
+    where: {
+      userId,
+      status: 'COMPLETED',
+      metadata: {
+        path: ['aggregatedJobId'],
+        equals: jobId
+      }
+    },
+    include: {
+      artifacts: {
+        where: { type: 'PDF_OUTPUT' },
+        orderBy: { version: 'desc' },
+        take: 1
+      }
+    }
+  });
+
+  if (existingForJob?.artifacts?.[0]) {
+    logger.info({ jobId, resumeJobId: existingForJob.id }, '✅ Found existing resume for this exact job');
+    return {
+      pdfContent: existingForJob.artifacts[0].content,
+      filename: existingForJob.artifacts[0].metadata?.filename || `resume_${userId}.pdf`,
+      source: 'EXISTING_FOR_JOB'
+    };
+  }
+
+  // Strategy 2: Check for recent resume for same company (reuse within 7 days)
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const recentForCompany = await prisma.job.findFirst({
+    where: {
+      userId,
+      status: 'COMPLETED',
+      createdAt: { gte: sevenDaysAgo },
+      metadata: {
+        path: ['company'],
+        string_contains: company
+      }
+    },
+    include: {
+      artifacts: {
+        where: { type: 'PDF_OUTPUT' },
+        orderBy: { version: 'desc' },
+        take: 1
+      }
+    }
+  });
+
+  if (recentForCompany?.artifacts?.[0]) {
+    logger.info({
+      jobId,
+      company,
+      resumeJobId: recentForCompany.id
+    }, '✅ Found recent resume for same company (within 7 days)');
+    return {
+      pdfContent: recentForCompany.artifacts[0].content,
+      filename: recentForCompany.artifacts[0].metadata?.filename || `resume_${userId}.pdf`,
+      source: 'RECENT_SAME_COMPANY'
+    };
+  }
+
+  // Strategy 3: Generate new tailored resume for this job
+  logger.info({ jobId, company, title }, '🔄 Generating new tailored resume for job');
+
+  try {
+    // Create a new resume generation job
+    const newResumeJob = await prisma.job.create({
+      data: {
+        userId,
+        status: 'PENDING',
+        jobDescription: fullJobDescription,
+        resumeText: '',
+        aiMode: 'gpt-5-mini',
+        metadata: {
+          aggregatedJobId: jobId,
+          company,
+          title,
+          autoApplyGenerated: true
+        }
+      }
+    });
+
+    // Process the resume generation (synchronously for auto-apply)
+    await processResumeJob({
+      jobId: newResumeJob.id,
+      profileData,
+      jobDescription: fullJobDescription
+    });
+
+    // Fetch the generated artifact
+    const generatedArtifact = await prisma.artifact.findFirst({
+      where: {
+        jobId: newResumeJob.id,
+        type: 'PDF_OUTPUT'
+      },
+      orderBy: { version: 'desc' }
+    });
+
+    if (generatedArtifact) {
+      logger.info({
+        jobId,
+        newResumeJobId: newResumeJob.id
+      }, '✅ Generated new tailored resume for job');
+      return {
+        pdfContent: generatedArtifact.content,
+        filename: generatedArtifact.metadata?.filename || `resume_${userId}_${company.replace(/\s+/g, '_')}.pdf`,
+        source: 'NEWLY_GENERATED'
+      };
+    }
+  } catch (error) {
+    logger.warn({
+      error: error.message,
+      jobId
+    }, '⚠️ Resume generation failed, falling back to existing resume');
+  }
+
+  // Strategy 4: Fall back to uploaded resume
+  const uploadedResume = profileData?.uploadedResume;
+  if (uploadedResume?.content) {
+    logger.info({ userId }, '📄 Falling back to uploaded resume');
+    return {
+      pdfContent: Buffer.from(uploadedResume.content, 'base64'),
+      filename: uploadedResume.filename || `resume_${userId}.pdf`,
+      source: 'UPLOADED_FALLBACK'
+    };
+  }
+
+  // Strategy 5: Fall back to latest generated resume
+  const latestResume = await prisma.job.findFirst({
+    where: {
+      userId,
+      status: 'COMPLETED'
+    },
+    orderBy: { createdAt: 'desc' },
+    include: {
+      artifacts: {
+        where: { type: 'PDF_OUTPUT' },
+        orderBy: { version: 'desc' },
+        take: 1
+      }
+    }
+  });
+
+  if (latestResume?.artifacts?.[0]) {
+    logger.info({ userId, resumeJobId: latestResume.id }, '📄 Falling back to latest generated resume');
+    return {
+      pdfContent: latestResume.artifacts[0].content,
+      filename: latestResume.artifacts[0].metadata?.filename || `resume_${userId}.pdf`,
+      source: 'LATEST_FALLBACK'
+    };
+  }
+
+  // No resume available
+  return null;
+}
 
 /**
  * Process auto-apply directly without queue
@@ -65,6 +244,38 @@ export async function processAutoApplyDirect({ applicationId, jobUrl, atsType, u
       throw new Error('User profile missing required data. Please complete profile setup.');
     }
 
+    // Fetch the aggregated job to get job details for tailored resume generation
+    const autoApplication = await prisma.autoApplication.findUnique({
+      where: { id: applicationId },
+      include: { job: true }
+    });
+
+    if (!autoApplication?.job) {
+      throw new Error('Job details not found for this application');
+    }
+
+    const aggregatedJob = autoApplication.job;
+
+    // Smart resume selection: find relevant existing resume or generate new tailored one
+    logger.info({
+      applicationId,
+      company: aggregatedJob.company,
+      title: aggregatedJob.title
+    }, '🔍 Getting tailored resume for job');
+
+    const resumeResult = await getOrGenerateTailoredResume(user.id, aggregatedJob, profileData);
+
+    if (!resumeResult) {
+      throw new Error('No resume found - please upload a resume or complete your profile to generate one');
+    }
+
+    const { pdfContent, filename, source: resumeSource } = resumeResult;
+    logger.info({
+      applicationId,
+      filename,
+      resumeSource
+    }, '📄 Resume ready for application');
+
     // Launch browser using centralized launcher (handles Camoufox → Browserless → Local fallback)
     logger.info('🚀 Launching stealth browser via centralized launcher...');
     browser = await launchStealthBrowser({ headless: false });
@@ -91,41 +302,6 @@ export async function processAutoApplyDirect({ applicationId, jobUrl, atsType, u
 
     // Apply additional stealth techniques to the page
     await applyStealthToPage(page);
-
-    // Prepare resume file
-    const uploadedResume = profileData?.uploadedResume;
-    let pdfContent, filename;
-
-    if (uploadedResume?.content) {
-      pdfContent = Buffer.from(uploadedResume.content, 'base64');
-      filename = uploadedResume.filename || `resume_${user.id}.pdf`;
-      logger.info({ filename }, '📄 Using user-uploaded resume');
-    } else {
-      // Fall back to AI-generated resume
-      const latestResumeJob = await prisma.job.findFirst({
-        where: {
-          userId: user.id,
-          status: 'COMPLETED'
-        },
-        orderBy: { createdAt: 'desc' },
-        include: {
-          artifacts: {
-            where: { type: 'PDF_OUTPUT' },
-            orderBy: { version: 'desc' },
-            take: 1
-          }
-        }
-      });
-
-      if (!latestResumeJob?.artifacts?.[0]) {
-        throw new Error('No resume found - please upload a resume or generate one first');
-      }
-
-      const pdfArtifact = latestResumeJob.artifacts[0];
-      pdfContent = pdfArtifact.content;
-      filename = pdfArtifact.metadata?.filename || `resume_${user.id}.pdf`;
-      logger.info({ filename }, '📄 Using AI-generated resume');
-    }
 
     // Save PDF to temp file
     const fs = await import('fs');
@@ -289,4 +465,5 @@ export async function processAutoApplyDirect({ applicationId, jobUrl, atsType, u
   }
 }
 
-export default { processAutoApplyDirect };
+export { getOrGenerateTailoredResume };
+export default { processAutoApplyDirect, getOrGenerateTailoredResume };

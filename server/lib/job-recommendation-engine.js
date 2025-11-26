@@ -110,6 +110,28 @@ class JobRecommendationEngine {
       const where = { isActive: true };
       const AND = [];
 
+      // CRITICAL: Pre-filter jobs by user's career domain
+      // This prevents showing Sales jobs to Engineers and vice versa
+      const userCareerDomain = this.detectCareerDomain(userProfile);
+      if (userCareerDomain && userCareerDomain.keywords.length > 0) {
+        // Build domain filter - job title should contain at least one domain keyword
+        const domainFilters = userCareerDomain.keywords.map(keyword => ({
+          OR: [
+            { title: { contains: keyword, mode: 'insensitive' } },
+            { extractedJobLevel: { contains: keyword, mode: 'insensitive' } }
+          ]
+        }));
+
+        // Job must match at least one domain keyword
+        AND.push({ OR: domainFilters });
+
+        logger.debug({
+          userId,
+          domain: userCareerDomain.name,
+          keywords: userCareerDomain.keywords
+        }, 'Filtering jobs by user career domain');
+      }
+
       // Basic filters
       if (filter === 'ai_applyable' || aiApplyable === true) {
         where.aiApplyable = true;
@@ -233,9 +255,9 @@ class JobRecommendationEngine {
       }
 
       // PERFORMANCE FIX: Only fetch a reasonable batch to score
-      // Fetch 10x the requested limit to ensure good results after scoring
+      // Fetch more jobs to find good matches after scoring/filtering
       // This prevents loading thousands of jobs into memory
-      const batchSize = Math.min(limit * 10, 1000); // Cap at 1000 jobs max
+      const batchSize = Math.min(limit * 20, 2000); // Increased to 2000 for better matches
 
       const jobs = await prisma.aggregatedJob.findMany({
         where,
@@ -300,13 +322,45 @@ class JobRecommendationEngine {
       // 5. Sort by relevance score (highest first)
       scoredJobs.sort((a, b) => b.relevanceScore - a.relevanceScore);
 
-      // 6. Apply pagination
-      const paginatedJobs = scoredJobs.slice(offset, offset + limit);
+      // 6. Apply minimum relevance threshold
+      // Only show jobs that are actually relevant to the user
+      const MIN_RELEVANCE_THRESHOLD = 0.45; // 45% minimum match (raised from 40%)
+      const GOOD_RELEVANCE_THRESHOLD = 0.60; // 60% is considered "good"
+
+      // Filter to only show relevant jobs
+      let relevantJobs = scoredJobs.filter(job => job.relevanceScore >= MIN_RELEVANCE_THRESHOLD);
+
+      // If we have very few relevant jobs, lower the threshold but show what we have
+      // This ensures users always see some results
+      if (relevantJobs.length < 10) {
+        // Show top jobs regardless of threshold, but at least 10 or all available
+        relevantJobs = scoredJobs.slice(0, Math.max(10, limit));
+        logger.info({
+          userId,
+          relevantCount: relevantJobs.length,
+          threshold: MIN_RELEVANCE_THRESHOLD,
+          topScore: scoredJobs[0]?.relevanceScore
+        }, 'Few relevant jobs found, showing top matches');
+      }
+
+      // Log matching stats for debugging
+      const goodMatchCount = scoredJobs.filter(j => j.relevanceScore >= GOOD_RELEVANCE_THRESHOLD).length;
+      logger.debug({
+        userId,
+        totalScored: scoredJobs.length,
+        aboveThreshold: relevantJobs.length,
+        goodMatches: goodMatchCount,
+        topScore: scoredJobs[0]?.relevanceScore,
+        bottomScore: scoredJobs[scoredJobs.length - 1]?.relevanceScore
+      }, 'Job relevance distribution');
+
+      // 7. Apply pagination to relevant jobs only
+      const paginatedJobs = relevantJobs.slice(offset, offset + limit);
 
       return {
         jobs: paginatedJobs,
-        total: scoredJobs.length,
-        hasMore: scoredJobs.length > (offset + limit)
+        total: relevantJobs.length,
+        hasMore: relevantJobs.length > (offset + limit)
       };
 
     } catch (error) {
@@ -356,6 +410,9 @@ class JobRecommendationEngine {
     // 8. User interaction score (engagement signals)
     const interactionScore = this.calculateInteractionScore(job.id, userInteractions);
 
+    // 9. Domain/Role match bonus
+    const domainBonus = this.calculateDomainMatch(job, userProfile);
+
     // Calculate weighted total using ATS-backed weights
     const totalScore =
       (keywordScore * this.weights.keywordMatch) +
@@ -365,9 +422,151 @@ class JobRecommendationEngine {
       (descriptionScore * this.weights.descriptionSimilarity) +
       (locationScore * this.weights.locationMatch) +
       (recencyScore * this.weights.recencyBoost) +
-      (interactionScore * this.weights.userInteractions);
+      (interactionScore * this.weights.userInteractions) +
+      domainBonus; // Additional bonus for domain match
 
     return Math.min(totalScore, 1.0);
+  }
+
+  /**
+   * Detect user's career domain from their profile
+   * Returns domain name and relevant job title keywords
+   */
+  detectCareerDomain(userProfile) {
+    const experiences = userProfile.experiences || [];
+    const skills = (userProfile.allSkills || userProfile.skills || []).map(s => s.toLowerCase());
+    const domains = (userProfile.domains || []).map(d => d.toLowerCase());
+
+    // Extract role titles from experiences
+    const roleTitles = experiences
+      .map(e => (e.role || '').toLowerCase())
+      .filter(Boolean);
+
+    // Career domain definitions with associated keywords
+    const careerDomains = {
+      engineering: {
+        indicators: ['engineer', 'developer', 'programmer', 'software', 'backend', 'frontend', 'fullstack', 'full-stack', 'devops', 'sre', 'platform'],
+        skills: ['javascript', 'python', 'java', 'react', 'node', 'aws', 'docker', 'kubernetes', 'typescript', 'golang', 'rust', 'c++', 'sql'],
+        keywords: ['engineer', 'developer', 'software', 'backend', 'frontend', 'full stack', 'fullstack', 'devops', 'sre', 'platform', 'architect']
+      },
+      data: {
+        indicators: ['data', 'analyst', 'scientist', 'analytics', 'machine learning', 'ml', 'ai'],
+        skills: ['python', 'sql', 'tableau', 'spark', 'pandas', 'tensorflow', 'pytorch', 'r', 'statistics'],
+        keywords: ['data', 'analyst', 'scientist', 'analytics', 'machine learning', 'ml', 'ai', 'business intelligence']
+      },
+      design: {
+        indicators: ['designer', 'ux', 'ui', 'product design', 'graphic', 'visual'],
+        skills: ['figma', 'sketch', 'adobe', 'photoshop', 'illustrator', 'ux', 'ui'],
+        keywords: ['designer', 'design', 'ux', 'ui', 'product design', 'graphic', 'visual', 'creative']
+      },
+      product: {
+        indicators: ['product manager', 'product owner', 'pm', 'product lead'],
+        skills: ['roadmap', 'agile', 'scrum', 'jira', 'product strategy'],
+        keywords: ['product manager', 'product owner', 'product lead', 'product']
+      },
+      marketing: {
+        indicators: ['marketing', 'growth', 'seo', 'content', 'brand'],
+        skills: ['google analytics', 'seo', 'sem', 'content marketing', 'social media'],
+        keywords: ['marketing', 'growth', 'seo', 'content', 'brand', 'digital marketing']
+      },
+      sales: {
+        indicators: ['sales', 'account executive', 'business development', 'sdr', 'ae'],
+        skills: ['salesforce', 'crm', 'negotiation', 'prospecting'],
+        keywords: ['sales', 'account executive', 'business development', 'sdr', 'account manager']
+      },
+      operations: {
+        indicators: ['operations', 'ops', 'supply chain', 'logistics'],
+        skills: ['process improvement', 'six sigma', 'lean', 'supply chain'],
+        keywords: ['operations', 'ops', 'supply chain', 'logistics', 'coordinator']
+      },
+      finance: {
+        indicators: ['finance', 'accounting', 'financial', 'cfo', 'controller'],
+        skills: ['excel', 'financial modeling', 'accounting', 'budgeting'],
+        keywords: ['finance', 'financial', 'accounting', 'controller', 'analyst']
+      },
+      hr: {
+        indicators: ['hr', 'human resources', 'recruiter', 'talent', 'people ops'],
+        skills: ['recruiting', 'onboarding', 'hris', 'compensation'],
+        keywords: ['hr', 'human resources', 'recruiter', 'talent', 'people']
+      }
+    };
+
+    // Score each domain
+    let bestDomain = null;
+    let bestScore = 0;
+
+    for (const [domainName, domain] of Object.entries(careerDomains)) {
+      let score = 0;
+
+      // Check role titles (highest weight)
+      domain.indicators.forEach(indicator => {
+        if (roleTitles.some(title => title.includes(indicator))) {
+          score += 10;
+        }
+      });
+
+      // Check skills
+      domain.skills.forEach(skill => {
+        if (skills.includes(skill)) {
+          score += 2;
+        }
+      });
+
+      // Check domains from profile
+      domain.indicators.forEach(indicator => {
+        if (domains.includes(indicator)) {
+          score += 5;
+        }
+      });
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestDomain = { name: domainName, keywords: domain.keywords, score };
+      }
+    }
+
+    // Only return domain if we have reasonable confidence (score >= 5)
+    if (bestDomain && bestScore >= 5) {
+      return bestDomain;
+    }
+
+    return null;
+  }
+
+  /**
+   * Calculate domain/role match bonus
+   * Gives significant boost when job title/role matches user's experience domain
+   */
+  calculateDomainMatch(job, userProfile) {
+    const jobTitle = (job.title || '').toLowerCase();
+    const jobDesc = (job.description || '').toLowerCase();
+
+    // Get user's domains and experience keywords
+    const userDomains = (userProfile.domains || []).map(d => d.toLowerCase());
+    const userExperiences = (userProfile.experiences || [])
+      .map(e => ((e.role || '') + ' ' + (e.company || '')).toLowerCase());
+
+    let bonus = 0;
+
+    // Check for domain/industry match
+    userDomains.forEach(domain => {
+      if (jobTitle.includes(domain) || jobDesc.includes(domain)) {
+        bonus += 0.10; // 10% bonus per domain match
+      }
+    });
+
+    // Check for role similarity (e.g., if user was "Software Engineer", boost "Software" jobs)
+    const roleKeywords = ['engineer', 'developer', 'architect', 'manager', 'analyst', 'designer', 'scientist', 'lead', 'director'];
+    userExperiences.forEach(exp => {
+      roleKeywords.forEach(roleKey => {
+        if (exp.includes(roleKey) && jobTitle.includes(roleKey)) {
+          bonus += 0.15; // 15% bonus for role type match
+        }
+      });
+    });
+
+    // Cap the bonus at 25%
+    return Math.min(bonus, 0.25);
   }
 
   /**

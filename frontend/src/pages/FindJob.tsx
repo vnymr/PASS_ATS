@@ -1,18 +1,14 @@
 import { useState, useMemo, useEffect, useCallback, useRef, type FormEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Input } from '../ui/Input';
-import { Button } from '../ui/Button';
-import Card from '../ui/Card';
 import { useAuth } from '@clerk/clerk-react';
 import type { Job as JobType, GetJobsResponse } from '../services/api';
-import JobCard from '../components/JobCard';
 import JobCardSimple from '../components/JobCardSimple';
 import JobDetailPanel from '../components/JobDetailPanel';
 import JobDetailPanelSimple from '../components/JobDetailPanelSimple';
 import logger from '../utils/logger';
-import { GooeySearchBar } from '../ui/AnimatedSearchBar';
 import JobFilterPanel, { type JobFilters } from '../components/JobFilterPanel';
 import { api } from '../api-clerk';
+import { Search } from 'lucide-react';
 
 const API_BASE_URL = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '').trim();
 const PAGE_SIZE = 20; // Reduced for lazy loading
@@ -23,8 +19,6 @@ type JobWithExtras = JobType & {
   tags?: string[] | null;
   salaryRange?: string | null;
   remote?: boolean | null;
-  relevanceScore?: number;
-  scoreBreakdown?: Record<string, number>;
 };
 
 type SearchMeta = {
@@ -141,11 +135,9 @@ export default function FindJob() {
   const [searchMeta, setSearchMeta] = useState<SearchMeta>({ query: initialQueryRef.current, offset: 0, hasMore: false, total: 0 });
   const [currentPage, setCurrentPage] = useState(1);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
-  const [usePersonalized, setUsePersonalized] = useState(true); // Default to personalized
-  const [isPersonalizedResponse, setIsPersonalizedResponse] = useState(false); // Track if response is personalized
-  const prevPersonalizedRef = useRef(true); // Track previous personalized state
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
   const [activeFilters, setActiveFilters] = useState<JobFilters>({});
+  const [sortBy, setSortBy] = useState<'recommended' | 'latest' | 'salary'>('recommended');
 
   const debouncedSearch = useDebouncedValue(searchInput, 500);
   const requestIdRef = useRef(0);
@@ -153,15 +145,41 @@ export default function FindJob() {
   const lastUrlQueryRef = useRef(initialQueryRef.current);
 
   const filteredJobs = useMemo(() => {
-    if (!remoteOnly) {
-      return jobs;
+    let result = jobs;
+
+    // Filter for remote only if enabled
+    if (remoteOnly) {
+      result = result.filter(job => {
+        const location = job.location?.toLowerCase() ?? '';
+        return location.includes('remote') || location.includes('anywhere');
+      });
     }
 
-    return jobs.filter(job => {
-      const location = job.location?.toLowerCase() ?? '';
-      return location.includes('remote') || location.includes('anywhere');
+    // Sort based on selected option
+    result = [...result].sort((a, b) => {
+      switch (sortBy) {
+        case 'recommended':
+          // Sort by relevance score (highest first)
+          const scoreA = a.relevanceScore ?? 0;
+          const scoreB = b.relevanceScore ?? 0;
+          return scoreB - scoreA;
+        case 'latest':
+          // Sort by posted date (newest first)
+          const dateA = a.postedDate ? new Date(a.postedDate).getTime() : 0;
+          const dateB = b.postedDate ? new Date(b.postedDate).getTime() : 0;
+          return dateB - dateA;
+        case 'salary':
+          // Sort by salary (highest first) - extract number from salary string
+          const salaryA = parseInt(a.salary?.replace(/[^0-9]/g, '') || '0') || 0;
+          const salaryB = parseInt(b.salary?.replace(/[^0-9]/g, '') || '0') || 0;
+          return salaryB - salaryA;
+        default:
+          return 0;
+      }
     });
-  }, [jobs, remoteOnly]);
+
+    return result;
+  }, [jobs, remoteOnly, sortBy]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -214,7 +232,7 @@ export default function FindJob() {
         const filterParams = new URLSearchParams();
         filterParams.set('limit', String(PAGE_SIZE));
         filterParams.set('offset', String(offset));
-        if (usePersonalized) filterParams.set('personalized', 'true');
+        filterParams.set('personalized', 'true'); // Always show personalized/recommended jobs
 
         // Add filter parameters
         if (filtersToUse.experienceLevel?.length) {
@@ -258,14 +276,11 @@ export default function FindJob() {
           throw new Error('Failed to load jobs');
         }
 
-        const data = (await response.json()) as GetJobsResponse & { personalized?: boolean };
-        logger.debug('API Response', { total: data.total, jobCount: data.jobs?.length, personalized: data.personalized });
+        const data = (await response.json()) as GetJobsResponse;
+        logger.debug('API Response', { total: data.total, jobCount: data.jobs?.length });
         if (requestId !== requestIdRef.current) {
           return;
         }
-
-        // Track if response is personalized
-        setIsPersonalizedResponse(data.personalized || false);
 
         const normalized = (data.jobs || []).map((job: any) => normalizeJob(job as JobWithExtras));
 
@@ -322,7 +337,7 @@ export default function FindJob() {
         }
       }
     },
-    [getToken, setSearchParams, usePersonalized, activeFilters]
+    [getToken, setSearchParams, activeFilters]
   );
 
   const runSearch = useCallback(
@@ -477,18 +492,6 @@ export default function FindJob() {
       fetchJobs({ offset: 0, append: false });
     }
   }, [searchParams, runSearch, fetchJobs]);
-
-  // Refetch when personalized toggle changes
-  useEffect(() => {
-    if (prevPersonalizedRef.current !== usePersonalized) {
-      prevPersonalizedRef.current = usePersonalized;
-
-      // Only refetch if we're in browse mode (not search)
-      if (mode === 'browse') {
-        fetchJobs({ offset: 0, append: false });
-      }
-    }
-  }, [usePersonalized, mode, fetchJobs]);
 
   useEffect(() => {
     const trimmed = debouncedSearch.trim();
@@ -738,41 +741,48 @@ export default function FindJob() {
   const isInitialLoading = loading;
   const showEmptyState = !isInitialLoading && !error && filteredJobs.length === 0;
 
-  // Tailwind replaces previous inline style objects
-
-  const jobSearchSuggestions = [
-    "Remote React jobs $120k+",
-    "Senior engineer healthcare",
-    "Data analyst NYC",
-    "Design jobs flexible hours",
-    "Machine learning startups",
-    "Product manager fintech",
-    "Full-stack developer remote",
-    "DevOps AWS Kubernetes",
-    "Frontend TypeScript React",
-    "Backend Python Django"
-  ];
-
   return (
     <div className="flex-1 w-full min-h-screen bg-background text-text font-sans">
       <div className="max-w-[1160px] mx-auto flex flex-col gap-2 px-4 lg:px-6 pt-4 pb-0">
         <div className="flex flex-col gap-3 sticky top-0 z-20 bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/60">
 
-          {/* Search on Left, Filters on Right */}
-          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 pb-3 border-b border-[rgba(12,19,16,0.06)]">
-            {/* Search Bar on Left */}
-            <div className="flex items-center gap-3">
-              <GooeySearchBar
-                suggestions={jobSearchSuggestions}
-                onSearch={(query) => {
-                  skipDebounceRef.current = true;
-                  setSearchInput(query);
-                  runSearch(query, { offset: 0, append: false });
-                }}
-              />
-            </div>
+          {/* Search and Filters Row */}
+          <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-3 pb-3 border-b border-[rgba(12,19,16,0.06)]">
+            {/* Search Input */}
+            <form
+              onSubmit={handleSearchSubmit}
+              className="flex-1 flex items-center gap-2"
+            >
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  type="text"
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  placeholder="Search jobs by title, company, skills..."
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all placeholder:text-gray-400"
+                />
+                {searchInput && (
+                  <button
+                    type="button"
+                    onClick={handleClearSearch}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M18 6L6 18M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+              <button
+                type="submit"
+                className="px-4 py-2.5 bg-primary text-white rounded-xl font-medium text-sm hover:bg-primary/90 transition-colors whitespace-nowrap"
+              >
+                Search
+              </button>
+            </form>
 
-            <div className="flex items-center gap-2.5 flex-wrap flex-1 justify-end">
+            <div className="flex items-center gap-2.5">
               {/* Filter Button */}
               <button
                 type="button"
@@ -798,27 +808,29 @@ export default function FindJob() {
                 )}
               </button>
 
-              <button
-                type="button"
-                onClick={() => setUsePersonalized(prev => !prev)}
-                className={`rounded-full px-[14px] py-[6px] text-[13px] font-medium cursor-pointer transition flex items-center gap-1.5 ${usePersonalized ? 'border border-primary bg-[var(--primary-50)] text-primary' : 'border border-[rgba(12,19,16,0.12)] bg-white text-accent'}`}
-                title={usePersonalized ? 'Showing jobs matched to your profile' : 'Showing all jobs chronologically'}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-                  <path d="M2 17l10 5 10-5M2 12l10 5 10-5"/>
+              {/* Sort Dropdown */}
+              <div className="relative">
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as 'recommended' | 'latest' | 'salary')}
+                  className="appearance-none rounded-full px-[14px] py-[6px] pr-8 text-[13px] font-medium cursor-pointer transition border border-[rgba(12,19,16,0.12)] bg-white text-accent hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                >
+                  <option value="recommended">Recommended</option>
+                  <option value="latest">Latest</option>
+                  <option value="salary">Highest Salary</option>
+                </select>
+                <svg
+                  className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500 pointer-events-none"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
-                {usePersonalized ? 'Personalized' : 'Latest'}
-              </button>
+              </div>
+
               {mode === 'search' && activeQuery && (
                 <span className="text-[13px] text-[var(--gray-600)]">"{activeQuery}"</span>
-              )}
-              {usePersonalized && isPersonalizedResponse && (
-                <span className="text-[11px] text-primary/70 font-medium flex items-center gap-1">
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-                  </svg>
-                </span>
               )}
             </div>
           </div>
@@ -868,54 +880,19 @@ export default function FindJob() {
                 </>
               )}
 
-              {!isInitialLoading && filteredJobs.map((job, index) => {
-                // Generate match score if not present (for non-personalized mode)
-                const relevanceScore = job.relevanceScore || (usePersonalized ? 0.75 : 0.70);
-
-                const enrichedJob = {
-                  ...job,
-                  relevanceScore, // Always include a score
-                  matchBreakdown: {
-                    experienceLevel: Math.min(95, Math.round((relevanceScore * 100) + 10)),
-                    skills: Math.min(95, Math.round((relevanceScore * 100) - 5)),
-                    industry: Math.min(85, Math.round((relevanceScore * 100) - 15)),
-                  },
-                  matchReasons: [
-                    `Your ${Math.round((relevanceScore * 100) - 5)}% skills match aligns well with this ${job.title} role. The position requires expertise in areas where you have demonstrated experience.`,
-                    `Experience level highly compatible`,
-                    `Strong technical skill alignment`,
-                    `Industry background matches requirements`
-                  ],
-                  matchingSkills: [
-                    'React',
-                    'TypeScript',
-                    'Node.js',
-                    'REST APIs',
-                    'Git',
-                    'Agile/Scrum'
-                  ],
-                  missingSkills: relevanceScore < 0.95 ? [
-                    'Next.js 14',
-                    'GraphQL',
-                    'Docker',
-                    'AWS Lambda'
-                  ] : undefined,
-                };
-
-                return (
-                  <JobCardSimple
-                    key={job.id}
-                    job={enrichedJob}
-                    delay={index * 0.05}
-                    onViewDetails={() => { setSelectedJob(enrichedJob as any); setIsDetailOpen(true); }}
-                    onGenerateResume={handleGenerateResume}
-                    onViewJob={(url) => window.open(url, '_blank', 'noopener')}
-                    onAutoApply={job.aiApplyable ? (j) => handleAutoApply(j.id) : undefined}
-                    isGenerating={generatingResumes[job.id]}
-                    resumeJobId={generatedResumes[job.id]}
-                  />
-                );
-              })}
+              {!isInitialLoading && filteredJobs.map((job, index) => (
+                <JobCardSimple
+                  key={job.id}
+                  job={job}
+                  delay={index * 0.05}
+                  onViewDetails={() => { setSelectedJob(job); setIsDetailOpen(true); }}
+                  onGenerateResume={handleGenerateResume}
+                  onViewJob={(url) => window.open(url, '_blank', 'noopener')}
+                  onAutoApply={job.aiApplyable ? (j) => handleAutoApply(j.id) : undefined}
+                  isGenerating={generatingResumes[job.id]}
+                  resumeJobId={generatedResumes[job.id]}
+                />
+              ))}
 
               {showEmptyState && (
                 <div className="bg-elevated rounded-2xl border border-[rgba(28,63,64,0.12)] p-10 text-center text-[var(--gray-600)] shadow-md">

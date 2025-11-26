@@ -11,6 +11,7 @@ import { prisma } from './prisma-client.js';
 import logger from './logger.js';
 import AIFormFiller from './ai-form-filler.js';
 import { classifyError, shouldRetryError } from './error-classifier.js';
+import { getOrGenerateTailoredResume } from './direct-auto-apply.js';
 
 const aiFormFiller = new AIFormFiller();
 
@@ -673,42 +674,37 @@ if (autoApplyQueue) {
     // Apply using AI-powered application (Playwright + GPT-4 Vision)
     logger.info(`Applying with strategy: AI-ONLY (Playwright + AI)`);
 
-    // Check if user has uploaded a custom resume (priority)
-    const uploadedResume = profileData?.uploadedResume;
+    // Fetch the aggregated job to get job details for tailored resume generation
+    const autoApplication = await prisma.autoApplication.findUnique({
+      where: { id: applicationId },
+      include: { job: true }
+    });
 
-    let pdfContent, filename;
-
-    if (uploadedResume?.content) {
-      // Use uploaded resume (preferred)
-      pdfContent = Buffer.from(uploadedResume.content, 'base64');
-      filename = uploadedResume.filename || `resume_${user.id}.pdf`;
-      logger.info({ filename }, '📄 Using user-uploaded resume');
-    } else {
-      // Fall back to most recent AI-generated resume
-      const latestResumeJob = await prisma.job.findFirst({
-        where: {
-          userId: user.id,
-          status: 'COMPLETED'
-        },
-        orderBy: { createdAt: 'desc' },
-        include: {
-          artifacts: {
-            where: { type: 'PDF_OUTPUT' },
-            orderBy: { version: 'desc' },
-            take: 1
-          }
-        }
-      });
-
-      if (!latestResumeJob?.artifacts?.[0]) {
-        throw new Error('No resume found - please either upload a resume or generate one before applying to jobs');
-      }
-
-      const pdfArtifact = latestResumeJob.artifacts[0];
-      pdfContent = pdfArtifact.content;
-      filename = pdfArtifact.metadata?.filename || `resume_${user.id}.pdf`;
-      logger.info({ filename }, '📄 Using AI-generated resume');
+    if (!autoApplication?.job) {
+      throw new Error('Job details not found for this application');
     }
+
+    const aggregatedJob = autoApplication.job;
+
+    // Smart resume selection: find relevant existing resume or generate new tailored one
+    logger.info({
+      applicationId,
+      company: aggregatedJob.company,
+      title: aggregatedJob.title
+    }, '🔍 Getting tailored resume for job');
+
+    const resumeResult = await getOrGenerateTailoredResume(user.id, aggregatedJob, profileData);
+
+    if (!resumeResult) {
+      throw new Error('No resume found - please upload a resume or complete your profile to generate one');
+    }
+
+    const { pdfContent, filename, source: resumeSource } = resumeResult;
+    logger.info({
+      applicationId,
+      filename,
+      resumeSource
+    }, '📄 Resume ready for application');
 
     // Create temporary directory if it doesn't exist
     const fs = await import('fs');

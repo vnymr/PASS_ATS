@@ -61,7 +61,11 @@ ENV BROWSER_POOL_SIZE=3
 ENV HEALTH_PORT=8080
 ENV BROWSER_PORT=3000
 ENV CAMOUFOX_HEADLESS=true
+ENV CAMOUFOX_GEOIP=true
 ENV ENVIRONMENT=production
+
+# Proxy configuration (set these via Railway env vars)
+# PROXY_HOST, PROXY_PORT, PROXY_USERNAME, PROXY_PASSWORD, PROXY_COUNTRY
 
 # Health check using the new HTTP endpoint
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \

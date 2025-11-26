@@ -12,6 +12,18 @@ interface ApiResponse<T> {
   error?: string;
 }
 
+// Score breakdown from recommendation engine
+export interface JobScoreBreakdown {
+  keywordMatch?: number;
+  requiredSkillsMatch?: number;
+  preferredSkillsMatch?: number;
+  experienceMatch?: number;
+  descriptionSimilarity?: number;
+  locationMatch?: number;
+  recencyBoost?: number;
+  interactionScore?: number;
+}
+
 // Job Types
 export interface Job {
   id: string;
@@ -38,6 +50,9 @@ export interface Job {
   _count?: {
     applications: number;
   };
+  // Personalized matching scores (only present when personalized=true)
+  relevanceScore?: number;
+  scoreBreakdown?: JobScoreBreakdown;
 }
 
 export interface JobSearchResult {

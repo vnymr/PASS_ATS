@@ -19,7 +19,7 @@ import json
 from pathlib import Path
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from threading import Thread
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Dict, List
 
 # Configuration
@@ -186,6 +186,7 @@ def launch_browser_instance(browser_id: str, port: int, headless: bool = True) -
     from camoufox.server import launch_options, get_nodejs, to_camel_case_dict, LAUNCH_SCRIPT
     import base64
     import orjson
+    import hashlib
 
     # Build launch arguments
     launch_args = {
@@ -193,17 +194,42 @@ def launch_browser_instance(browser_id: str, port: int, headless: bool = True) -
     }
 
     # Configure proxy if provided
+    # Support both PROXY_SERVER (full URL) and PROXY_HOST+PROXY_PORT (separate)
     proxy_server = os.getenv('PROXY_SERVER')
+    if not proxy_server:
+        proxy_host = os.getenv('PROXY_HOST')
+        proxy_port = os.getenv('PROXY_PORT')
+        if proxy_host and proxy_port:
+            proxy_server = f"http://{proxy_host}:{proxy_port}"
+
     if proxy_server:
+        proxy_username = os.getenv('PROXY_USERNAME')
+        proxy_password = os.getenv('PROXY_PASSWORD')
+        proxy_country = os.getenv('PROXY_COUNTRY', 'us')
+
+        # Create sticky session password for iproyal
+        # IPRoyal format: password_country-XX_session-XXXXXXXX_lifetime-30m
+        # Session ID must be exactly 8 alphanumeric characters
+        # This ensures each browser instance gets a consistent IP for the session lifetime
+        if proxy_password:
+            # Generate 8-char session ID from browser_id hash
+            session_id = hashlib.md5(browser_id.encode()).hexdigest()[:8]
+            sticky_password = f"{proxy_password}_country-{proxy_country}_session-{session_id}_lifetime-30m"
+            print(f"[{browser_id}] Using sticky proxy session: {session_id} (30min lifetime)", flush=True)
+        else:
+            sticky_password = proxy_password
+
         proxy_config = {'server': proxy_server}
-        if os.getenv('PROXY_USERNAME'):
-            proxy_config['username'] = os.getenv('PROXY_USERNAME')
-        if os.getenv('PROXY_PASSWORD'):
-            proxy_config['password'] = os.getenv('PROXY_PASSWORD')
+        if proxy_username:
+            proxy_config['username'] = proxy_username
+        if sticky_password:
+            proxy_config['password'] = sticky_password
         launch_args['proxy'] = proxy_config
 
         if os.getenv('CAMOUFOX_GEOIP', 'false').lower() == 'true':
             launch_args['geoip'] = True
+
+        print(f"[{browser_id}] Proxy configured: {proxy_server} (country: {proxy_country})", flush=True)
 
     try:
         config = launch_options(**launch_args)
@@ -258,7 +284,7 @@ def launch_browser_instance(browser_id: str, port: int, headless: bool = True) -
                             'dynamic_port': dynamic_port,
                             'process': process,
                             'status': 'ready',
-                            'started_at': datetime.utcnow().isoformat()
+                            'started_at': datetime.now(timezone.utc).isoformat()
                         }
                         print(f"[{browser_id}] Ready at: {proxied_endpoint} (proxied from {dynamic_port})", flush=True)
                     else:
@@ -267,7 +293,7 @@ def launch_browser_instance(browser_id: str, port: int, headless: bool = True) -
                             'endpoint': ws_endpoint,
                             'process': process,
                             'status': 'ready',
-                            'started_at': datetime.utcnow().isoformat()
+                            'started_at': datetime.now(timezone.utc).isoformat()
                         }
                         print(f"[{browser_id}] Ready at: {ws_endpoint}", flush=True)
 
