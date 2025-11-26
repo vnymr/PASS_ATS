@@ -186,14 +186,24 @@
   --info-100: #dbeafe;
 
   /* Component-specific Variables */
-  --radius: 0.65rem;
+  --radius: 0.75rem;
   --foreground: var(--text);
   --muted-foreground: var(--gray-600);
   --popover: var(--background);
   --popover-foreground: var(--text);
   --card: var(--background);
   --ring: var(--primary);
-  --border: var(--accent);
+  --border: rgba(28, 63, 64, 0.1);
+
+  /* Additional variables for landing page */
+  --primary-foreground: #ffffff;
+  --secondary-foreground: #ffffff;
+  --accent-foreground: #ffffff;
+  --muted: #e5e9e9;
+  --destructive: #d4183d;
+  --destructive-foreground: #ffffff;
+  --input: transparent;
+  --input-background: #eef2f2;
 }
 
 @layer base {

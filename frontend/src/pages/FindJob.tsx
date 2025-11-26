@@ -15,7 +15,7 @@ import JobFilterPanel, { type JobFilters } from '../components/JobFilterPanel';
 import { api } from '../api-clerk';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '';
-const PAGE_SIZE = 100; // Increased from 50 to 100
+const PAGE_SIZE = 20; // Reduced for lazy loading
 
 type JobWithExtras = JobType & {
   logoUrl?: string | null;
@@ -139,6 +139,7 @@ export default function FindJob() {
   const [generatedResumes, setGeneratedResumes] = useState<Record<string, string>>({});
   const [browseMeta, setBrowseMeta] = useState<BrowseMeta>({ offset: 0, hasMore: false, total: 0 });
   const [searchMeta, setSearchMeta] = useState<SearchMeta>({ query: initialQueryRef.current, offset: 0, hasMore: false, total: 0 });
+  const [currentPage, setCurrentPage] = useState(1);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [usePersonalized, setUsePersonalized] = useState(true); // Default to personalized
   const [isPersonalizedResponse, setIsPersonalizedResponse] = useState(false); // Track if response is personalized
@@ -192,7 +193,6 @@ export default function FindJob() {
   const fetchJobs = useCallback(
     async ({ offset = 0, append = false, filters }: { offset?: number; append?: boolean; filters?: JobFilters } = {}) => {
       const requestId = ++requestIdRef.current;
-
       setLoading(true);
       setError('');
 
@@ -283,11 +283,24 @@ export default function FindJob() {
           total: data.total || 0,
         });
 
-        // Don't append, replace based on page
-        setJobs(normalized);
-        setSelectedJob(normalized[0] ?? null);
+        // Append or replace based on append flag
+        if (append) {
+          // Deduplicate jobs by ID when appending
+          setJobs(prev => {
+            const existingIds = new Set(prev.map(j => j.id));
+            const newUniqueJobs = normalized.filter(j => !existingIds.has(j.id));
 
-        if (!append) {
+            // If no new unique jobs, stop loading more (prevents infinite loop)
+            if (newUniqueJobs.length === 0) {
+              setBrowseMeta(m => ({ ...m, hasMore: false }));
+              return prev;
+            }
+
+            return [...prev, ...newUniqueJobs];
+          });
+        } else {
+          setJobs(normalized);
+          setSelectedJob(normalized[0] ?? null);
           setMode('browse');
           setActiveQuery('');
           setExplanation('');
@@ -323,7 +336,6 @@ export default function FindJob() {
       }
 
       const requestId = ++requestIdRef.current;
-
       setLoading(true);
       setError('');
       setMode('search');
@@ -384,10 +396,28 @@ export default function FindJob() {
           append,
           previousCount: jobs.length,
           newJobsCount: normalized.length,
-          willResultIn: normalized.length
+          willResultIn: append ? jobs.length + normalized.length : normalized.length
         });
-        setJobs(normalized);
-        setSelectedJob(normalized[0] ?? null);
+
+        // Append or replace based on append flag
+        if (append) {
+          // Deduplicate jobs by ID when appending
+          setJobs(prev => {
+            const existingIds = new Set(prev.map((j: JobWithExtras) => j.id));
+            const newUniqueJobs = normalized.filter((j: JobWithExtras) => !existingIds.has(j.id));
+
+            // If no new unique jobs, stop loading more (prevents infinite loop)
+            if (newUniqueJobs.length === 0) {
+              setSearchMeta(m => ({ ...m, hasMore: false }));
+              return prev;
+            }
+
+            return [...prev, ...newUniqueJobs];
+          });
+        } else {
+          setJobs(normalized);
+          setSelectedJob(normalized[0] ?? null);
+        }
 
         setSearchMeta({
           query: trimmedQuery,
@@ -476,13 +506,36 @@ export default function FindJob() {
         setSearchMeta({ query: '', offset: 0, hasMore: false, total: 0 });
         lastUrlQueryRef.current = '';
         setSearchParams({});
+        setCurrentPage(1);
         fetchJobs({ offset: 0, append: false });
       }
       return;
     }
 
+    setCurrentPage(1);
     runSearch(trimmed, { offset: 0, append: false });
   }, [debouncedSearch, mode, activeQuery, runSearch, fetchJobs, setSearchParams]);
+
+  // Go to specific page
+  const goToPage = useCallback((page: number) => {
+    if (loading) return;
+
+    const newOffset = (page - 1) * PAGE_SIZE;
+    setCurrentPage(page);
+
+    // Scroll to top of job list
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    if (mode === 'search') {
+      runSearch(activeQuery, { offset: newOffset, append: false });
+    } else {
+      fetchJobs({ offset: newOffset, append: false });
+    }
+  }, [loading, mode, activeQuery, runSearch, fetchJobs]);
+
+  // Calculate total pages
+  const totalPages = Math.ceil((mode === 'search' ? searchMeta.total : browseMeta.total) / PAGE_SIZE);
+  const totalJobs = mode === 'search' ? searchMeta.total : browseMeta.total;
 
   const handleSearchSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -506,6 +559,7 @@ export default function FindJob() {
     setSearchMeta({ query: '', offset: 0, hasMore: false, total: 0 });
     lastUrlQueryRef.current = '';
     setSearchParams({});
+    setCurrentPage(1);
     fetchJobs({ offset: 0, append: false });
   };
 
@@ -853,7 +907,7 @@ export default function FindJob() {
                     key={job.id}
                     job={enrichedJob}
                     delay={index * 0.05}
-                    onViewDetails={(job) => { setSelectedJob(enrichedJob as any); setIsDetailOpen(true); }}
+                    onViewDetails={() => { setSelectedJob(enrichedJob as any); setIsDetailOpen(true); }}
                     onGenerateResume={handleGenerateResume}
                     onViewJob={(url) => window.open(url, '_blank', 'noopener')}
                     onAutoApply={job.aiApplyable ? (j) => handleAutoApply(j.id) : undefined}
@@ -883,6 +937,110 @@ export default function FindJob() {
                 </div>
               )}
             </div>
+
+            {/* Pagination Controls */}
+            {!isInitialLoading && totalJobs > 0 && (
+              <div className="mt-8 mb-8">
+                {/* Job count and page info */}
+                <div className="text-center mb-4">
+                  <p className="text-sm text-[var(--gray-600)]">
+                    Showing {((currentPage - 1) * PAGE_SIZE) + 1}-{Math.min(currentPage * PAGE_SIZE, totalJobs)} of {totalJobs} jobs
+                  </p>
+                </div>
+
+                {/* Pagination buttons */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-center gap-2 flex-wrap">
+                    {/* Previous button */}
+                    <button
+                      type="button"
+                      onClick={() => goToPage(currentPage - 1)}
+                      disabled={currentPage === 1 || loading}
+                      className="px-4 py-2 rounded-lg border border-[rgba(12,19,16,0.12)] bg-white text-accent font-medium cursor-pointer hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Previous
+                    </button>
+
+                    {/* Page numbers */}
+                    <div className="flex items-center gap-1">
+                      {/* First page */}
+                      {currentPage > 3 && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => goToPage(1)}
+                            disabled={loading}
+                            className="w-10 h-10 rounded-lg border border-[rgba(12,19,16,0.12)] bg-white text-accent font-medium cursor-pointer hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                          >
+                            1
+                          </button>
+                          {currentPage > 4 && <span className="px-2 text-[var(--gray-400)]">...</span>}
+                        </>
+                      )}
+
+                      {/* Page numbers around current */}
+                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                        let pageNum: number;
+                        if (totalPages <= 5) {
+                          pageNum = i + 1;
+                        } else if (currentPage <= 3) {
+                          pageNum = i + 1;
+                        } else if (currentPage >= totalPages - 2) {
+                          pageNum = totalPages - 4 + i;
+                        } else {
+                          pageNum = currentPage - 2 + i;
+                        }
+
+                        if (pageNum < 1 || pageNum > totalPages) return null;
+                        if (currentPage > 3 && pageNum === 1) return null;
+                        if (currentPage < totalPages - 2 && pageNum === totalPages) return null;
+
+                        return (
+                          <button
+                            key={pageNum}
+                            type="button"
+                            onClick={() => goToPage(pageNum)}
+                            disabled={loading}
+                            className={`w-10 h-10 rounded-lg font-medium cursor-pointer transition-colors disabled:opacity-50 ${
+                              currentPage === pageNum
+                                ? 'bg-primary text-white border border-primary'
+                                : 'border border-[rgba(12,19,16,0.12)] bg-white text-accent hover:bg-gray-50'
+                            }`}
+                          >
+                            {pageNum}
+                          </button>
+                        );
+                      })}
+
+                      {/* Last page */}
+                      {currentPage < totalPages - 2 && totalPages > 5 && (
+                        <>
+                          {currentPage < totalPages - 3 && <span className="px-2 text-[var(--gray-400)]">...</span>}
+                          <button
+                            type="button"
+                            onClick={() => goToPage(totalPages)}
+                            disabled={loading}
+                            className="w-10 h-10 rounded-lg border border-[rgba(12,19,16,0.12)] bg-white text-accent font-medium cursor-pointer hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                          >
+                            {totalPages}
+                          </button>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Next button */}
+                    <button
+                      type="button"
+                      onClick={() => goToPage(currentPage + 1)}
+                      disabled={currentPage === totalPages || loading}
+                      className="px-4 py-2 rounded-lg border border-[rgba(12,19,16,0.12)] bg-white text-accent font-medium cursor-pointer hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Next
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
 
             {error && (
               <div className="mt-2 bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.3)] rounded-xl p-4 flex items-center justify-between gap-3 text-[#b91c1c] text-sm">

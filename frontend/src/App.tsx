@@ -6,6 +6,9 @@ import { authLogger } from './utils/logger';
 
 // Page components
 import Landing from './pages/Landing';
+import Features from './pages/Features';
+import Extension from './pages/Extension';
+import Pricing from './pages/Pricing';
 import MemoryProfile from './pages/MemoryProfile';
 import GenerateResume from './pages/GenerateResume';
 import History from './pages/History';
@@ -112,6 +115,9 @@ export default function App() {
   return (
     <Routes>
       <Route path="/" element={<Landing />} />
+      <Route path="/features" element={<Features />} />
+      <Route path="/extension" element={<Extension />} />
+      <Route path="/pricing" element={<Pricing />} />
       <Route path="/auth" element={<AuthPage />} />
       <Route path="/profile" element={
         <ProtectedRoute>
