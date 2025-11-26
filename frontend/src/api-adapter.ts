@@ -32,7 +32,7 @@ export type Profile = {
 };
 
 // Update to use the new backend port
-const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3000';
+const API_URL = ((import.meta as any).env?.VITE_API_URL || 'http://localhost:3000').trim();
 
 // Clerk token helper - this will be used by components that have access to Clerk
 export function getClerkToken(): Promise<string | null> {

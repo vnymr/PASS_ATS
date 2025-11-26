@@ -7,7 +7,7 @@ interface ResumeUploadModalProps {
   onUploadSuccess: () => void;
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '';
+const API_BASE_URL = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '').trim();
 const buildUrl = (path: string) => (API_BASE_URL ? `${API_BASE_URL}${path}` : path);
 
 export default function ResumeUploadModal({ isOpen, onClose, onUploadSuccess }: ResumeUploadModalProps) {

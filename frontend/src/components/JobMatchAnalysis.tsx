@@ -48,7 +48,7 @@ interface JobMatchAnalysisProps {
   jobId: string;
 }
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:3000').trim();
 
 export default function JobMatchAnalysis({ jobId }: JobMatchAnalysisProps) {
   const { getToken } = useAuth();

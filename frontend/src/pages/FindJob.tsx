@@ -14,7 +14,7 @@ import { GooeySearchBar } from '../ui/AnimatedSearchBar';
 import JobFilterPanel, { type JobFilters } from '../components/JobFilterPanel';
 import { api } from '../api-clerk';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '';
+const API_BASE_URL = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '').trim();
 const PAGE_SIZE = 20; // Reduced for lazy loading
 
 type JobWithExtras = JobType & {

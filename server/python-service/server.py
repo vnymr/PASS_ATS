@@ -33,6 +33,7 @@ ADVERTISE_HOST = os.getenv('ADVERTISE_HOST', 'localhost')
 
 # Global state
 browser_pool: Dict[str, dict] = {}
+socat_processes: List[subprocess.Popen] = []
 server_ready = False
 shutdown_requested = False
 
@@ -151,6 +152,23 @@ def start_health_server():
     server.serve_forever()
 
 
+def start_socat_proxy(proxy_port: int, target_port: int, browser_id: str) -> Optional[subprocess.Popen]:
+    """Start socat to proxy from 0.0.0.0:proxy_port to localhost:target_port"""
+    try:
+        # socat forwards TCP connections from external port to internal localhost port
+        process = subprocess.Popen(
+            ['socat', f'TCP-LISTEN:{proxy_port},fork,reuseaddr,bind=0.0.0.0', f'TCP:localhost:{target_port}'],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+        print(f"[{browser_id}] socat proxy started: 0.0.0.0:{proxy_port} -> localhost:{target_port}", flush=True)
+        socat_processes.append(process)
+        return process
+    except Exception as e:
+        print(f"[{browser_id}] Failed to start socat proxy: {e}", flush=True)
+        return None
+
+
 def launch_browser_instance(browser_id: str, port: int, headless: bool = True) -> Optional[subprocess.Popen]:
     """Launch a single Camoufox browser instance"""
     from camoufox.server import launch_options, get_nodejs, to_camel_case_dict, LAUNCH_SCRIPT
@@ -204,17 +222,46 @@ def launch_browser_instance(browser_id: str, port: int, headless: bool = True) -
                 match = re.search(r'(wss?://[^\s\x1b]+)', line)
                 if match:
                     ws_endpoint = match.group(1).strip()
-                    browser_pool[browser_id] = {
-                        'endpoint': ws_endpoint,
-                        'process': process,
-                        'status': 'ready',
-                        'started_at': datetime.utcnow().isoformat()
-                    }
-                    print(f"[{browser_id}] Ready at: {ws_endpoint}", flush=True)
+
+                    # Extract the dynamic port from the endpoint
+                    port_match = re.search(r':(\d+)/', ws_endpoint)
+                    if port_match:
+                        dynamic_port = int(port_match.group(1))
+                        # Extract browser index for fixed proxy port
+                        browser_index = int(browser_id.split('_')[1])
+                        proxy_port = BROWSER_PORT + browser_index  # 3000, 3001, 3002...
+
+                        # Start socat proxy to forward external connections
+                        start_socat_proxy(proxy_port, dynamic_port, browser_id)
+
+                        # Rewrite endpoint to use proxy port instead of dynamic port
+                        # Keep the path (session ID) from original endpoint
+                        path = ws_endpoint.split('/', 3)[-1] if ws_endpoint.count('/') >= 3 else ''
+                        proxied_endpoint = f"ws://localhost:{proxy_port}/{path}"
+
+                        browser_pool[browser_id] = {
+                            'endpoint': proxied_endpoint,
+                            'original_endpoint': ws_endpoint,
+                            'proxy_port': proxy_port,
+                            'dynamic_port': dynamic_port,
+                            'process': process,
+                            'status': 'ready',
+                            'started_at': datetime.utcnow().isoformat()
+                        }
+                        print(f"[{browser_id}] Ready at: {proxied_endpoint} (proxied from {dynamic_port})", flush=True)
+                    else:
+                        # Fallback if port extraction fails
+                        browser_pool[browser_id] = {
+                            'endpoint': ws_endpoint,
+                            'process': process,
+                            'status': 'ready',
+                            'started_at': datetime.utcnow().isoformat()
+                        }
+                        print(f"[{browser_id}] Ready at: {ws_endpoint}", flush=True)
 
                     # Write primary endpoint to file for backward compatibility
                     if browser_id == 'browser_0':
-                        ENDPOINT_FILE.write_text(ws_endpoint)
+                        ENDPOINT_FILE.write_text(browser_pool[browser_id]['endpoint'])
                         print(f"Primary endpoint written to: {ENDPOINT_FILE}", flush=True)
                     break
 
@@ -226,12 +273,13 @@ def launch_browser_instance(browser_id: str, port: int, headless: bool = True) -
 
 
 def cleanup_browsers():
-    """Gracefully shutdown all browser instances"""
+    """Gracefully shutdown all browser instances and socat proxies"""
     global shutdown_requested
     shutdown_requested = True
 
     print("\nShutting down browser pool...", flush=True)
 
+    # Terminate browser processes
     for browser_id, info in browser_pool.items():
         process = info.get('process')
         if process and process.poll() is None:
@@ -241,6 +289,16 @@ def cleanup_browsers():
                 process.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 process.kill()
+
+    # Terminate socat proxies
+    print("Shutting down socat proxies...", flush=True)
+    for socat_proc in socat_processes:
+        if socat_proc and socat_proc.poll() is None:
+            socat_proc.terminate()
+            try:
+                socat_proc.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                socat_proc.kill()
 
     # Clean up endpoint file
     if ENDPOINT_FILE.exists():

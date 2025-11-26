@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import ChatInterface, { ContentType, StreamingCallbacks } from '../components/ChatInterface';
 
 // Use empty string for development to leverage Vite proxy, or explicit URL for production
-const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+const API_BASE_URL = (import.meta.env.VITE_API_URL || '').trim();
 
 export default function Happy() {
   const [conversationId, setConversationId] = useState<string | null>(null);
