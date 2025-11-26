@@ -126,7 +126,19 @@ camoufox_pool_size {POOL_SIZE}
         def rewrite_endpoint(endpoint):
             """Replace localhost with ADVERTISE_HOST for external access"""
             if endpoint and ADVERTISE_HOST != 'localhost':
-                return endpoint.replace('localhost', ADVERTISE_HOST).replace('127.0.0.1', ADVERTISE_HOST)
+                # ADVERTISE_HOST can be "hostname" or "hostname:port"
+                # If it includes a port, replace the entire host:port part
+                if ':' in ADVERTISE_HOST:
+                    # Extract just the path from the original endpoint
+                    # ws://localhost:3000/sessionid -> ws://newhost:newport/sessionid
+                    import re
+                    path_match = re.search(r'(wss?://)([^/]+)(/.+)?', endpoint)
+                    if path_match:
+                        protocol = path_match.group(1)
+                        path = path_match.group(3) or ''
+                        return f"{protocol}{ADVERTISE_HOST}{path}"
+                else:
+                    return endpoint.replace('localhost', ADVERTISE_HOST).replace('127.0.0.1', ADVERTISE_HOST)
             return endpoint
 
         browsers = []
