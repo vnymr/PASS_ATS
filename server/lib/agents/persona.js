@@ -19,84 +19,126 @@ const openai = new OpenAI({
  * Build system prompt for the persona
  * @param {string} [profileContext] - User profile context
  * @param {string} [memoryContext] - Relevant memory from past conversations
+ * @param {Array} [toolSchemas] - Dynamic tool schemas from registry
  * @returns {string}
  */
-function buildSystemPrompt(profileContext = '', memoryContext = '') {
+function buildSystemPrompt(profileContext = '', memoryContext = '', toolSchemas = []) {
   const profileSection = profileContext
     ? `\n\nUSER PROFILE:\n${profileContext}\n`
     : '';
 
-  return `You are a helpful job search assistant. Focus ONLY on what the user is asking RIGHT NOW. Look at the recent conversation to understand context.${profileSection}
+  const memorySection = memoryContext
+    ? `\n\nRELEVANT PAST CONVERSATIONS:\n${memoryContext}\n`
+    : '';
 
-CONVERSATION CONTEXT (last few messages):
-This shows what was discussed. Use it to understand references like "that job" or "the resume".
+  // Build dynamic tool documentation from schemas
+  const toolDocs = toolSchemas.map((tool, idx) => {
+    const params = tool.function.parameters.properties || {};
+    const required = tool.function.parameters.required || [];
+    const paramList = Object.entries(params)
+      .map(([name, schema]) => {
+        const isRequired = required.includes(name);
+        const typeInfo = schema.enum ? schema.enum.join('|') : schema.type;
+        return `     - ${name}${isRequired ? ' (required)' : ''}: ${schema.description || typeInfo}`;
+      })
+      .join('\n');
 
-YOUR GOAL:
-Respond to the user's CURRENT message. Don't bring up old topics or combine multiple requests. Just handle what they're asking now.
+    return `${idx + 1}. ${tool.function.name}: ${tool.function.description}\n${paramList}`;
+  }).join('\n\n');
 
-AVAILABLE TOOLS:
-1. search_jobs: Find jobs
-   - Input: { "role": "Job Title", "company": "Company Name", "location": "Location", "limit": 10 }
+  return `You are a helpful AI assistant for job searching and career management. You help users find jobs, create resumes, track applications, set goals, and automate their job search.${profileSection}${memorySection}
 
-2. generate_resume_preview: Create resume
-   - Input: { "jobDescription": "text" } OR { "jobUrl": "url" } OR { "jobId": "id" }
+CONVERSATION HISTORY:
+The messages below show recent conversation. Use them to understand context and references like "that job", "the resume", or "my goals".
 
-3. create_routine: Set up automation
-   - Input: { "title": "Routine Name", "description": "What it does", "schedule": "09:00", "frequency": "DAILY" }
-   - IMPORTANT: Use "title" not "name"
+YOUR CAPABILITIES - USE THESE TOOLS:
+${toolDocs}
 
-4. track_applications: Check application status
-5. create_goal, update_goal, list_goals: Track goals
+IMPORTANT GUIDELINES:
+1. BE PROACTIVE: If user mentions wanting a job, offer to search. If they mention applications, offer to track them.
+2. USE TOOLS: Don't just talk - take action! Use tools to actually help.
+3. REMEMBER CONTEXT: Use conversation history to understand what "that job" or "the one you mentioned" refers to.
+4. MANAGE GOALS: Help users set and track career goals. Suggest creating goals when appropriate.
+5. SET UP ROUTINES: Offer to automate repetitive tasks (daily job searches, weekly summaries).
+6. TRACK PROGRESS: Use track_applications to show application status when asked.
 
 HOW TO RESPOND:
-Look at the conversation history. If user mentions "that job" or "the one above", find it in recent messages.
-
-Respond with JSON:
+Return JSON with your plan and actions:
 {
-  "plan": "what I'm doing for THIS request",
+  "plan": "Brief explanation of what you're doing",
   "actions": [
-    { "type": "message", "content": "..." },
-    { "type": "tool", "name": "...", "input": {...} }
+    { "type": "message", "content": "Your message to the user" },
+    { "type": "tool", "name": "tool_name", "input": { ... } }
   ]
 }
 
 EXAMPLES:
 
-User: "find product manager jobs"
-Response:
+User: "find software engineer jobs in San Francisco"
 {
-  "plan": "User wants PM jobs",
+  "plan": "Search for SE jobs in SF",
   "actions": [
-    { "type": "message", "content": "Searching for Product Manager positions..." },
-    { "type": "tool", "name": "search_jobs", "input": { "role": "Product Manager", "limit": 10 } }
+    { "type": "message", "content": "Searching for Software Engineer positions in San Francisco..." },
+    { "type": "tool", "name": "search_jobs", "input": { "role": "Software Engineer", "location": "San Francisco", "limit": 10 } }
   ]
 }
 
-User: "create a resume for product manager" [CONTEXT: User just asked about PM jobs]
-Response:
+User: "apply to that job" [after seeing job results]
 {
-  "plan": "User wants a PM resume",
+  "plan": "User wants to apply to a job from results",
   "actions": [
-    { "type": "message", "content": "I'll create a resume for a Product Manager role..." },
-    { "type": "tool", "name": "generate_resume_preview", "input": { "jobDescription": "Product Manager - Lead product strategy, work with cross-functional teams, analyze market trends" } }
+    { "type": "message", "content": "I'll prepare the application for you..." },
+    { "type": "tool", "name": "prepare_application_preview", "input": { "jobId": "[ID from context]" } }
   ]
 }
 
-User: "create a routine for job searching every morning"
-Response:
+User: "what are my goals?"
 {
-  "plan": "User wants a daily job search routine",
+  "plan": "List user's goals",
   "actions": [
-    { "type": "message", "content": "I'll set up a routine to search for jobs every morning..." },
-    { "type": "tool", "name": "create_routine", "input": { "title": "Morning Job Search", "description": "Search for new job postings daily", "schedule": "09:00", "frequency": "DAILY", "type": "SEARCH_JOBS" } }
+    { "type": "tool", "name": "list_goals", "input": { "limit": 10 } }
+  ]
+}
+
+User: "set a goal to apply to 5 jobs this week"
+{
+  "plan": "Create application goal",
+  "actions": [
+    { "type": "message", "content": "I'll create that goal for you..." },
+    { "type": "tool", "name": "create_goal", "input": { "title": "Apply to 5 jobs this week", "type": "JOB_SEARCH", "description": "Submit 5 job applications by end of week" } }
+  ]
+}
+
+User: "set up a daily job search at 9am"
+{
+  "plan": "Create daily search routine",
+  "actions": [
+    { "type": "message", "content": "Setting up your daily job search routine..." },
+    { "type": "tool", "name": "create_routine", "input": { "title": "Daily Job Search", "type": "SEARCH_JOBS", "frequency": "DAILY", "schedule": "09:00" } }
+  ]
+}
+
+User: "show my routines"
+{
+  "plan": "List user's routines",
+  "actions": [
+    { "type": "tool", "name": "list_routines", "input": { "limit": 10 } }
+  ]
+}
+
+User: "check my application status"
+{
+  "plan": "Show application tracking",
+  "actions": [
+    { "type": "tool", "name": "track_applications", "input": { "limit": 10 } }
   ]
 }
 
 RULES:
-- Respond ONLY to the current message
-- Don't combine multiple old requests
-- Use conversation history ONLY to understand references (like "that job")
-- Keep it simple and direct`;
+- ALWAYS use tools when the user asks for something actionable
+- Be helpful and proactive - suggest next steps
+- Reference conversation history for context
+- Keep messages concise but friendly`;
 }
 
 /**
@@ -115,13 +157,13 @@ export async function plan({ message, metadata = {}, conversation = [], profile 
   try {
     logger.info({ message, metadata, hasProfile: !!profile, userId, fastMode }, 'Planning persona actions (LLM-first)');
 
-    // MEMORY SEARCH DISABLED: Focusing on current conversation only
-    // Past memory was causing confusion and timeouts - prioritizing immediate context instead
+    // MEMORY SEARCH: Enabled by default for conversation continuity
+    // Can be disabled via DISABLE_MEMORY_SEARCH=true if causing issues
     let memoryContext = '';
     const isSimpleGreeting = /^(hi|hey|hello|sup|yo)$/i.test(message.trim());
 
-    // Memory search can be re-enabled via ENABLE_MEMORY_SEARCH=true env var if needed
-    const memorySearchEnabled = process.env.ENABLE_MEMORY_SEARCH === 'true';
+    // Memory search is now enabled by default (opt-out instead of opt-in)
+    const memorySearchEnabled = process.env.DISABLE_MEMORY_SEARCH !== 'true';
     let memoryPromise = null;
     if (userId && !isSimpleGreeting && !fastMode && memorySearchEnabled) {
       memoryPromise = (async () => {
@@ -185,11 +227,14 @@ export async function plan({ message, metadata = {}, conversation = [], profile 
     } else if (isSimpleGreeting) {
       logger.debug({ message }, 'Skipping memory search for simple greeting');
     } else if (!memorySearchEnabled) {
-      logger.debug('Memory search disabled (focusing on current conversation)');
+      logger.debug('Memory search disabled via DISABLE_MEMORY_SEARCH env var');
     }
 
-    // Build system prompt with profile context and memory
-    const systemPrompt = buildSystemPrompt(profileContext, memoryContext);
+    // Get all available tool schemas dynamically
+    const toolSchemas = getToolSchemasForOpenAI();
+
+    // Build system prompt with profile context, memory, and tool schemas
+    const systemPrompt = buildSystemPrompt(profileContext, memoryContext, toolSchemas);
 
     // Include conversation history for context
     const messages = [

@@ -152,17 +152,27 @@ export function validateFilename(filename) {
     errors.push('Filename contains invalid characters');
   }
 
-  // Check for double extensions (potential attack)
-  const extensions = basename.split('.').slice(1);
-  if (extensions.length > 2) {
-    errors.push('Multiple file extensions not allowed');
-  }
+  // Extract extension (everything after the last dot)
+  const lastDotIndex = basename.lastIndexOf('.');
+  if (lastDotIndex === -1 || lastDotIndex === basename.length - 1) {
+    // No extension or filename ends with a dot
+    errors.push('File must have a valid extension');
+  } else {
+    const ext = basename.substring(lastDotIndex + 1).toLowerCase();
+    
+    // Check for multiple extensions (potential attack)
+    // Count dots before the last one
+    const dotsBeforeLast = (basename.substring(0, lastDotIndex).match(/\./g) || []).length;
+    if (dotsBeforeLast > 0) {
+      // Has multiple extensions like "file.pdf.txt"
+      errors.push('Multiple file extensions not allowed');
+    }
 
-  // Validate extension
-  const allowedExtensions = ['pdf', 'txt', 'doc', 'docx'];
-  const ext = extensions[extensions.length - 1]?.toLowerCase();
-  if (!ext || !allowedExtensions.includes(ext)) {
-    errors.push(`File extension must be one of: ${allowedExtensions.join(', ')}`);
+    // Validate extension
+    const allowedExtensions = ['pdf', 'txt', 'doc', 'docx'];
+    if (!ext || ext.length === 0 || !allowedExtensions.includes(ext)) {
+      errors.push(`File extension must be one of: ${allowedExtensions.join(', ')}`);
+    }
   }
 
   return {

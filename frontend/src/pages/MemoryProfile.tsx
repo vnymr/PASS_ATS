@@ -27,7 +27,16 @@ type Profile = {
   additionalInfo?: string;
 };
 
-type TabType = 'personal' | 'summary' | 'skills' | 'experience' | 'additional' | 'resume' | 'billing';
+type TabType = 'personal' | 'summary' | 'skills' | 'experience' | 'additional' | 'resume' | 'accounts' | 'billing';
+
+// Gmail connection status type
+type GmailStatus = {
+  connected: boolean;
+  email?: string;
+  isActive?: boolean;
+  lastUsed?: string;
+  connectedAt?: string;
+};
 
 // API base URL
 const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:3000').trim();
@@ -48,6 +57,11 @@ export default function MemoryProfile() {
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [autoSaving, setAutoSaving] = useState(false);
 
+  // Gmail connection state
+  const [gmailStatus, setGmailStatus] = useState<GmailStatus>({ connected: false });
+  const [gmailLoading, setGmailLoading] = useState(false);
+  const [gmailConfigured, setGmailConfigured] = useState(true); // Assume configured until checked
+
   // Form fields for structured profile data
   const [formData, setFormData] = useState({
     name: '',
@@ -66,11 +80,110 @@ export default function MemoryProfile() {
   useEffect(() => {
     if (isLoaded && isSignedIn) {
       loadProfile();
+      loadGmailStatus();
+      checkGmailUrlParams();
     } else if (isLoaded && !isSignedIn) {
       setError('Please sign in to view your profile');
       setLoading(false);
     }
   }, [isLoaded, isSignedIn]);
+
+  // Check URL params from Gmail OAuth redirect
+  function checkGmailUrlParams() {
+    const params = new URLSearchParams(window.location.search);
+    const gmailConnected = params.get('gmail_connected');
+    const gmailError = params.get('gmail_error');
+    const gmailEmail = params.get('email');
+
+    if (gmailConnected === 'true' && gmailEmail) {
+      setGmailStatus({ connected: true, email: decodeURIComponent(gmailEmail), isActive: true });
+      setSuccess(true);
+      setActiveTab('accounts');
+      // Clean URL params
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (gmailError) {
+      setError(`Gmail connection failed: ${decodeURIComponent(gmailError)}`);
+      setActiveTab('accounts');
+      // Clean URL params
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }
+
+  // Load Gmail connection status
+  async function loadGmailStatus() {
+    try {
+      const token = await getToken();
+      if (!token) return;
+
+      // Check if Gmail is configured on server
+      const configResponse = await fetch(`${API_URL}/api/gmail/configured`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const configData = await configResponse.json();
+      setGmailConfigured(configData.configured);
+
+      if (!configData.configured) return;
+
+      // Get connection status
+      const statusResponse = await fetch(`${API_URL}/api/gmail/status`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const statusData = await statusResponse.json();
+      setGmailStatus(statusData);
+    } catch (err) {
+      logger.error('Failed to load Gmail status', err);
+    }
+  }
+
+  // Connect Gmail
+  async function connectGmail() {
+    setGmailLoading(true);
+    try {
+      const token = await getToken();
+      if (!token) throw new Error('Not authenticated');
+
+      const response = await fetch(`${API_URL}/api/gmail/auth-url`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await response.json();
+
+      if (data.authUrl) {
+        // Redirect to Google OAuth
+        window.location.href = data.authUrl;
+      } else {
+        throw new Error(data.error || 'Failed to get auth URL');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to connect Gmail');
+      setGmailLoading(false);
+    }
+  }
+
+  // Disconnect Gmail
+  async function disconnectGmail() {
+    setGmailLoading(true);
+    try {
+      const token = await getToken();
+      if (!token) throw new Error('Not authenticated');
+
+      const response = await fetch(`${API_URL}/api/gmail/disconnect`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await response.json();
+
+      if (data.success) {
+        setGmailStatus({ connected: false });
+        setSuccess(true);
+      } else {
+        throw new Error(data.error || 'Failed to disconnect Gmail');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to disconnect Gmail');
+    } finally {
+      setGmailLoading(false);
+    }
+  }
 
   useEffect(() => {
     logger.debug('[RUNTIME] Mounted: MemoryProfile');
@@ -487,6 +600,7 @@ export default function MemoryProfile() {
           { value: 'experience', label: 'Experience' },
           { value: 'additional', label: 'Notes' },
           { value: 'resume', label: 'Resume' },
+          { value: 'accounts', label: 'Accounts' },
           { value: 'billing', label: 'Billing' },
         ]}
         className="mb-6"
@@ -693,9 +807,104 @@ export default function MemoryProfile() {
         </MinimalCard>
       )}
 
+      {activeTab === 'accounts' && (
+        <MinimalCard>
+          <MinimalCardHeader>
+            <MinimalCardTitle>Connected Accounts</MinimalCardTitle>
+            <MinimalCardDescription>Connect your email for auto-apply verification</MinimalCardDescription>
+          </MinimalCardHeader>
+          <MinimalCardContent>
+            <div className="space-y-6">
+              {/* Gmail Connection */}
+              <div className="flex items-start gap-4 p-4 rounded-lg" style={{ backgroundColor: 'var(--text-50)', border: '1px solid var(--text-100)' }}>
+                <div className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center" style={{ backgroundColor: gmailStatus.connected ? 'rgba(34, 197, 94, 0.1)' : 'var(--text-100)' }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                    <path d="M22 6C22 4.9 21.1 4 20 4H4C2.9 4 2 4.9 2 6V18C2 19.1 2.9 20 4 20H20C21.1 20 22 19.1 22 18V6ZM20 6L12 11L4 6H20ZM20 18H4V8L12 13L20 8V18Z" fill={gmailStatus.connected ? '#22c55e' : '#6b7280'}/>
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-medium" style={{ color: 'var(--text-900)' }}>Gmail</h3>
+                    {gmailStatus.connected && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium" style={{ backgroundColor: 'rgba(34, 197, 94, 0.1)', color: '#16a34a' }}>
+                        <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+                        Connected
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm mt-1" style={{ color: 'var(--text-600)' }}>
+                    {gmailStatus.connected
+                      ? `Connected as ${gmailStatus.email}`
+                      : 'Connect your Gmail to automatically verify job applications during auto-apply'}
+                  </p>
+                  {gmailStatus.connected && gmailStatus.lastUsed && (
+                    <p className="text-xs mt-1" style={{ color: 'var(--text-500)' }}>
+                      Last used: {new Date(gmailStatus.lastUsed).toLocaleDateString()}
+                    </p>
+                  )}
+                  {!gmailConfigured && (
+                    <p className="text-xs mt-2" style={{ color: '#b91c1c' }}>
+                      Gmail integration is not configured on this server. Contact administrator.
+                    </p>
+                  )}
+                </div>
+                <div className="flex-shrink-0">
+                  {gmailStatus.connected ? (
+                    <Button
+                      variant="outline"
+                      onClick={disconnectGmail}
+                      disabled={gmailLoading}
+                      className="text-sm"
+                    >
+                      {gmailLoading ? (
+                        <Icons.loader className="animate-spin" size={16} />
+                      ) : (
+                        'Disconnect'
+                      )}
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={connectGmail}
+                      disabled={gmailLoading || !gmailConfigured}
+                      className="text-sm"
+                    >
+                      {gmailLoading ? (
+                        <>
+                          <Icons.loader className="animate-spin" size={16} />
+                          Connecting...
+                        </>
+                      ) : (
+                        <>
+                          <Icons.link size={16} />
+                          Connect Gmail
+                        </>
+                      )}
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              {/* Privacy Notice */}
+              <div className="flex items-start gap-3 p-4 rounded-lg" style={{ backgroundColor: 'rgba(59, 130, 246, 0.05)', border: '1px solid rgba(59, 130, 246, 0.2)' }}>
+                <Icons.shield size={20} style={{ color: '#3b82f6' }} />
+                <div>
+                  <h4 className="font-medium text-sm" style={{ color: 'var(--text-900)' }}>Privacy & Security</h4>
+                  <ul className="text-xs mt-2 space-y-1" style={{ color: 'var(--text-600)' }}>
+                    <li>We only read emails from job application senders (Greenhouse, Lever, etc.)</li>
+                    <li>We never store your email content - only extract verification codes</li>
+                    <li>Access is limited to the last 10 minutes during auto-apply</li>
+                    <li>You can disconnect at any time</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </MinimalCardContent>
+        </MinimalCard>
+      )}
+
       {activeTab === 'billing' && <BillingSection />}
 
-      {activeTab !== 'billing' && (
+      {activeTab !== 'billing' && activeTab !== 'accounts' && (
         <div className="flex items-center gap-3 mt-6">
           <input ref={fileInputRef} type="file" accept=".pdf,.docx,.txt" onChange={handleResumeUpload} className="hidden" />
           <Button onClick={() => fileInputRef.current?.click()} variant="outline" disabled={uploadingResume}>

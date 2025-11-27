@@ -415,25 +415,9 @@ export async function* handleMessage({ conversationId, userId, message, metadata
         .catch(err => logger.error({ error: err.message, conversationId }, 'Failed to append assistant message (non-critical)'));
     }
 
-    // Auto-delete conversations after 20 messages to keep database clean
-    // This runs asynchronously and doesn't block the response
-    setImmediate(async () => {
-      try {
-        const messageCount = await prisma.message.count({
-          where: { conversationId }
-        });
-
-        if (messageCount >= 20) {
-          logger.info({ conversationId, messageCount }, 'Auto-deleting conversation (reached 20 messages)');
-          await prisma.conversation.delete({
-            where: { id: conversationId }
-          });
-        }
-      } catch (deleteError) {
-        // Non-critical error, just log it
-        logger.error({ error: deleteError.message, conversationId }, 'Failed to auto-delete conversation (non-critical)');
-      }
-    });
+    // NOTE: Conversations are now persistent until user explicitly clears them
+    // Auto-delete was removed to preserve conversation history
+    // Users can clear conversations via DELETE /api/conversations/:id endpoint
 
     // Extract and update profile from conversation (async, don't wait)
     // Do this after streaming completes so we don't slow down the response

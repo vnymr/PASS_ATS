@@ -67,7 +67,10 @@ export default function JobCardSimple({
     return null;
   };
 
-  const matchScore = job.relevanceScore ? Math.round(job.relevanceScore * 100) : null;
+  // Always show match score - use 0 as fallback if not available
+  const matchScore = job.relevanceScore !== undefined && job.relevanceScore !== null
+    ? Math.round(job.relevanceScore * 100)
+    : null;
 
   return (
     <motion.div
@@ -97,20 +100,23 @@ export default function JobCardSimple({
             </p>
           </div>
 
-          {/* Match Score Badge */}
-          {matchScore && (
-            <div
-              className={`px-2 py-0.5 rounded-md text-xs font-semibold ${
-                matchScore >= 80
+          {/* Match Score Badge - Always Show */}
+          <div
+            className={`px-2 py-0.5 rounded-md text-xs font-semibold ${
+              matchScore === null
+                ? 'bg-gray-100 text-gray-500'
+                : matchScore >= 80
                   ? 'bg-teal-50 text-teal-700'
                   : matchScore >= 60
                     ? 'bg-amber-50 text-amber-700'
-                    : 'bg-gray-100 text-gray-600'
-              }`}
-            >
-              {matchScore}%
-            </div>
-          )}
+                    : matchScore >= 40
+                      ? 'bg-orange-50 text-orange-600'
+                      : 'bg-red-50 text-red-600'
+            }`}
+            title={matchScore !== null ? `${matchScore}% match with your profile` : 'Match score not available'}
+          >
+            {matchScore !== null ? `${matchScore}%` : '--'}
+          </div>
         </div>
 
         {/* Meta Row */}

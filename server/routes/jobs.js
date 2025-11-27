@@ -51,6 +51,7 @@ router.get('/jobs', async (req, res) => {
       source,                   // Filter by source (greenhouse, lever, etc.)
       search,                   // Search in title/description
       personalized = 'false',   // Use personalized recommendations
+      sort = 'recommended',     // Sort order: 'recommended', 'latest', 'salary'
       limit = '50',
       offset = '0',             // Offset for pagination
       cursor,                   // Cursor for pagination (job ID)
@@ -75,16 +76,17 @@ router.get('/jobs', async (req, res) => {
     } = req.query;
 
     // Check if personalized recommendations requested
-    if (personalized === 'true' && req.userId) {
-      // Create cache key from parameters (include offset)
-      const cacheKey = `${filter}-${atsType || 'all'}-${company || 'all'}-${source || 'all'}-${search || 'all'}-${limit}-${offset}-${cursor || 'start'}`;
+    // Only use personalized for 'recommended' sort - for 'latest' and 'salary', skip personalization
+    if (personalized === 'true' && req.userId && sort === 'recommended') {
+      // Create cache key from parameters (include offset and sort)
+      const cacheKey = `${filter}-${atsType || 'all'}-${company || 'all'}-${source || 'all'}-${search || 'all'}-${sort}-${limit}-${offset}-${cursor || 'start'}`;
 
       // Try cache first
       const cached = await cacheManager.getRecommendations(req.userId, cacheKey);
       if (cached) {
         logger.debug({ userId: req.userId, cacheKey }, 'Recommendations loaded from cache');
-        // Allow short-term browser caching (60 seconds)
-        res.setHeader('Cache-Control', 'public, max-age=60');
+        // Disable browser caching to ensure pagination works correctly
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
         return res.json({
           ...cached,
           fromCache: true
@@ -135,8 +137,8 @@ router.get('/jobs', async (req, res) => {
       };
       await cacheManager.setRecommendations(req.userId, cacheKey, response);
 
-      // Allow short-term browser caching (60 seconds)
-      res.setHeader('Cache-Control', 'public, max-age=60');
+      // Disable browser caching to ensure pagination works correctly
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
 
       return res.json(response);
     }
@@ -293,13 +295,14 @@ router.get('/jobs', async (req, res) => {
       where.AND = AND;
     }
 
-    // Create cache key from parameters (include all filters)
+    // Create cache key from parameters (include all filters and sort)
     const filterKey = [
       filter,
       atsType || 'all',
       company || 'all',
       source || 'all',
       search || 'all',
+      sort,  // Include sort in cache key
       experienceLevel || 'all',
       minSalary || 'all',
       maxSalary || 'all',
@@ -311,6 +314,7 @@ router.get('/jobs', async (req, res) => {
       aiApplyable || 'all',
       applicationComplexity || 'all',
       limit,
+      offset,  // Include offset for pagination
       cursor || 'start'
     ].join('-');
     const cacheKey = filterKey;
@@ -330,9 +334,27 @@ router.get('/jobs', async (req, res) => {
     // Get jobs with cursor-based pagination (more efficient than skip)
     const limitNum = parseInt(limit);
 
+    // Determine orderBy based on sort parameter
+    let orderBy;
+    switch (sort) {
+      case 'latest':
+        orderBy = { postedDate: 'desc' };
+        break;
+      case 'salary':
+        // Sort by salary - note: salary is stored as string, so this may not work perfectly
+        // For better salary sorting, we'd need a numeric salary field
+        orderBy = [{ salary: 'desc' }, { postedDate: 'desc' }];
+        break;
+      case 'recommended':
+      default:
+        // For recommended without personalization, sort by postedDate
+        orderBy = { postedDate: 'desc' };
+        break;
+    }
+
     const queryOptions = {
       where,
-      orderBy: { id: 'desc' },  // Use id for consistent ordering
+      orderBy,
       take: limitNum + 1,  // Take one extra to check if there are more
       select: {
         id: true,

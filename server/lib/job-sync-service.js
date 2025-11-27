@@ -1,21 +1,27 @@
 /**
- * Job Sync Service - V3 with FREE Auto-Discovery
+ * Job Sync Service - V4 with Google Discovery
  *
- * Uses 100% FREE sources with NO manual company lists:
+ * Uses 100% FREE sources with AUTOMATIC company discovery:
  * - SimplifyJobs GitHub (daily updates, 1000+ jobs)
  * - Hacker News Who's Hiring (monthly, 500+ jobs)
  * - RSS Feeds (real-time, unlimited)
  * - Greenhouse API (direct, free, unlimited)
  * - Lever API (direct, free, unlimited)
- * - Remotive API (remote jobs, free)
+ * - Ashby API (direct, free, startups)
+ * - Workable API (direct, free, mid-market)
  *
+ * NEW: Google Discovery (every 6 hours)
+ * - Searches Google for new company job boards
+ * - Automatically discovers companies using ATS platforms
+ *
+ * FRESHNESS: Only jobs posted in last 72 hours
  * TOTAL COST: $0/month
- * AUTO-DISCOVERY: Yes (no manual company lists!)
  */
 
 import smartAggregator from './job-sources/smart-aggregator.js';
 import freeAutoDiscovery from './job-sources/free-auto-discovery.js';
 import aggressiveDiscovery from './job-sources/aggressive-discovery.js';
+import googleDiscovery from './job-sources/google-company-discovery.js';
 import { prisma } from './prisma-client.js';
 import logger from './logger.js';
 import cron from 'node-cron';
@@ -41,29 +47,29 @@ class JobSyncService {
 
   /**
    * Start the cron jobs
-   * - Job sync: Runs every day at midnight (fetch fresh jobs)
-   * - Company discovery: Runs every 24 hours at 2 AM (find new companies)
+   * - Job sync: Runs every 6 hours (fetch fresh 72-hour jobs)
+   * - Company discovery: Runs every 6 hours (find new companies via Google)
    */
-  start(syncSchedule = '0 0 * * *', discoverySchedule = '0 2 * * *') {
+  start(syncSchedule = '0 */6 * * *', discoverySchedule = '30 */6 * * *') {
     if (this.syncCronJob) {
       logger.warn('Job sync cron already running');
       return;
     }
 
-    // Job sync cron (daily at midnight)
+    // Job sync cron (every 6 hours)
     this.syncCronJob = cron.schedule(syncSchedule, () => {
-      this.syncJobs();
+      this.syncJobs({ freshOnly: true });
     });
 
-    // Company discovery cron (daily at 2 AM)
+    // Company discovery cron (every 6 hours, offset by 30 minutes)
     this.discoveryCronJob = cron.schedule(discoverySchedule, () => {
       this.discoverNewCompanies();
     });
 
     logger.info(`✅ Job sync cron started (schedule: ${syncSchedule})`);
-    logger.info(`   Running daily at midnight to fetch fresh jobs`);
+    logger.info(`   Running every 6 hours to fetch fresh 72-hour jobs`);
     logger.info(`✅ Company discovery cron started (schedule: ${discoverySchedule})`);
-    logger.info(`   Running DAILY at 2 AM to discover new companies automatically!`);
+    logger.info(`   Running every 6 hours to discover new companies via Google!`);
   }
 
   /**
@@ -85,9 +91,9 @@ class JobSyncService {
 
   /**
    * Discover new companies automatically
-   * Runs weekly to find hundreds of new companies
+   * Runs every 6 hours to find new companies via Google search
    */
-  async discoverNewCompanies() {
+  async discoverNewCompanies(options = {}) {
     if (this.isDiscovering) {
       logger.warn('Company discovery already in progress, skipping');
       return { skipped: true };
@@ -97,15 +103,38 @@ class JobSyncService {
     const startTime = Date.now();
 
     try {
-      logger.info('🔍 Starting company discovery...');
+      logger.info('🔍 Starting company discovery (Google + API exploration)...');
 
-      // Run aggressive discovery
-      const result = await aggressiveDiscovery.runFullDiscovery();
+      let result;
+
+      // Try Google discovery first (if browser available)
+      try {
+        result = await googleDiscovery.discoverNewCompanies({
+          atsTypes: ['greenhouse', 'ashby', 'lever'],
+          keywords: ['software engineer', 'frontend developer', 'backend developer'],
+          maxCompaniesPerATS: 50
+        });
+      } catch (browserError) {
+        logger.warn(`Google discovery failed (${browserError.message}), falling back to API exploration`);
+
+        // Fallback to API exploration (no browser needed)
+        result = await googleDiscovery.discoverViaAPIExploration({
+          atsTypes: ['greenhouse', 'ashby', 'lever', 'workable']
+        });
+      }
+
+      // Also run aggressive discovery for additional sources
+      try {
+        const aggressiveResult = await aggressiveDiscovery.runFullDiscovery();
+        logger.info(`   Aggressive discovery found ${aggressiveResult.companies?.length || 0} additional companies`);
+      } catch (error) {
+        logger.warn(`Aggressive discovery failed: ${error.message}`);
+      }
 
       const duration = Date.now() - startTime;
 
       // Update stats
-      this.stats.companiesDiscovered = result.companies.length;
+      this.stats.companiesDiscovered = result.summary?.total || 0;
       this.lastDiscovery = new Date();
 
       // Get total companies in database
@@ -115,15 +144,16 @@ class JobSyncService {
       this.stats.totalCompanies = totalCompanies;
 
       logger.info('✅ Company discovery completed');
-      logger.info(`  - New companies found: ${result.companies.length}`);
+      logger.info(`  - New companies found: ${result.summary?.total || 0}`);
       logger.info(`  - Total companies in DB: ${totalCompanies}`);
       logger.info(`  - Duration: ${(duration / 1000).toFixed(1)}s`);
 
       return {
         success: true,
-        discovered: result.companies.length,
+        discovered: result.summary?.total || 0,
         totalCompanies: totalCompanies,
-        duration
+        duration,
+        breakdown: result.summary
       };
 
     } catch (error) {
@@ -157,10 +187,14 @@ class JobSyncService {
       // Fetch from FREE auto-discovery sources (SimplifyJobs, HN, RSS)
       const freeResult = await freeAutoDiscovery.aggregateAll();
 
-      // Fetch from smart aggregator (Greenhouse, Lever, Remotive)
+      // Fetch from smart aggregator (Greenhouse, Lever, Ashby, Workable)
+      // Now with 72-hour freshness filter!
       const atsResult = await smartAggregator.aggregateAll({
         // Force discovery on first run or if requested
         forceDiscovery: this.stats.totalSynced === 0 || options.forceDiscovery,
+
+        // Freshness filter (default: true = only last 72 hours)
+        freshOnly: options.freshOnly !== false,
 
         // JSearch discovery options (only if API key is set)
         jsearch: {
@@ -182,62 +216,79 @@ class JobSyncService {
         companies: atsResult.companies
       };
 
-      logger.info(`📊 Fetched ${result.jobs.length} jobs from all sources`);
-      logger.info(`  - SimplifyJobs: ${result.stats.simplify}`);
-      logger.info(`  - Hacker News: ${result.stats.hackernews}`);
-      logger.info(`  - RSS Feeds: ${result.stats.rss}`);
-      logger.info(`  - Y Combinator: ${result.stats.yc}`);
-      logger.info(`  - Greenhouse: ${result.stats.greenhouse || 0}`);
-      logger.info(`  - Lever: ${result.stats.lever || 0}`);
+      logger.info(`📊 Fetched ${result.jobs.length} fresh jobs from all sources`);
+      logger.info(`  - SimplifyJobs: ${result.stats.simplify || 0}`);
+      logger.info(`  - Hacker News: ${result.stats.hackernews || 0}`);
+      logger.info(`  - RSS Feeds: ${result.stats.rss || 0}`);
+      logger.info(`  - Y Combinator: ${result.stats.yc || 0}`);
+      logger.info(`  - Greenhouse: ${result.stats.byATS?.GREENHOUSE || 0}`);
+      logger.info(`  - Lever: ${result.stats.byATS?.LEVER || 0}`);
+      logger.info(`  - Ashby: ${result.stats.byATS?.ASHBY || 0}`);
+      logger.info(`  - Workable: ${result.stats.byATS?.WORKABLE || 0}`);
       logger.info(`  - AI-applyable: ${result.stats.aiApplyable || 0}`);
 
-      // Save to database
+      // DEDUPLICATION: Remove duplicates from the batch
+      const seenIds = new Set();
+      const uniqueJobs = result.jobs.filter(job => {
+        if (!job.externalId) return false;
+        if (seenIds.has(job.externalId)) return false;
+        seenIds.add(job.externalId);
+        return true;
+      });
+
+      const duplicatesInBatch = result.jobs.length - uniqueJobs.length;
+      if (duplicatesInBatch > 0) {
+        logger.info(`  - Filtered ${duplicatesInBatch} duplicates from batch`);
+      }
+
+      // Save to database using upsert for duplicate safety
       let saved = 0;
       let updated = 0;
       let skipped = 0;
 
-      for (const job of result.jobs) {
+      // Get existing job IDs for tracking new vs updated
+      const existingJobs = await prisma.aggregatedJob.findMany({
+        where: { externalId: { in: uniqueJobs.map(j => j.externalId) } },
+        select: { externalId: true }
+      });
+      const existingIds = new Set(existingJobs.map(j => j.externalId));
+
+      for (const job of uniqueJobs) {
         try {
-          const existing = await prisma.aggregatedJob.findUnique({
-            where: { externalId: job.externalId }
+          // Use upsert to handle duplicates gracefully
+          await prisma.aggregatedJob.upsert({
+            where: { externalId: job.externalId },
+            update: {
+              title: job.title,
+              description: job.description,
+              location: job.location,
+              salary: job.salary,
+              lastChecked: new Date(),
+              isActive: true
+            },
+            create: {
+              externalId: job.externalId,
+              source: job.source,
+              title: job.title,
+              company: job.company,
+              location: job.location,
+              salary: job.salary,
+              description: job.description,
+              requirements: job.requirements || null,
+              applyUrl: job.applyUrl,
+              companyUrl: job.companyUrl || null,
+              atsType: job.atsType,
+              atsCompany: job.atsCompany || null,
+              atsComplexity: job.atsComplexity,
+              atsConfidence: job.atsConfidence,
+              aiApplyable: job.aiApplyable,
+              postedDate: job.postedDate
+            }
           });
 
-          if (existing) {
-            // Update existing job
-            await prisma.aggregatedJob.update({
-              where: { externalId: job.externalId },
-              data: {
-                title: job.title,
-                description: job.description,
-                location: job.location,
-                salary: job.salary,
-                lastChecked: new Date(),
-                isActive: true
-              }
-            });
+          if (existingIds.has(job.externalId)) {
             updated++;
           } else {
-            // Create new job
-            await prisma.aggregatedJob.create({
-              data: {
-                externalId: job.externalId,
-                source: job.source,
-                title: job.title,
-                company: job.company,
-                location: job.location,
-                salary: job.salary,
-                description: job.description,
-                requirements: job.requirements || null,
-                applyUrl: job.applyUrl,
-                companyUrl: job.companyUrl || null,
-                atsType: job.atsType,
-                atsCompany: job.atsCompany || null,
-                atsComplexity: job.atsComplexity,
-                atsConfidence: job.atsConfidence,
-                aiApplyable: job.aiApplyable,
-                postedDate: job.postedDate
-              }
-            });
             saved++;
           }
         } catch (error) {
@@ -273,11 +324,15 @@ class JobSyncService {
       const duration = Date.now() - startTime;
 
       // Update stats
+      const companiesCount = (result.companies.greenhouse?.length || 0) +
+                            (result.companies.lever?.length || 0) +
+                            (result.companies.ashby?.length || 0) +
+                            (result.companies.workable?.length || 0);
       this.stats = {
         totalSynced: saved + updated,
         lastRunDate: new Date(),
         lastRunDuration: duration,
-        companiesDiscovered: result.companies.greenhouse.length + result.companies.lever.length
+        companiesDiscovered: companiesCount
       };
 
       logger.info('✅ Job sync completed successfully');

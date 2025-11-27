@@ -15,6 +15,10 @@ import {
   proxyRotator
 } from './browser-launcher.js';
 import { processResumeJob } from './job-processor.js';
+import {
+  pollForVerification,
+  hasActiveGmailConnection
+} from './email-verification-checker.js';
 
 const aiFormFiller = new AIFormFiller();
 
@@ -363,6 +367,127 @@ export async function processAutoApplyDirect({ applicationId, jobUrl, atsType, u
       submitResult = await aiFormFiller.submitForm(page, fillResult.submitButton, userProfile);
     }
 
+    // Check if page is asking for email verification
+    let verificationResult = null;
+    let pageNeedsVerification = false;
+
+    try {
+      // First, detect if the page is actually asking for verification
+      // Look for verification input fields
+      const verificationInput = await page.$([
+        'input[name*="code"]',
+        'input[name*="verification"]',
+        'input[name*="otp"]',
+        'input[name*="pin"]',
+        'input[placeholder*="code"]',
+        'input[placeholder*="verification"]',
+        'input[placeholder*="enter"]',
+        'input[aria-label*="code"]',
+        'input[aria-label*="verification"]',
+        'input[type="tel"][maxlength="6"]',
+        'input[type="text"][maxlength="6"]',
+        'input[type="number"][maxlength="6"]'
+      ].join(', '));
+
+      // Also check for verification-related text on the page
+      const pageText = await page.textContent('body').catch(() => '');
+      const verificationKeywords = [
+        'verify your email',
+        'verification code',
+        'enter the code',
+        'check your email',
+        'sent you a code',
+        'confirmation code',
+        'enter code',
+        'verify email',
+        'email verification',
+        'one-time code',
+        'otp'
+      ];
+
+      const hasVerificationText = verificationKeywords.some(keyword =>
+        pageText.toLowerCase().includes(keyword)
+      );
+
+      pageNeedsVerification = !!(verificationInput || hasVerificationText);
+
+      if (pageNeedsVerification) {
+        logger.info('🔐 Page is asking for email verification');
+
+        // Check if user has Gmail connected
+        const hasGmail = await hasActiveGmailConnection(userId);
+
+        if (hasGmail) {
+          logger.info('📧 Polling Gmail for verification code...');
+
+          // Poll for verification email
+          verificationResult = await pollForVerification(userId, {
+            maxWaitMs: 90000, // 1.5 minutes max
+            pollIntervalMs: 8000, // Every 8 seconds
+            companyName: job.company
+          });
+
+          if (verificationResult.found && verificationResult.code) {
+            logger.info({ code: verificationResult.code }, '✅ Found verification code in email');
+
+            // Re-find the input (page might have updated)
+            const codeInput = await page.$([
+              'input[name*="code"]',
+              'input[name*="verification"]',
+              'input[name*="otp"]',
+              'input[name*="pin"]',
+              'input[placeholder*="code"]',
+              'input[placeholder*="verification"]',
+              'input[type="tel"][maxlength="6"]',
+              'input[type="text"][maxlength="6"]'
+            ].join(', '));
+
+            if (codeInput) {
+              await codeInput.click();
+              await codeInput.fill('');
+              await codeInput.type(verificationResult.code, { delay: 50 });
+              logger.info('📝 Entered verification code');
+
+              // Small delay before clicking submit
+              await new Promise(resolve => setTimeout(resolve, 500));
+
+              // Try to submit verification
+              const verifyButton = await page.$([
+                'button:has-text("verify")',
+                'button:has-text("confirm")',
+                'button:has-text("submit")',
+                'button:has-text("continue")',
+                'input[type="submit"]',
+                'button[type="submit"]'
+              ].join(', '));
+
+              if (verifyButton) {
+                await verifyButton.click();
+                await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
+                logger.info('✅ Verification code submitted');
+              }
+            } else {
+              logger.warn('Could not find verification input to enter code');
+            }
+          } else if (verificationResult.found && verificationResult.links?.length > 0) {
+            // Handle verification links
+            const verifyLink = verificationResult.links[0];
+            logger.info({ link: verifyLink }, '🔗 Following verification link');
+            await page.goto(verifyLink, { waitUntil: 'networkidle', timeout: 15000 });
+            logger.info('✅ Verification link visited');
+          } else {
+            logger.warn('Verification needed but no code/link found in email');
+          }
+        } else {
+          logger.warn('⚠️ Verification needed but Gmail not connected - cannot auto-verify');
+        }
+      } else {
+        logger.debug('No verification requested on this page');
+      }
+    } catch (verifyError) {
+      logger.warn({ error: verifyError.message }, 'Error during verification check');
+    }
+
     // Take screenshot
     let screenshot = null;
     try {
@@ -391,7 +516,14 @@ export async function processAutoApplyDirect({ applicationId, jobUrl, atsType, u
             fieldsExtracted: fillResult.fieldsExtracted,
             fieldsFilled: fillResult.fieldsFilled,
             successMessages: sanitizedMessages,
-            finalUrl: sanitize(submitResult.currentUrl)
+            finalUrl: sanitize(submitResult.currentUrl),
+            verification: verificationResult ? {
+              found: verificationResult.found,
+              codeUsed: !!verificationResult.code,
+              linkFollowed: !!verificationResult.links?.length && !verificationResult.code,
+              attempts: verificationResult.attempts,
+              duration: verificationResult.duration
+            } : null
           }
         }
       });

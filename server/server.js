@@ -48,6 +48,11 @@ import { createClerkClient } from '@clerk/clerk-sdk-node';
 import { fileURLToPath } from 'url';
 import path from 'path';
 import multer from 'multer';
+import {
+  exchangeCodeForTokens as gmailExchangeCodeForTokens,
+  getGmailAddress as gmailGetGmailAddress,
+  saveGmailConnection as gmailSaveGmailConnection
+} from './lib/gmail-oauth.js';
 import OpenAI from 'openai';
 import rateLimit from 'express-rate-limit';
 import Stripe from 'stripe';
@@ -91,8 +96,9 @@ import { config, getOpenAIModel } from './lib/config.js';
 import { startRoutineExecutor, stopRoutineExecutor } from './lib/routine-executor.js';
 import dataValidator from './lib/utils/dataValidator.js';
 import ResumeParser from './lib/resume-parser.js';
-// Import job sync service for automated job discovery
+// Import job sync services for automated job discovery
 import jobSyncService from './lib/job-sync-service.js';
+import smartJobSync from './lib/smart-job-sync.js';
 // Import LaTeX compiler
 import { compileLatex } from './lib/latex-compiler.js';
 // Import production logger
@@ -2828,6 +2834,9 @@ import chatRouter from './routes/chat.js';
 import profileRouter from './routes/profile.js';
 import goalsRouter from './routes/goals.js';
 import healthRouter from './routes/health.js';
+import conversationsRouter from './routes/conversations.js';
+import routinesRouter from './routes/routines.js';
+import gmailRouter from './routes/gmail.js';
 
 app.post('/api/generate-ai', authenticateToken, generateResumeEndpoint);
 app.get('/api/check-compilers', authenticateToken, checkCompilersEndpoint);
@@ -2837,6 +2846,46 @@ app.post('/api/extract-job', authenticateToken, extractJobHandler);
 
 // Health check endpoints - NO authentication required (used by load balancers)
 app.use('/', healthRouter);
+
+// Gmail OAuth callback - NO authentication required (comes from Google redirect)
+app.get('/api/gmail/callback', async (req, res) => {
+  try {
+    const { code, state, error: oauthError } = req.query;
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+
+    if (oauthError) {
+      console.error('[Gmail Callback] OAuth error:', oauthError);
+      return res.redirect(`${frontendUrl}/profile?gmail_error=${encodeURIComponent(oauthError)}`);
+    }
+
+    if (!code) {
+      return res.redirect(`${frontendUrl}/profile?gmail_error=Missing%20authorization%20code`);
+    }
+
+    let userId;
+    try {
+      const stateData = JSON.parse(state);
+      userId = stateData.userId;
+    } catch (e) {
+      return res.redirect(`${frontendUrl}/profile?gmail_error=Invalid%20state%20parameter`);
+    }
+
+    if (!userId) {
+      return res.redirect(`${frontendUrl}/profile?gmail_error=User%20ID%20not%20found`);
+    }
+
+    const tokens = await gmailExchangeCodeForTokens(code);
+    const email = await gmailGetGmailAddress(tokens.accessToken);
+    await gmailSaveGmailConnection(userId, tokens, email);
+
+    console.log(`[Gmail Callback] Connected Gmail for user ${userId}: ${email}`);
+    res.redirect(`${frontendUrl}/profile?gmail_connected=true&email=${encodeURIComponent(email)}`);
+  } catch (error) {
+    console.error('[Gmail Callback] Error:', error);
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    res.redirect(`${frontendUrl}/profile?gmail_error=${encodeURIComponent(error.message)}`);
+  }
+});
 
 // Mount new routers - MUST be before static file serving!
 // Apply auth middleware once for all /api routes except health and migration
@@ -2851,6 +2900,9 @@ apiRouter.use(diagnosticsRouter);
 apiRouter.use(chatRouter);
 apiRouter.use(profileRouter);
 apiRouter.use(goalsRouter);
+apiRouter.use(conversationsRouter);
+apiRouter.use(routinesRouter);
+apiRouter.use(gmailRouter);
 
 // Mount the API router
 app.use('/api', apiRouter);
@@ -2887,11 +2939,13 @@ const server = app.listen(PORT, () => {
   // Start routine executor for automated task scheduling
   startRoutineExecutor();
 
-  // Start job sync service (daily at midnight + company discovery at 2 AM)
-  jobSyncService.start();
-  logger.info('✅ Job sync service started');
-  logger.info('   - Job sync: Daily at midnight');
-  logger.info('   - Company discovery: Daily at 2 AM');
+  // Start SMART job sync service (tiered frequency for fresh jobs)
+  smartJobSync.start();
+  logger.info('✅ Smart Job Sync service started');
+  logger.info('   - High-priority companies: Every hour');
+  logger.info('   - Medium-priority companies: Every 3 hours');
+  logger.info('   - Full sync + discovery: Every 6 hours');
+  logger.info('   - Job closure detection: Every 12 hours');
 });
 
 // Graceful shutdown
@@ -2901,8 +2955,8 @@ process.on('SIGTERM', async () => {
   // Stop routine executor
   stopRoutineExecutor();
 
-  // Stop job sync service
-  jobSyncService.stop();
+  // Stop smart job sync service
+  smartJobSync.stop();
 
   // Close server
   server.close(async () => {
@@ -2917,8 +2971,8 @@ process.on('SIGINT', async () => {
   // Stop routine executor
   stopRoutineExecutor();
 
-  // Stop job sync service
-  jobSyncService.stop();
+  // Stop smart job sync service
+  smartJobSync.stop();
 
   server.close(async () => {
     await prisma.$disconnect();

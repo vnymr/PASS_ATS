@@ -583,13 +583,46 @@ export function handleUnknownAction(message, profile = null) {
  */
 export async function execute(name, input, ctx = {}) {
   try {
+    // Handle OpenAI's internal parallel tool calling format
+    // OpenAI wraps multiple tool calls in "multi_tool_use.parallel"
+    if (name === 'multi_tool_use.parallel') {
+      logger.info({ toolUses: input.tool_uses?.length || 0 }, 'Handling parallel tool calls from OpenAI');
+
+      if (!input.tool_uses || !Array.isArray(input.tool_uses)) {
+        throw new Error('multi_tool_use.parallel requires tool_uses array');
+      }
+
+      // Execute all tool calls in parallel
+      const results = await Promise.all(
+        input.tool_uses.map(async (toolUse) => {
+          const toolName = toolUse.recipient_name;
+          const toolParams = toolUse.parameters || {};
+
+          try {
+            const validatedInput = validate(toolName, toolParams);
+            const result = await executeToolImpl(toolName, validatedInput, ctx);
+            return { tool: toolName, success: true, result };
+          } catch (error) {
+            logger.error({ tool: toolName, error: error.message }, 'Parallel tool execution failed');
+            return { tool: toolName, success: false, error: error.message };
+          }
+        })
+      );
+
+      logger.info({
+        toolCount: results.length,
+        successCount: results.filter(r => r.success).length
+      }, 'Parallel tool execution completed');
+
+      return { parallel_results: results };
+    }
+
     // Validate input
     const validatedInput = validate(name, input);
 
     logger.info({ tool: name, input: validatedInput, ctx }, 'Executing tool');
 
     // Execute tool handler
-    const tool = TOOLS[name];
     const result = await executeToolImpl(name, validatedInput, ctx);
 
     logger.info({ tool: name, resultSize: JSON.stringify(result).length }, 'Tool executed successfully');

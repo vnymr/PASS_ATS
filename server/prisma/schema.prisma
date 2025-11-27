@@ -22,6 +22,26 @@ model User {
   conversations   Conversation[]
   goals           Goal[]
   routines        Routine[]
+  gmailConnection GmailConnection?
+}
+
+// Gmail OAuth Connection for Email Verification during Auto-Apply
+model GmailConnection {
+  id           String   @id @default(cuid())
+  userId       Int      @unique
+  email        String                    // The connected Gmail address
+  accessToken  String   @db.Text         // Encrypted access token
+  refreshToken String   @db.Text         // Encrypted refresh token
+  expiresAt    DateTime                  // Token expiration time
+  scope        String                    // Granted OAuth scopes
+  isActive     Boolean  @default(true)   // Whether connection is active
+  lastUsed     DateTime?                 // Last time used for verification
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isActive])
 }
 
 model Profile {
@@ -46,6 +66,7 @@ model Job {
   error          String?
   diagnostics    Json?
   processingLog  Json[]
+  metadata       Json?                   // For storing aggregatedJobId, company, title, etc.
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
   startedAt      DateTime?
@@ -210,11 +231,17 @@ model AggregatedJob {
   extractionConfidence  Float?
   postedDate            DateTime
   expiresAt             DateTime?
+  firstSeenAt           DateTime          @default(now())
   lastChecked           DateTime          @default(now())
+  closedAt              DateTime?
   isActive              Boolean           @default(true)
   applications          AutoApplication[]
 
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime?         @updatedAt
+
   @@index([aiApplyable, postedDate])
+  @@index([lastChecked])
   @@index([atsType])
   @@index([isActive, postedDate])
   @@index([source])
@@ -413,25 +440,42 @@ model MessageUsage {
 // Autonomous Routine/Schedule Management
 
 model Routine {
-  id          String         @id @default(cuid())
+  id          String             @id @default(cuid())
   userId      Int
   title       String
-  description String?        @db.Text
-  type        RoutineType    @default(SEARCH_JOBS)
-  frequency   String         @default("DAILY")
-  schedule    String         @default("09:00")
+  description String?            @db.Text
+  type        RoutineType        @default(SEARCH_JOBS)
+  frequency   String             @default("DAILY")
+  schedule    String             @default("09:00")
   config      Json?
-  isActive    Boolean        @default(true)
+  isActive    Boolean            @default(true)
   lastRun     DateTime?
   nextRun     DateTime?
-  runCount    Int            @default(0)
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  runCount    Int                @default(0)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  executions  RoutineExecution[]
 
   @@index([userId, isActive])
   @@index([nextRun, isActive])
   @@index([type, isActive])
+}
+
+// Store routine execution results for user review
+model RoutineExecution {
+  id         String   @id @default(cuid())
+  routineId  String
+  status     String   @default("SUCCESS") // SUCCESS, FAILED, PARTIAL
+  summary    String?  @db.Text            // Human-readable summary
+  results    Json?                         // Raw execution results
+  duration   Int?                          // Execution time in ms
+  error      String?  @db.Text            // Error message if failed
+  createdAt  DateTime @default(now())
+  routine    Routine  @relation(fields: [routineId], references: [id], onDelete: Cascade)
+
+  @@index([routineId, createdAt])
+  @@index([status])
 }
 
 enum RoutineType {

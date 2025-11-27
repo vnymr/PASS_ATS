@@ -15,7 +15,12 @@ import logger from './logger.js';
 class CacheManager {
   constructor() {
     this.redis = createRedisConnection();
-    this.enabled = true;
+    // Only enable cache if Redis connection was successful
+    this.enabled = !!this.redis;
+
+    if (!this.redis) {
+      logger.warn('Redis not available - cache disabled, falling through to database');
+    }
 
     // Cache TTLs (Time To Live)
     this.ttl = {
@@ -35,7 +40,7 @@ class CacheManager {
    * @returns {Promise<any|null>}
    */
   async get(key) {
-    if (!this.enabled) return null;
+    if (!this.enabled || !this.redis) return null;
 
     try {
       const value = await this.redis.get(key);
@@ -46,7 +51,15 @@ class CacheManager {
       logger.debug({ key }, 'Cache MISS');
       return null;
     } catch (error) {
-      logger.error({ error: error.message, key }, 'Cache get error');
+      // Gracefully handle Redis connection errors - just fall through to DB
+      // Don't log "Stream isn't writeable" errors at error level - these are expected when Redis is down
+      if (error.message?.includes('Stream isn\'t writeable') || error.message?.includes('enableOfflineQueue')) {
+        logger.debug({ key }, 'Cache unavailable (Redis disconnected), falling through');
+        // Disable cache to prevent further error logs until Redis reconnects
+        this.enabled = false;
+      } else {
+        logger.error({ error: error.message, key }, 'Cache get error');
+      }
       return null;
     }
   }
@@ -58,13 +71,19 @@ class CacheManager {
    * @param {number} ttl - Time to live in seconds
    */
   async set(key, value, ttl) {
-    if (!this.enabled) return;
+    if (!this.enabled || !this.redis) return;
 
     try {
       await this.redis.setex(key, ttl, JSON.stringify(value));
       logger.debug({ key, ttl }, 'Cache SET');
     } catch (error) {
-      logger.error({ error: error.message, key }, 'Cache set error');
+      // Gracefully handle Redis connection errors
+      if (error.message?.includes('Stream isn\'t writeable') || error.message?.includes('enableOfflineQueue')) {
+        logger.debug({ key }, 'Cache unavailable (Redis disconnected), skipping set');
+        this.enabled = false;
+      } else {
+        logger.error({ error: error.message, key }, 'Cache set error');
+      }
     }
   }
 
@@ -73,13 +92,19 @@ class CacheManager {
    * @param {string} key
    */
   async del(key) {
-    if (!this.enabled) return;
+    if (!this.enabled || !this.redis) return;
 
     try {
       await this.redis.del(key);
       logger.debug({ key }, 'Cache DELETE');
     } catch (error) {
-      logger.error({ error: error.message, key }, 'Cache delete error');
+      // Gracefully handle Redis connection errors
+      if (error.message?.includes('Stream isn\'t writeable') || error.message?.includes('enableOfflineQueue')) {
+        logger.debug({ key }, 'Cache unavailable (Redis disconnected), skipping delete');
+        this.enabled = false;
+      } else {
+        logger.error({ error: error.message, key }, 'Cache delete error');
+      }
     }
   }
 
@@ -165,6 +190,8 @@ class CacheManager {
   }
 
   async invalidateRecommendations(userId) {
+    if (!this.enabled || !this.redis) return;
+
     // Delete all recommendation keys for a user
     const pattern = `user:${userId}:recs:*`;
     try {
@@ -174,7 +201,13 @@ class CacheManager {
         logger.debug({ userId, count: keys.length }, 'Invalidated recommendation cache');
       }
     } catch (error) {
-      logger.error({ error: error.message, userId }, 'Failed to invalidate recommendations');
+      // Gracefully handle Redis connection errors
+      if (error.message?.includes('Stream isn\'t writeable') || error.message?.includes('enableOfflineQueue')) {
+        logger.debug({ userId }, 'Cache unavailable, skipping recommendation invalidation');
+        this.enabled = false;
+      } else {
+        logger.error({ error: error.message, userId }, 'Failed to invalidate recommendations');
+      }
     }
   }
 
@@ -212,6 +245,10 @@ class CacheManager {
    * Get cache stats
    */
   async getStats() {
+    if (!this.enabled || !this.redis) {
+      return { enabled: false, message: 'Redis not available' };
+    }
+
     try {
       const info = await this.redis.info('stats');
       return info;

@@ -21,6 +21,10 @@ import { prisma } from '../prisma-client.js';
 import logger from '../logger.js';
 import { getAllCompanies, TOTAL_COMPANIES } from './comprehensive-company-list.js';
 
+// Freshness filter: Only jobs posted within this time window
+const FRESHNESS_HOURS = 72;
+const FRESHNESS_MS = FRESHNESS_HOURS * 60 * 60 * 1000;
+
 class SmartAggregator {
   constructor() {
     // Track discovered companies per ATS
@@ -34,6 +38,16 @@ class SmartAggregator {
 
     // Load comprehensive company list on initialization
     this.loadComprehensiveList();
+  }
+
+  /**
+   * Check if a job is fresh (within FRESHNESS_HOURS)
+   */
+  isJobFresh(dateString) {
+    if (!dateString) return true; // If no date, include it
+    const jobDate = new Date(dateString);
+    const now = Date.now();
+    return (now - jobDate.getTime()) < FRESHNESS_MS;
   }
 
   /**
@@ -233,8 +247,11 @@ class SmartAggregator {
   /**
    * Phase 2: Fetch directly from Greenhouse API for discovered companies
    * Now fetches FULL job details including complete descriptions!
+   * Supports freshness filtering (default: 72 hours)
    */
-  async fetchFromGreenhouse(companies = []) {
+  async fetchFromGreenhouse(companies = [], options = {}) {
+    const { freshOnly = true } = options;
+
     if (companies.length === 0) {
       companies = Array.from(this.discoveredCompanies.greenhouse);
     }
@@ -244,12 +261,13 @@ class SmartAggregator {
       return [];
     }
 
-    logger.info(`📥 Fetching from ${companies.length} Greenhouse companies...`);
+    logger.info(`📥 Fetching from ${companies.length} Greenhouse companies (freshOnly=${freshOnly})...`);
 
     const allJobs = [];
     const batchSize = 20; // Reduced from 50 to be more conservative
     let failedCompanies = 0;
     let successfulCompanies = 0;
+    let skippedOldJobs = 0;
 
     for (let i = 0; i < companies.length; i += batchSize) {
       const batch = companies.slice(i, i + batchSize);
@@ -282,10 +300,19 @@ class SmartAggregator {
             continue;
           }
 
-          // Step 2: Fetch details for each job with rate limiting
+          // Step 2: Filter by freshness FIRST, then fetch details only for fresh jobs
           const jobsWithDetails = [];
 
-          for (const job of listData.jobs) {
+          // Filter jobs by freshness before fetching details (optimization)
+          const freshJobs = freshOnly
+            ? listData.jobs.filter(job => this.isJobFresh(job.updated_at))
+            : listData.jobs;
+
+          if (freshOnly && listData.jobs.length > freshJobs.length) {
+            skippedOldJobs += (listData.jobs.length - freshJobs.length);
+          }
+
+          for (const job of freshJobs) {
             try {
               // Add small delay between job detail fetches (100ms)
               await this.delay(100);
@@ -398,15 +425,18 @@ class SmartAggregator {
       }
     }
 
-    logger.info(`✅ Fetched ${allJobs.length} jobs from Greenhouse (${successfulCompanies} companies succeeded, ${failedCompanies} failed)`);
+    logger.info(`✅ Fetched ${allJobs.length} fresh jobs from Greenhouse (${successfulCompanies} companies, ${skippedOldJobs} old jobs skipped)`);
     return allJobs;
   }
 
   /**
    * Phase 3: Fetch directly from Lever API for discovered companies
    * Lever's JSON endpoint already includes full descriptions!
+   * Supports freshness filtering (default: 72 hours)
    */
-  async fetchFromLever(companies = []) {
+  async fetchFromLever(companies = [], options = {}) {
+    const { freshOnly = true } = options;
+
     if (companies.length === 0) {
       companies = Array.from(this.discoveredCompanies.lever);
     }
@@ -416,12 +446,13 @@ class SmartAggregator {
       return [];
     }
 
-    logger.info(`📥 Fetching from ${companies.length} Lever companies...`);
+    logger.info(`📥 Fetching from ${companies.length} Lever companies (freshOnly=${freshOnly})...`);
 
     const allJobs = [];
     const batchSize = 20; // Reduced from 50
     let failedCompanies = 0;
     let successfulCompanies = 0;
+    let skippedOldJobs = 0;
 
     for (let i = 0; i < companies.length; i += batchSize) {
       const batch = companies.slice(i, i + batchSize);
@@ -449,7 +480,16 @@ class SmartAggregator {
 
           const jobs = await response.json();
 
-          const companyJobs = jobs.map(job => {
+          // Filter by freshness first
+          const freshJobs = freshOnly
+            ? jobs.filter(job => this.isJobFresh(job.createdAt))
+            : jobs;
+
+          if (freshOnly && jobs.length > freshJobs.length) {
+            skippedOldJobs += (jobs.length - freshJobs.length);
+          }
+
+          const companyJobs = freshJobs.map(job => {
             // Extract requirements from description HTML
             const requirements = this.extractRequirementsFromHTML(job.description || '');
 
@@ -495,7 +535,201 @@ class SmartAggregator {
       }
     }
 
-    logger.info(`✅ Fetched ${allJobs.length} jobs from Lever (${successfulCompanies} companies succeeded, ${failedCompanies} failed)`);
+    logger.info(`✅ Fetched ${allJobs.length} fresh jobs from Lever (${successfulCompanies} companies, ${skippedOldJobs} old jobs skipped)`);
+    return allJobs;
+  }
+
+  /**
+   * Phase 4: Fetch directly from Ashby API for discovered companies
+   * Ashby is popular with modern startups (Linear, Ramp, Vanta, etc.)
+   */
+  async fetchFromAshby(companies = [], options = {}) {
+    const { freshOnly = true } = options;
+
+    if (companies.length === 0) {
+      companies = Array.from(this.discoveredCompanies.ashby);
+    }
+
+    if (companies.length === 0) {
+      logger.info('⚠️  No Ashby companies discovered yet');
+      return [];
+    }
+
+    logger.info(`📥 Fetching from ${companies.length} Ashby companies...`);
+
+    const allJobs = [];
+    let failedCompanies = 0;
+    let successfulCompanies = 0;
+    let skippedOldJobs = 0;
+
+    for (const company of companies) {
+      try {
+        const response = await this.fetchWithRetry(
+          `https://api.ashbyhq.com/posting-api/job-board/${company}`,
+          {},
+          2,
+          5000
+        );
+
+        if (!response.ok) {
+          if (response.status === 404) {
+            failedCompanies++;
+            continue;
+          }
+          logger.warn(`Ashby API returned ${response.status} for ${company}`);
+          failedCompanies++;
+          continue;
+        }
+
+        const data = await response.json();
+        const jobs = data.jobs || [];
+
+        for (const job of jobs) {
+          // Apply freshness filter
+          if (freshOnly && !this.isJobFresh(job.publishedAt)) {
+            skippedOldJobs++;
+            continue;
+          }
+
+          allJobs.push({
+            externalId: `ashby_${job.id}`,
+            source: 'ashby',
+            sourceCompanyId: company,
+            title: job.title,
+            company: company,
+            location: job.location || (job.isRemote ? 'Remote' : 'Unknown'),
+            salary: null,
+            description: job.descriptionHtml || job.descriptionPlain || '',
+            requirements: this.extractRequirementsFromHTML(job.descriptionHtml || ''),
+            applyUrl: job.applyUrl || job.jobUrl || `https://jobs.ashbyhq.com/${company}/${job.id}`,
+            postedDate: new Date(job.publishedAt),
+
+            // ATS metadata
+            atsType: 'ASHBY',
+            atsCompany: company,
+            atsComplexity: 'SIMPLE',
+            atsConfidence: 1.0,
+            aiApplyable: true,
+
+            // Extra Ashby fields
+            department: job.department,
+            team: job.team,
+            employmentType: job.employmentType,
+            isRemote: job.isRemote
+          });
+        }
+
+        successfulCompanies++;
+
+      } catch (error) {
+        if (error.name !== 'AbortError') {
+          logger.warn(`Ashby fetch failed (${company}): ${error.message}`);
+        }
+        failedCompanies++;
+      }
+
+      // Rate limit: 200ms delay between companies
+      await this.delay(200);
+    }
+
+    logger.info(`✅ Fetched ${allJobs.length} fresh jobs from Ashby (${successfulCompanies} companies, ${skippedOldJobs} old jobs skipped)`);
+    return allJobs;
+  }
+
+  /**
+   * Phase 5: Fetch directly from Workable API for discovered companies
+   */
+  async fetchFromWorkable(companies = [], options = {}) {
+    const { freshOnly = true } = options;
+
+    if (companies.length === 0) {
+      companies = Array.from(this.discoveredCompanies.workable);
+    }
+
+    if (companies.length === 0) {
+      logger.info('⚠️  No Workable companies discovered yet');
+      return [];
+    }
+
+    logger.info(`📥 Fetching from ${companies.length} Workable companies...`);
+
+    const allJobs = [];
+    let failedCompanies = 0;
+    let successfulCompanies = 0;
+    let skippedOldJobs = 0;
+
+    for (const company of companies) {
+      try {
+        const response = await this.fetchWithRetry(
+          `https://apply.workable.com/api/v1/widget/accounts/${company}`,
+          {},
+          2,
+          5000
+        );
+
+        if (!response.ok) {
+          if (response.status === 404) {
+            failedCompanies++;
+            continue;
+          }
+          logger.warn(`Workable API returned ${response.status} for ${company}`);
+          failedCompanies++;
+          continue;
+        }
+
+        const data = await response.json();
+        const jobs = data.jobs || [];
+
+        for (const job of jobs) {
+          // Workable may have published_on or created_at
+          const jobDate = job.published_on || job.created_at;
+
+          // Apply freshness filter
+          if (freshOnly && jobDate && !this.isJobFresh(jobDate)) {
+            skippedOldJobs++;
+            continue;
+          }
+
+          allJobs.push({
+            externalId: `workable_${job.shortcode || job.id}`,
+            source: 'workable',
+            sourceCompanyId: company,
+            title: job.title,
+            company: company,
+            location: job.location?.city || job.location?.country || 'Unknown',
+            salary: null,
+            description: job.description || '',
+            requirements: this.extractRequirementsFromHTML(job.requirements || job.description || ''),
+            applyUrl: job.url || `https://apply.workable.com/${company}/j/${job.shortcode}/`,
+            postedDate: jobDate ? new Date(jobDate) : new Date(),
+
+            // ATS metadata
+            atsType: 'WORKABLE',
+            atsCompany: company,
+            atsComplexity: 'SIMPLE',
+            atsConfidence: 1.0,
+            aiApplyable: true,
+
+            // Extra fields
+            department: job.department,
+            employmentType: job.employment_type
+          });
+        }
+
+        successfulCompanies++;
+
+      } catch (error) {
+        if (error.name !== 'AbortError') {
+          logger.warn(`Workable fetch failed (${company}): ${error.message}`);
+        }
+        failedCompanies++;
+      }
+
+      // Rate limit: 200ms delay between companies
+      await this.delay(200);
+    }
+
+    logger.info(`✅ Fetched ${allJobs.length} fresh jobs from Workable (${successfulCompanies} companies, ${skippedOldJobs} old jobs skipped)`);
     return allJobs;
   }
 
@@ -513,11 +747,15 @@ class SmartAggregator {
    * Main aggregation method - hybrid approach
    *
    * Strategy:
-   * 1. First run: Discover via JSearch + Remotive
-   * 2. Subsequent runs: Fetch directly from Greenhouse/Lever + supplement with discovery
+   * 1. First run: Discover via JSearch
+   * 2. Subsequent runs: Fetch directly from all ATS platforms
+   * 3. Filter to only fresh jobs (default: 72 hours)
    */
   async aggregateAll(options = {}) {
-    logger.info('🚀 Starting smart job aggregation...\n');
+    const { freshOnly = true } = options;
+
+    logger.info('🚀 Starting smart job aggregation...');
+    logger.info(`   Freshness filter: ${freshOnly ? `${FRESHNESS_HOURS} hours` : 'disabled'}\n`);
 
     // Load previously discovered companies from database
     await this.loadDiscoveredCompanies();
@@ -526,7 +764,8 @@ class SmartAggregator {
 
     // Phase 1: Discovery (if we don't have many companies yet)
     const totalDiscovered = Array.from(this.discoveredCompanies.greenhouse).length +
-                           Array.from(this.discoveredCompanies.lever).length;
+                           Array.from(this.discoveredCompanies.lever).length +
+                           Array.from(this.discoveredCompanies.ashby).length;
 
     if (totalDiscovered < 100 || options.forceDiscovery) {
       logger.info('🔍 Running discovery phase (building company list)...');
@@ -540,23 +779,29 @@ class SmartAggregator {
       await this.saveDiscoveredCompanies();
     }
 
-    // Phase 2: Direct fetching from discovered companies
-    logger.info('📥 Fetching directly from discovered companies...');
+    // Phase 2: Direct fetching from ALL discovered ATS platforms
+    logger.info('📥 Fetching directly from all ATS platforms...');
 
-    const [greenhouseJobs, leverJobs] = await Promise.all([
-      this.fetchFromGreenhouse(),
-      this.fetchFromLever()
+    const fetchOptions = { freshOnly };
+
+    const [greenhouseJobs, leverJobs, ashbyJobs, workableJobs] = await Promise.all([
+      this.fetchFromGreenhouse([], fetchOptions),
+      this.fetchFromLever([], fetchOptions),
+      this.fetchFromAshby([], fetchOptions),
+      this.fetchFromWorkable([], fetchOptions)
     ]);
 
-    results.push(...greenhouseJobs, ...leverJobs);
+    results.push(...greenhouseJobs, ...leverJobs, ...ashbyJobs, ...workableJobs);
 
     // Deduplicate jobs
     const uniqueJobs = this.deduplicateJobs(results);
 
     logger.info(`\n✅ Aggregation complete:`);
-    logger.info(`  - Total jobs: ${uniqueJobs.length}`);
-    logger.info(`  - Greenhouse companies: ${this.discoveredCompanies.greenhouse.size}`);
-    logger.info(`  - Lever companies: ${this.discoveredCompanies.lever.size}`);
+    logger.info(`  - Total fresh jobs: ${uniqueJobs.length}`);
+    logger.info(`  - Greenhouse: ${greenhouseJobs.length} jobs (${this.discoveredCompanies.greenhouse.size} companies)`);
+    logger.info(`  - Lever: ${leverJobs.length} jobs (${this.discoveredCompanies.lever.size} companies)`);
+    logger.info(`  - Ashby: ${ashbyJobs.length} jobs (${this.discoveredCompanies.ashby.size} companies)`);
+    logger.info(`  - Workable: ${workableJobs.length} jobs (${this.discoveredCompanies.workable.size} companies)`);
     logger.info(`  - AI-applyable: ${uniqueJobs.filter(j => j.aiApplyable).length}`);
 
     return {
@@ -564,7 +809,9 @@ class SmartAggregator {
       stats: this.generateStats(uniqueJobs),
       companies: {
         greenhouse: Array.from(this.discoveredCompanies.greenhouse),
-        lever: Array.from(this.discoveredCompanies.lever)
+        lever: Array.from(this.discoveredCompanies.lever),
+        ashby: Array.from(this.discoveredCompanies.ashby),
+        workable: Array.from(this.discoveredCompanies.workable)
       }
     };
   }

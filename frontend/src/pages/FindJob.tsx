@@ -11,7 +11,7 @@ import { api } from '../api-clerk';
 import { Search } from 'lucide-react';
 
 const API_BASE_URL = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '').trim();
-const PAGE_SIZE = 20; // Reduced for lazy loading
+const PAGE_SIZE = 100; // Show 100 jobs per page
 
 type JobWithExtras = JobType & {
   logoUrl?: string | null;
@@ -19,6 +19,8 @@ type JobWithExtras = JobType & {
   tags?: string[] | null;
   salaryRange?: string | null;
   remote?: boolean | null;
+  relevanceScore?: number;
+  scoreBreakdown?: Record<string, number>;
 };
 
 type SearchMeta = {
@@ -147,7 +149,7 @@ export default function FindJob() {
   const filteredJobs = useMemo(() => {
     let result = jobs;
 
-    // Filter for remote only if enabled
+    // Filter for remote only if enabled (client-side filter)
     if (remoteOnly) {
       result = result.filter(job => {
         const location = job.location?.toLowerCase() ?? '';
@@ -155,31 +157,11 @@ export default function FindJob() {
       });
     }
 
-    // Sort based on selected option
-    result = [...result].sort((a, b) => {
-      switch (sortBy) {
-        case 'recommended':
-          // Sort by relevance score (highest first)
-          const scoreA = a.relevanceScore ?? 0;
-          const scoreB = b.relevanceScore ?? 0;
-          return scoreB - scoreA;
-        case 'latest':
-          // Sort by posted date (newest first)
-          const dateA = a.postedDate ? new Date(a.postedDate).getTime() : 0;
-          const dateB = b.postedDate ? new Date(b.postedDate).getTime() : 0;
-          return dateB - dateA;
-        case 'salary':
-          // Sort by salary (highest first) - extract number from salary string
-          const salaryA = parseInt(a.salary?.replace(/[^0-9]/g, '') || '0') || 0;
-          const salaryB = parseInt(b.salary?.replace(/[^0-9]/g, '') || '0') || 0;
-          return salaryB - salaryA;
-        default:
-          return 0;
-      }
-    });
+    // Note: Sorting is now done by the backend via the 'sort' parameter
+    // No client-side sorting needed here
 
     return result;
-  }, [jobs, remoteOnly, sortBy]);
+  }, [jobs, remoteOnly]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -209,9 +191,11 @@ export default function FindJob() {
   }, [filteredJobs, selectedJob]);
 
   const fetchJobs = useCallback(
-    async ({ offset = 0, append = false, filters }: { offset?: number; append?: boolean; filters?: JobFilters } = {}) => {
+    async ({ offset = 0, append = false, filters, sort }: { offset?: number; append?: boolean; filters?: JobFilters; sort?: string } = {}) => {
       const requestId = ++requestIdRef.current;
-      setLoading(true);
+      if (!append) {
+        setLoading(true);
+      }
       setError('');
 
       try {
@@ -227,12 +211,15 @@ export default function FindJob() {
 
         // Use provided filters or fall back to activeFilters
         const filtersToUse = filters !== undefined ? filters : activeFilters;
+        // Use provided sort or fall back to sortBy state
+        const sortToUse = sort !== undefined ? sort : sortBy;
 
         // Build filter query params
         const filterParams = new URLSearchParams();
         filterParams.set('limit', String(PAGE_SIZE));
         filterParams.set('offset', String(offset));
         filterParams.set('personalized', 'true'); // Always show personalized/recommended jobs
+        filterParams.set('sort', sortToUse); // Pass sort parameter to backend
 
         // Add filter parameters
         if (filtersToUse.experienceLevel?.length) {
@@ -292,6 +279,7 @@ export default function FindJob() {
           willHave: append ? jobs.length + normalized.length : normalized.length
         });
 
+        // Update browse meta with correct offset
         setBrowseMeta({
           offset: offset,
           hasMore: Boolean(data.hasMore),
@@ -337,7 +325,7 @@ export default function FindJob() {
         }
       }
     },
-    [getToken, setSearchParams, activeFilters]
+    [getToken, setSearchParams, activeFilters, sortBy]
   );
 
   const runSearch = useCallback(
@@ -372,7 +360,7 @@ export default function FindJob() {
 
         // Use AI-powered search endpoint
         const searchUrl = buildUrl('/api/ai-search');
-        logger.debug('Making AI search request', { query: trimmedQuery, limit: PAGE_SIZE, offset });
+        logger.debug('Making AI search request', { query: trimmedQuery, limit: PAGE_SIZE, offset, sort: sortBy });
 
         const response = await fetch(searchUrl, {
           method: 'POST',
@@ -380,7 +368,8 @@ export default function FindJob() {
           body: JSON.stringify({
             query: trimmedQuery,
             limit: PAGE_SIZE,
-            offset: offset
+            offset: offset,
+            sort: sortBy  // Pass sort parameter to backend
           })
         });
 
@@ -455,7 +444,7 @@ export default function FindJob() {
         }
       }
     },
-    [getToken, setSearchParams, jobs.length]
+    [getToken, setSearchParams, jobs.length, sortBy]
   );
 
   useEffect(() => {
@@ -812,7 +801,18 @@ export default function FindJob() {
               <div className="relative">
                 <select
                   value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as 'recommended' | 'latest' | 'salary')}
+                  onChange={(e) => {
+                    const newSort = e.target.value as 'recommended' | 'latest' | 'salary';
+                    setSortBy(newSort);
+                    // Reset jobs and refetch with new sort order
+                    setJobs([]);
+                    setBrowseMeta({ offset: 0, hasMore: false, total: 0 });
+                    if (mode === 'search' && activeQuery) {
+                      runSearch(activeQuery, { offset: 0, append: false });
+                    } else {
+                      fetchJobs({ offset: 0, append: false, sort: newSort });
+                    }
+                  }}
                   className="appearance-none rounded-full px-[14px] py-[6px] pr-8 text-[13px] font-medium cursor-pointer transition border border-[rgba(12,19,16,0.12)] bg-white text-accent hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary/20"
                 >
                   <option value="recommended">Recommended</option>
@@ -916,106 +916,80 @@ export default function FindJob() {
             </div>
 
             {/* Pagination Controls */}
-            {!isInitialLoading && totalJobs > 0 && (
-              <div className="mt-8 mb-8">
-                {/* Job count and page info */}
+            {!isInitialLoading && totalJobs > 0 && totalPages > 1 && (
+              <div className="mt-6 mb-8">
+                {/* Job count info */}
                 <div className="text-center mb-4">
                   <p className="text-sm text-[var(--gray-600)]">
-                    Showing {((currentPage - 1) * PAGE_SIZE) + 1}-{Math.min(currentPage * PAGE_SIZE, totalJobs)} of {totalJobs} jobs
+                    Page {currentPage} of {totalPages} ({totalJobs} total jobs)
                   </p>
                 </div>
 
                 {/* Pagination buttons */}
-                {totalPages > 1 && (
-                  <div className="flex items-center justify-center gap-2 flex-wrap">
-                    {/* Previous button */}
-                    <button
-                      type="button"
-                      onClick={() => goToPage(currentPage - 1)}
-                      disabled={currentPage === 1 || loading}
-                      className="px-4 py-2 rounded-lg border border-[rgba(12,19,16,0.12)] bg-white text-accent font-medium cursor-pointer hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    >
-                      Previous
-                    </button>
+                <div className="flex items-center justify-center gap-2 flex-wrap">
+                  {/* Previous button */}
+                  <button
+                    type="button"
+                    onClick={() => goToPage(currentPage - 1)}
+                    disabled={currentPage === 1 || loading}
+                    className="px-4 py-2 rounded-lg border border-[rgba(12,19,16,0.12)] bg-white text-accent font-medium cursor-pointer hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Previous
+                  </button>
 
-                    {/* Page numbers */}
-                    <div className="flex items-center gap-1">
-                      {/* First page */}
-                      {currentPage > 3 && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => goToPage(1)}
-                            disabled={loading}
-                            className="w-10 h-10 rounded-lg border border-[rgba(12,19,16,0.12)] bg-white text-accent font-medium cursor-pointer hover:bg-gray-50 disabled:opacity-50 transition-colors"
-                          >
-                            1
-                          </button>
-                          {currentPage > 4 && <span className="px-2 text-[var(--gray-400)]">...</span>}
-                        </>
-                      )}
+                  {/* Page numbers */}
+                  {(() => {
+                    const pages: (number | string)[] = [];
+                    const maxVisible = 7;
 
-                      {/* Page numbers around current */}
-                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                        let pageNum: number;
-                        if (totalPages <= 5) {
-                          pageNum = i + 1;
-                        } else if (currentPage <= 3) {
-                          pageNum = i + 1;
-                        } else if (currentPage >= totalPages - 2) {
-                          pageNum = totalPages - 4 + i;
-                        } else {
-                          pageNum = currentPage - 2 + i;
-                        }
+                    if (totalPages <= maxVisible) {
+                      for (let i = 1; i <= totalPages; i++) pages.push(i);
+                    } else {
+                      pages.push(1);
 
-                        if (pageNum < 1 || pageNum > totalPages) return null;
-                        if (currentPage > 3 && pageNum === 1) return null;
-                        if (currentPage < totalPages - 2 && pageNum === totalPages) return null;
+                      if (currentPage > 3) pages.push('...');
 
-                        return (
-                          <button
-                            key={pageNum}
-                            type="button"
-                            onClick={() => goToPage(pageNum)}
-                            disabled={loading}
-                            className={`w-10 h-10 rounded-lg font-medium cursor-pointer transition-colors disabled:opacity-50 ${
-                              currentPage === pageNum
-                                ? 'bg-primary text-white border border-primary'
-                                : 'border border-[rgba(12,19,16,0.12)] bg-white text-accent hover:bg-gray-50'
-                            }`}
-                          >
-                            {pageNum}
-                          </button>
-                        );
-                      })}
+                      const start = Math.max(2, currentPage - 1);
+                      const end = Math.min(totalPages - 1, currentPage + 1);
 
-                      {/* Last page */}
-                      {currentPage < totalPages - 2 && totalPages > 5 && (
-                        <>
-                          {currentPage < totalPages - 3 && <span className="px-2 text-[var(--gray-400)]">...</span>}
-                          <button
-                            type="button"
-                            onClick={() => goToPage(totalPages)}
-                            disabled={loading}
-                            className="w-10 h-10 rounded-lg border border-[rgba(12,19,16,0.12)] bg-white text-accent font-medium cursor-pointer hover:bg-gray-50 disabled:opacity-50 transition-colors"
-                          >
-                            {totalPages}
-                          </button>
-                        </>
-                      )}
-                    </div>
+                      for (let i = start; i <= end; i++) pages.push(i);
 
-                    {/* Next button */}
-                    <button
-                      type="button"
-                      onClick={() => goToPage(currentPage + 1)}
-                      disabled={currentPage === totalPages || loading}
-                      className="px-4 py-2 rounded-lg border border-[rgba(12,19,16,0.12)] bg-white text-accent font-medium cursor-pointer hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    >
-                      Next
-                    </button>
-                  </div>
-                )}
+                      if (currentPage < totalPages - 2) pages.push('...');
+
+                      pages.push(totalPages);
+                    }
+
+                    return pages.map((page, idx) => (
+                      typeof page === 'string' ? (
+                        <span key={`ellipsis-${idx}`} className="px-2 text-gray-400">...</span>
+                      ) : (
+                        <button
+                          key={page}
+                          type="button"
+                          onClick={() => goToPage(page)}
+                          disabled={loading}
+                          className={`w-10 h-10 rounded-lg font-medium transition-colors ${
+                            page === currentPage
+                              ? 'bg-primary text-white'
+                              : 'border border-[rgba(12,19,16,0.12)] bg-white text-accent hover:bg-gray-50'
+                          } disabled:opacity-50 disabled:cursor-not-allowed`}
+                        >
+                          {page}
+                        </button>
+                      )
+                    ));
+                  })()}
+
+                  {/* Next button */}
+                  <button
+                    type="button"
+                    onClick={() => goToPage(currentPage + 1)}
+                    disabled={currentPage === totalPages || loading}
+                    className="px-4 py-2 rounded-lg border border-[rgba(12,19,16,0.12)] bg-white text-accent font-medium cursor-pointer hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Next
+                  </button>
+                </div>
               </div>
             )}
 

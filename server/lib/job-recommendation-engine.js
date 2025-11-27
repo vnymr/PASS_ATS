@@ -22,14 +22,14 @@ class JobRecommendationEngine {
     // Weight factors for ranking (ATS best practices + LinkedIn/Indeed research 2024-2025)
     // 99.7% of recruiters use keyword filters, LinkedIn uses GBDT with contextual features
     this.weights = {
-      keywordMatch: 0.30,           // Primary factor (99.7% of recruiters use this)
-      requiredSkillsMatch: 0.25,    // Must-haves are critical (Boolean logic)
-      preferredSkillsMatch: 0.10,   // Nice-to-haves boost score
-      experienceMatch: 0.15,        // Experience level + years
+      keywordMatch: 0.25,           // Primary factor (99.7% of recruiters use this)
+      requiredSkillsMatch: 0.20,    // Must-haves are critical (Boolean logic)
+      preferredSkillsMatch: 0.08,   // Nice-to-haves boost score
+      experienceMatch: 0.25,        // Experience level + years - CRITICAL for matching
       descriptionSimilarity: 0.05,  // Contextual similarity
       locationMatch: 0.08,          // Location preference
       recencyBoost: 0.04,           // Newer jobs preferred
-      userInteractions: 0.03        // Engagement signals (clicks, saves, applications)
+      userInteractions: 0.05        // Engagement signals (clicks, saves, applications)
     };
 
     // User interaction decay (interactions lose weight over time)
@@ -333,14 +333,15 @@ class JobRecommendationEngine {
       // If we have very few relevant jobs, lower the threshold but show what we have
       // This ensures users always see some results
       if (relevantJobs.length < 10) {
-        // Show top jobs regardless of threshold, but at least 10 or all available
-        relevantJobs = scoredJobs.slice(0, Math.max(10, limit));
+        // Show all scored jobs to enable proper pagination
+        // Don't limit here - let pagination handle the slicing
+        relevantJobs = scoredJobs;
         logger.info({
           userId,
           relevantCount: relevantJobs.length,
           threshold: MIN_RELEVANCE_THRESHOLD,
           topScore: scoredJobs[0]?.relevanceScore
-        }, 'Few relevant jobs found, showing top matches');
+        }, 'Few relevant jobs found, showing all matches');
       }
 
       // Log matching stats for debugging
@@ -392,8 +393,11 @@ class JobRecommendationEngine {
       : 0.5; // Neutral if no preferred skills
 
     // 4. Experience matching - enhanced with total years
+    // Combine extractedExperience with job description/requirements for better extraction
+    const jobExperienceText = job.extractedExperience ||
+      `${job.description || ''} ${job.requirements || ''}`;
     const experienceScore = this.calculateExperienceMatchEnhanced(
-      job.extractedExperience,
+      jobExperienceText,
       userProfile.experience,
       userProfile.totalYears || 0
     );
@@ -583,7 +587,7 @@ class JobRecommendationEngine {
         ? this.calculatePreferredSkillsMatch(job, preferredSkills)
         : 0.5,
       experienceMatch: this.calculateExperienceMatchEnhanced(
-        job.extractedExperience,
+        job.extractedExperience || `${job.description || ''} ${job.requirements || ''}`,
         userProfile.experience,
         userProfile.totalYears || 0
       ),
@@ -663,8 +667,11 @@ class JobRecommendationEngine {
 
   /**
    * Calculate required skills match (Boolean AND logic)
-   * Checks if user has skills that match job requirements
+   * Checks if user skills appear in job requirements
    * Uses comprehensive skill extraction from user profile
+   *
+   * NEW: When jobs don't have pre-extracted skills (most cases),
+   * we scan the job description for user skills instead.
    */
   calculateRequiredSkillsMatch(job, userSkills) {
     if (!userSkills || userSkills.length === 0) {
@@ -678,41 +685,86 @@ class JobRecommendationEngine {
     // Combine all job skill indicators
     const allJobSkills = [...jobSkills, ...jobKeywords];
 
-    let matchCount = 0;
-    let totalJobSkills = Math.max(allJobSkills.length, 1);
+    // If job has pre-extracted skills, use the original approach
+    if (allJobSkills.length > 0) {
+      let matchCount = 0;
+      let totalJobSkills = allJobSkills.length;
 
-    // For each job skill, check if user has it
-    allJobSkills.forEach(jobSkill => {
-      const synonyms = this.getSkillSynonyms(jobSkill);
-      const allVariants = [jobSkill, ...synonyms];
+      // For each job skill, check if user has it
+      allJobSkills.forEach(jobSkill => {
+        const synonyms = this.getSkillSynonyms(jobSkill);
+        const allVariants = [jobSkill, ...synonyms];
 
-      // Check if user has this skill (with variations)
-      const userHasSkill = userSkills.some(userSkill => {
-        const userSkillLower = userSkill.toLowerCase();
-        const userSynonyms = this.getSkillSynonyms(userSkillLower);
+        // Check if user has this skill (with variations)
+        const userHasSkill = userSkills.some(userSkill => {
+          const userSkillLower = userSkill.toLowerCase();
+          const userSynonyms = this.getSkillSynonyms(userSkillLower);
 
-        return allVariants.some(variant =>
-          userSkillLower === variant ||
-          userSynonyms.includes(variant) ||
-          variant.includes(userSkillLower) ||
-          userSkillLower.includes(variant)
-        );
+          return allVariants.some(variant =>
+            userSkillLower === variant ||
+            userSynonyms.includes(variant) ||
+            variant.includes(userSkillLower) ||
+            userSkillLower.includes(variant)
+          );
+        });
+
+        if (userHasSkill) {
+          matchCount++;
+        }
       });
 
-      if (userHasSkill) {
-        matchCount++;
+      const matchRatio = matchCount / totalJobSkills;
+      if (matchRatio > 0.7) {
+        return Math.min(matchRatio + 0.2, 1.0);
       }
-    });
-
-    // Score based on how many job requirements user meets
-    const matchRatio = matchCount / totalJobSkills;
-
-    // Boost score if user has many of the required skills
-    if (matchRatio > 0.7) {
-      return Math.min(matchRatio + 0.2, 1.0); // Strong match bonus
+      return matchRatio;
     }
 
-    return matchRatio;
+    // FALLBACK: Job has no pre-extracted skills
+    // Scan job description for user skills instead
+    let matchCount = 0;
+    let checkedSkills = 0;
+    const matchedSkills = [];
+
+    userSkills.forEach(userSkill => {
+      const skillLower = userSkill.toLowerCase();
+      const synonyms = this.getSkillSynonyms(skillLower);
+      const allVariants = [skillLower, ...synonyms];
+
+      // Check if any variant of this skill appears in job text
+      const skillFound = allVariants.some(variant => {
+        // Use word boundary matching for short skills to avoid false positives
+        if (variant.length <= 3) {
+          // For short skills like "sql", "aws", use stricter matching
+          const regex = new RegExp(`\\b${variant}\\b`, 'i');
+          return regex.test(jobText);
+        }
+        return jobText.includes(variant);
+      });
+
+      if (skillFound) {
+        matchCount++;
+        matchedSkills.push(userSkill);
+      }
+      checkedSkills++;
+    });
+
+    // Calculate score based on how many user skills appear in job
+    // We want a good differentiation between jobs
+    const matchRatio = matchCount / Math.max(checkedSkills, 1);
+
+    // Apply scoring tiers for better differentiation
+    if (matchCount >= 8) {
+      return Math.min(0.95, matchRatio + 0.3); // Excellent match (8+ skills)
+    } else if (matchCount >= 5) {
+      return Math.min(0.85, matchRatio + 0.2); // Good match (5-7 skills)
+    } else if (matchCount >= 3) {
+      return Math.min(0.70, matchRatio + 0.1); // Decent match (3-4 skills)
+    } else if (matchCount >= 1) {
+      return Math.min(0.50, matchRatio); // Some match (1-2 skills)
+    }
+
+    return 0.1; // No skill match at all
   }
 
   /**
@@ -890,46 +942,72 @@ class JobRecommendationEngine {
    * Enhanced experience matching that considers both level and years
    */
   calculateExperienceMatchEnhanced(jobExperience, userExperience, userTotalYears) {
-    if (!jobExperience || !userExperience) {
-      return 0.5; // Neutral if unknown
-    }
+    // Extract years from job - try multiple patterns
+    let jobMinYears = 0;
+    const jobExpText = (jobExperience || '').toLowerCase();
 
-    // 1. Level-based matching
-    const levelScore = this.calculateExperienceMatch(jobExperience, userExperience);
+    // Pattern: "10+ years", "10 years", "10-15 years"
+    const patterns = [
+      /(\d+)\s*\+\s*years?/i,
+      /(\d+)\s*-\s*\d+\s*years?/i,
+      /(\d+)\s*years?/i,
+      /minimum\s*(\d+)\s*years?/i,
+      /at\s*least\s*(\d+)\s*years?/i
+    ];
 
-    // 2. Years-based matching
-    // Extract years from job requirement (e.g., "3+ years", "5-7 years")
-    const jobYearsMatch = jobExperience.match(/(\d+)\s*\+?\s*years?/i);
-    let yearsScore = 0.5; // Default neutral
-
-    if (jobYearsMatch && userTotalYears > 0) {
-      const jobMinYears = parseInt(jobYearsMatch[1]);
-
-      // User has exact or more years than required = perfect
-      if (userTotalYears >= jobMinYears) {
-        yearsScore = 1.0;
-      }
-      // User has 80% of required years = good match
-      else if (userTotalYears >= jobMinYears * 0.8) {
-        yearsScore = 0.8;
-      }
-      // User has 60% of required years = acceptable
-      else if (userTotalYears >= jobMinYears * 0.6) {
-        yearsScore = 0.6;
-      }
-      // User has less than 60% = lower score
-      else {
-        yearsScore = 0.3;
-      }
-
-      // Bonus if user is overqualified (but not too much to avoid overqualification penalty)
-      if (userTotalYears > jobMinYears && userTotalYears <= jobMinYears * 1.5) {
-        yearsScore = Math.min(yearsScore + 0.1, 1.0);
+    for (const pattern of patterns) {
+      const match = jobExpText.match(pattern);
+      if (match) {
+        jobMinYears = parseInt(match[1]);
+        break;
       }
     }
 
-    // Combine level score (60%) and years score (40%)
-    return (levelScore * 0.6) + (yearsScore * 0.4);
+    // If no years requirement found, use neutral score
+    if (jobMinYears === 0) {
+      return 0.6; // Slightly positive if no experience requirement
+    }
+
+    // If user has no experience data, be conservative
+    if (!userTotalYears || userTotalYears === 0) {
+      // Assume entry-level (1-2 years) if no data
+      userTotalYears = 1;
+    }
+
+    // Calculate experience gap
+    const experienceRatio = userTotalYears / jobMinYears;
+    let yearsScore;
+
+    if (experienceRatio >= 1.0) {
+      // User meets or exceeds requirement
+      yearsScore = 1.0;
+      // Slight penalty for being WAY overqualified (might get rejected)
+      if (experienceRatio > 2.0) {
+        yearsScore = 0.85;
+      }
+    } else if (experienceRatio >= 0.75) {
+      // User has 75%+ of required experience - reasonable stretch
+      yearsScore = 0.80;
+    } else if (experienceRatio >= 0.5) {
+      // User has 50-75% of required experience - significant stretch
+      yearsScore = 0.50;
+    } else if (experienceRatio >= 0.3) {
+      // User has 30-50% of required experience - unlikely match
+      yearsScore = 0.25;
+    } else {
+      // User has <30% of required experience - very poor match
+      // 2 years user for 10 year job = 0.2 ratio = 0.10 score
+      yearsScore = 0.10;
+    }
+
+    // Also factor in seniority level matching if available
+    let levelScore = 0.5;
+    if (userExperience) {
+      levelScore = this.calculateExperienceMatch(jobExperience, userExperience);
+    }
+
+    // Weight years score more heavily (70%) since it's more concrete
+    return (yearsScore * 0.70) + (levelScore * 0.30);
   }
 
   extractExperienceLevel(experienceText, levels) {
