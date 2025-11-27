@@ -95,7 +95,7 @@ export function sanitizeProfileData(data) {
   }));
 
   // Remove duplicate skills
-  sanitized.skills = [...new Set(sanitized.skills.map(s => s?.trim()).filter(s => s))];
+  sanitized.skills = dedupeSkills(sanitized.skills);
 
   // Sanitize education
   sanitized.education = sanitized.education.map(edu => ({
@@ -162,7 +162,7 @@ export function hasMinimumData(data) {
     (data.projects && data.projects.length > 0)
   );
 
-  return hasBasicInfo && hasContent;
+  return !!(hasBasicInfo && hasContent);
 }
 
 /**
