@@ -424,7 +424,7 @@ export async function processAutoApplyDirect({ applicationId, jobUrl, atsType, u
           verificationResult = await pollForVerification(userId, {
             maxWaitMs: 90000, // 1.5 minutes max
             pollIntervalMs: 8000, // Every 8 seconds
-            companyName: job.company
+            companyName: aggregatedJob.company
           });
 
           if (verificationResult.found && verificationResult.code) {
