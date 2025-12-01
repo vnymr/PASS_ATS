@@ -12,7 +12,8 @@ import {
   createStealthContext,
   createStealthContextCamoufox,
   applyStealthToPage,
-  proxyRotator
+  proxyRotator,
+  simulateHumanBrowsing
 } from './browser-launcher.js';
 import { processResumeJob } from './job-processor.js';
 import {
@@ -334,8 +335,16 @@ export async function processAutoApplyDirect({ applicationId, jobUrl, atsType, u
       timeout: 30000
     });
 
-    // Human-like delay
-    const randomDelay = Math.floor(Math.random() * 2000) + 2000;
+    // Simulate human browsing behavior (mouse movements, scrolling) to evade bot detection
+    logger.info('🤖 Simulating human browsing behavior...');
+    try {
+      await simulateHumanBrowsing(page);
+    } catch (e) {
+      logger.debug({ error: e.message }, 'Human browsing simulation failed, continuing...');
+    }
+
+    // Additional human-like delay
+    const randomDelay = Math.floor(Math.random() * 1500) + 1500;
     await new Promise(resolve => setTimeout(resolve, randomDelay));
 
     // Prepare user profile for form filling

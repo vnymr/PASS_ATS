@@ -11,6 +11,7 @@ import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import logger from './logger.js';
 import { execSync } from 'child_process';
 import proxyRotator from './proxy-rotator.js';
+import { createCursor, ghostClick, ghostType, simulateHumanBrowsing } from './ghost-cursor-playwright.js';
 
 // Add stealth plugin to playwright-extra
 chromium.use(StealthPlugin());
@@ -1328,6 +1329,9 @@ export async function simulateHumanPageVisit(page, options = {}) {
 // Re-export proxy rotator for convenience
 export { default as proxyRotator } from './proxy-rotator.js';
 
+// Re-export ghost cursor functions for convenience
+export { createCursor, ghostClick, ghostType, simulateHumanBrowsing } from './ghost-cursor-playwright.js';
+
 export default {
   launchBrowser,
   launchStealthBrowser,
@@ -1343,5 +1347,10 @@ export default {
   randomMouseJiggles,
   humanType,
   simulateHumanPageVisit,
-  proxyRotator
+  proxyRotator,
+  // Ghost cursor exports
+  createCursor,
+  ghostClick,
+  ghostType,
+  simulateHumanBrowsing
 };

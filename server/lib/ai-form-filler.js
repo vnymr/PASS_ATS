@@ -1,6 +1,7 @@
 /**
  * AI Form Filler
  * Intelligently fills forms using AI-generated responses with error recovery
+ * ENHANCED: Ghost cursor integration for human-like mouse movements
  */
 
 import logger from './logger.js';
@@ -8,9 +9,10 @@ import AIFormExtractor from './ai-form-extractor.js';
 import AIFormIntelligence from './ai-form-intelligence.js';
 import AILearningSystem from './ai-learning-system.js';
 import CaptchaSolver from './captcha-solver.js';
+import { createCursor, simulateHumanBrowsing } from './ghost-cursor-playwright.js';
 
 class AIFormFiller {
-  constructor() {
+  constructor(options = {}) {
     this.extractor = new AIFormExtractor();
     this.intelligence = new AIFormIntelligence();
     this.learningSystem = new AILearningSystem();
@@ -18,6 +20,26 @@ class AIFormFiller {
 
     this.maxRetries = 3;
     this.typingDelay = 50; // ms between keystrokes for natural typing
+
+    // Ghost cursor mode for human-like mouse movements (improved bot detection evasion)
+    this.useGhostCursor = options.useGhostCursor !== false; // Enabled by default
+    this.ghostCursors = new WeakMap(); // Cache cursors per page
+  }
+
+  /**
+   * Get or create ghost cursor for a page
+   * @param {Page} page - Playwright page
+   * @returns {Object} Ghost cursor controller
+   */
+  getGhostCursor(page) {
+    if (!this.ghostCursors.has(page)) {
+      const cursor = createCursor(page, {
+        moveSpeed: 0.8, // Slightly slower for more natural movement
+        overshootSpread: 8
+      });
+      this.ghostCursors.set(page, cursor);
+    }
+    return this.ghostCursors.get(page);
   }
 
   /**
@@ -699,6 +721,7 @@ class AIFormFiller {
 
   /**
    * Fill text input with human-like typing
+   * ENHANCED: Uses ghost cursor for human-like mouse movements
    */
   async fillTextInput(page, selector, text) {
     // Add human-like "reading time" before filling important fields
@@ -707,6 +730,24 @@ class AIFormFiller {
         fieldName.includes('location') || fieldName.includes('name')) {
       // Simulate reading the field label (500ms - 1.5s)
       await this.sleep(500 + Math.random() * 1000);
+    }
+
+    // Use ghost cursor for human-like click if enabled
+    if (this.useGhostCursor) {
+      try {
+        const cursor = this.getGhostCursor(page);
+        // Move to and click the field with human-like behavior
+        await cursor.click(selector);
+        await this.sleep(50 + Math.random() * 100);
+      } catch (e) {
+        // Fallback to regular click if ghost cursor fails
+        logger.debug({ selector, error: e.message }, 'Ghost cursor click failed, using fallback');
+        try {
+          await page.click(selector, { timeout: 3000 });
+        } catch (clickErr) {
+          // Continue anyway, fill might still work
+        }
+      }
     }
 
     // Use Playwright's native fill method - properly triggers React/Vue change detection
@@ -763,17 +804,32 @@ class AIFormFiller {
    * Fill custom dropdown (Greenhouse, Lever, modern job boards)
    * These use React-select style components - uses type + keyboard method
    * Based on Playwright best practices for react-select
+   * ENHANCED: Uses ghost cursor for human-like mouse movements
    */
   async fillCustomDropdown(page, selector, value, field) {
     logger.debug({ value, fieldName: field.name }, 'Filling custom dropdown (react-select style)');
+
+    // Helper function for clicking with ghost cursor fallback
+    const humanClick = async (sel, timeout = 5000) => {
+      if (this.useGhostCursor) {
+        try {
+          const cursor = this.getGhostCursor(page);
+          await cursor.click(sel);
+          return;
+        } catch (e) {
+          logger.debug({ sel, error: e.message }, 'Ghost cursor click failed for dropdown');
+        }
+      }
+      await page.click(sel, { timeout });
+    };
 
     try {
       // Method 1: Type to search + Tab/Enter (works for most Greenhouse/Lever dropdowns)
       try {
         logger.debug({ selector }, 'Attempting dropdown via type + keyboard method');
 
-        // Click the dropdown to open it
-        await page.click(selector, { timeout: 5000 });
+        // Click the dropdown to open it with human-like movement
+        await humanClick(selector, 5000);
         await this.sleep(200);
 
         // Type the value (react-select has built-in search/filter)
@@ -794,8 +850,8 @@ class AIFormFiller {
       // Method 2: Click dropdown, wait for options, click specific option
       logger.debug('Attempting dropdown via click + wait + click option method');
 
-      // Click to open
-      await page.click(selector, { timeout: 5000 });
+      // Click to open with human-like movement
+      await humanClick(selector, 5000);
       await this.sleep(300);
 
       // Try to find option by text using different selectors
@@ -808,7 +864,7 @@ class AIFormFiller {
 
       for (const optionSelector of optionSelectors) {
         try {
-          await page.click(optionSelector, { timeout: 2000 });
+          await humanClick(optionSelector, 2000);
           logger.debug({ value, optionSelector }, 'Custom dropdown option clicked');
           await this.sleep(200);
           return { success: true, matched: value, value: value };
@@ -819,7 +875,7 @@ class AIFormFiller {
 
       // Method 3: Keyboard navigation fallback
       logger.debug('Attempting dropdown via keyboard navigation');
-      await page.click(selector);
+      await humanClick(selector, 5000);
       await this.sleep(200);
 
       // Type a few characters to filter, then use arrow down + enter
