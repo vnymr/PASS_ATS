@@ -12,11 +12,13 @@ const prisma = new PrismaClient();
 
 // Known job application senders and their domains
 export const KNOWN_JOB_SENDERS = [
-  // ATS Platforms
+  // ATS Platforms (including mail subdomains)
   'greenhouse.io',
+  'greenhouse-mail.io',  // Greenhouse verification emails
   'lever.co',
   'workday.com',
   'ashbyhq.com',
+  'ashby-mail.io',  // Ashby verification emails
   'smartrecruiters.com',
   'icims.com',
   'jobvite.com',
@@ -110,8 +112,8 @@ function buildSearchQuery(options = {}) {
     .map(s => `from:${s}`)
     .join(' OR ');
 
-  // Combine filters
-  return `after:${afterTimestamp} is:unread (${senderFilter})`;
+  // Combine filters (removed is:unread to catch emails that may have been auto-read)
+  return `after:${afterTimestamp} (${senderFilter})`;
 }
 
 /**
