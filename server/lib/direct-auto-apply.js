@@ -261,30 +261,10 @@ export async function processAutoApplyDirect({ applicationId, jobUrl, atsType, u
 
     const aggregatedJob = autoApplication.job;
 
-    // Smart resume selection: find relevant existing resume or generate new tailored one
-    logger.info({
-      applicationId,
-      company: aggregatedJob.company,
-      title: aggregatedJob.title
-    }, '🔍 Getting tailored resume for job');
-
-    const resumeResult = await getOrGenerateTailoredResume(user.id, aggregatedJob, profileData);
-
-    if (!resumeResult) {
-      throw new Error('No resume found - please upload a resume or complete your profile to generate one');
-    }
-
-    const { pdfContent, filename, source: resumeSource } = resumeResult;
-    logger.info({
-      applicationId,
-      filename,
-      resumeSource
-    }, '📄 Resume ready for application');
-
-    // Launch browser using centralized launcher (handles Camoufox → Browserless → Local fallback)
-    logger.info('🚀 Launching stealth browser via centralized launcher...');
-    browser = await launchStealthBrowser({ headless: false });
-    logger.info('✅ Stealth browser launched successfully');
+    // Import fs modules early
+    const fs = await import('fs');
+    const path = await import('path');
+    const os = await import('os');
 
     // Extract job board domain for proxy selection
     const jobBoardDomain = new URL(jobUrl).hostname;
@@ -294,31 +274,86 @@ export async function processAutoApplyDirect({ applicationId, jobUrl, atsType, u
       ? parseInt(applicationId.replace(/\D/g, '').slice(0, 8) || '12345', 10)
       : Math.floor(Math.random() * 1000000);
 
-    // Create stealth context with proxy rotation
-    // Use Camoufox context if available, otherwise standard context
     const useCamoufox = process.env.USE_CAMOUFOX === 'true';
-    const context = useCamoufox
-      ? await createStealthContextCamoufox(browser, { applicationId, jobBoardDomain, sessionSeed })
-      : await createStealthContext(browser, { applicationId, jobBoardDomain, sessionSeed });
+
+    // ============================================================
+    // PARALLEL EXECUTION: Resume generation + Browser launch/navigate
+    // This saves ~30 seconds by not waiting for resume before browser
+    // ============================================================
+    logger.info({
+      applicationId,
+      company: aggregatedJob.company,
+      title: aggregatedJob.title
+    }, '🚀 Starting parallel: resume generation + browser launch');
+
+    // Task 1: Resume generation (can take 30s)
+    const resumePromise = (async () => {
+      logger.info('🔍 [PARALLEL] Getting tailored resume for job...');
+      const result = await getOrGenerateTailoredResume(user.id, aggregatedJob, profileData);
+      if (!result) {
+        throw new Error('No resume found - please upload a resume or complete your profile to generate one');
+      }
+      logger.info({ source: result.source }, '✅ [PARALLEL] Resume ready');
+      return result;
+    })();
+
+    // Task 2: Browser launch + navigate to job page
+    const browserPromise = (async () => {
+      logger.info('🚀 [PARALLEL] Launching stealth browser...');
+      const launchedBrowser = await launchStealthBrowser({ headless: false });
+      logger.info('✅ [PARALLEL] Browser launched');
+
+      // Create context
+      const context = useCamoufox
+        ? await createStealthContextCamoufox(launchedBrowser, { applicationId, jobBoardDomain, sessionSeed })
+        : await createStealthContext(launchedBrowser, { applicationId, jobBoardDomain, sessionSeed });
+
+      logger.info({
+        jobBoardDomain,
+        useCamoufox,
+        sessionSeed
+      }, '🔗 [PARALLEL] Browser context created');
+
+      const newPage = await context.newPage();
+      await applyStealthToPage(newPage, { sessionSeed });
+
+      // Navigate to job page (80 second timeout as requested)
+      logger.info(`📄 [PARALLEL] Navigating to ${jobUrl}...`);
+      await newPage.goto(jobUrl, {
+        waitUntil: 'domcontentloaded',
+        timeout: 80000  // 1 minute 20 seconds
+      });
+
+      // Wait for page to be visually ready
+      try {
+        await newPage.waitForLoadState('load', { timeout: 20000 });
+      } catch (e) {
+        logger.debug('Load state timeout - continuing anyway');
+      }
+
+      // Wait for dynamic content
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      logger.info('✅ [PARALLEL] Page loaded and ready');
+      return { browser: launchedBrowser, page: newPage, context };
+    })();
+
+    // Wait for both tasks to complete
+    const [resumeResult, browserResult] = await Promise.all([resumePromise, browserPromise]);
+
+    // Extract results
+    const { pdfContent, filename, source: resumeSource } = resumeResult;
+    browser = browserResult.browser;
+    const page = browserResult.page;
 
     logger.info({
       applicationId,
-      jobBoardDomain,
-      proxyEnabled: proxyRotator.isConfigured(),
-      useCamoufox,
-      sessionSeed
-    }, '🔗 Browser context created with proxy rotation');
-
-    const page = await context.newPage();
-
-    // Apply additional stealth techniques to the page (with matching sessionSeed)
-    await applyStealthToPage(page, { sessionSeed });
+      filename,
+      resumeSource,
+      useCamoufox
+    }, '✅ Parallel tasks complete - resume + browser ready');
 
     // Save PDF to temp file
-    const fs = await import('fs');
-    const path = await import('path');
-    const os = await import('os');
-
     const tempDir = path.join(os.tmpdir(), 'resume-auto-apply');
     if (!fs.existsSync(tempDir)) {
       fs.mkdirSync(tempDir, { recursive: true });
@@ -326,26 +361,7 @@ export async function processAutoApplyDirect({ applicationId, jobUrl, atsType, u
 
     resumePath = path.join(tempDir, filename);
     fs.writeFileSync(resumePath, pdfContent);
-    logger.info({ resumePath }, '📄 Resume file ready');
-
-    // Navigate to job application page
-    // Use 'domcontentloaded' instead of 'networkidle' - many job sites have persistent
-    // connections (analytics, websockets) that prevent networkidle from ever firing
-    logger.info(`📄 Navigating to ${jobUrl}...`);
-    await page.goto(jobUrl, {
-      waitUntil: 'domcontentloaded',
-      timeout: 45000
-    });
-
-    // Wait for page to be visually ready (key elements loaded)
-    try {
-      await page.waitForLoadState('load', { timeout: 15000 });
-    } catch (e) {
-      logger.debug('Load state timeout - continuing anyway');
-    }
-
-    // Extra wait for dynamic content to render (React/Vue/Angular apps)
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    logger.info({ resumePath }, '📄 Resume file saved');
 
     // Simulate human browsing behavior - SKIP for Camoufox (remote Firefox has mouse issues)
     // See: https://github.com/microsoft/playwright/issues/9354
