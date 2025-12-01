@@ -443,37 +443,65 @@ export async function ghostType(page, selector, text, options = {}) {
 
 /**
  * Simulate human browsing behavior on a page
+ * With timeout protection to prevent hanging on remote browsers
  * @param {Page} page - Playwright page
  * @param {Object} options - Behavior options
  */
 export async function simulateHumanBrowsing(page, options = {}) {
-  const cursor = createCursor(page, options);
+  const timeout = options.timeout || 10000; // 10 second max
 
-  logger.info('Simulating human browsing behavior...');
+  // Wrap entire simulation in a timeout
+  const simulationPromise = (async () => {
+    try {
+      logger.info('Simulating human browsing behavior...');
 
-  // Initial page load behavior
-  await new Promise(r => setTimeout(r, 500 + Math.random() * 1000));
+      // Simple approach: just do a few basic mouse moves and scroll
+      // Avoid complex Bezier curves on remote browsers which can hang
 
-  // Random mouse movements (reading the page)
-  for (let i = 0; i < 3; i++) {
-    const randomX = 100 + Math.random() * 1720;
-    const randomY = 100 + Math.random() * 880;
-    await cursor.moveTo({ x: randomX, y: randomY }, { overshoot: false });
-    await new Promise(r => setTimeout(r, 500 + Math.random() * 1000));
+      // Initial pause
+      await new Promise(r => setTimeout(r, 500 + Math.random() * 500));
+
+      // Simple mouse movements using page.mouse directly (more reliable on remote)
+      for (let i = 0; i < 2; i++) {
+        const randomX = 200 + Math.random() * 1500;
+        const randomY = 200 + Math.random() * 600;
+        try {
+          await page.mouse.move(randomX, randomY, { steps: 5 });
+        } catch (e) {
+          logger.debug({ error: e.message }, 'Mouse move failed, continuing...');
+        }
+        await new Promise(r => setTimeout(r, 300 + Math.random() * 500));
+      }
+
+      // Simple scroll
+      try {
+        await page.evaluate(() => {
+          window.scrollBy({ top: 300, behavior: 'smooth' });
+        });
+      } catch (e) {
+        logger.debug({ error: e.message }, 'Scroll failed, continuing...');
+      }
+
+      await new Promise(r => setTimeout(r, 500 + Math.random() * 500));
+
+      logger.info('Human browsing simulation complete');
+    } catch (error) {
+      logger.warn({ error: error.message }, 'Human browsing simulation failed');
+      // Don't throw - just continue with form filling
+    }
+  })();
+
+  // Race against timeout
+  const timeoutPromise = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error('Human browsing simulation timed out')), timeout)
+  );
+
+  try {
+    await Promise.race([simulationPromise, timeoutPromise]);
+  } catch (error) {
+    logger.warn({ error: error.message }, 'Human browsing simulation skipped due to timeout');
+    // Don't throw - let the auto-apply continue
   }
-
-  // Scroll down
-  await cursor.scroll({ direction: 'down', amount: 300 + Math.random() * 300 });
-
-  // More random movements
-  for (let i = 0; i < 2; i++) {
-    const randomX = 100 + Math.random() * 1720;
-    const randomY = 200 + Math.random() * 700;
-    await cursor.moveTo({ x: randomX, y: randomY }, { overshoot: false });
-    await new Promise(r => setTimeout(r, 300 + Math.random() * 700));
-  }
-
-  logger.info('Human browsing simulation complete');
 }
 
 export default {

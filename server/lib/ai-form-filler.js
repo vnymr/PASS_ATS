@@ -732,15 +732,18 @@ class AIFormFiller {
       await this.sleep(500 + Math.random() * 1000);
     }
 
-    // Use ghost cursor for human-like click if enabled
+    // Use ghost cursor for human-like click if enabled (with timeout protection)
     if (this.useGhostCursor) {
       try {
         const cursor = this.getGhostCursor(page);
-        // Move to and click the field with human-like behavior
-        await cursor.click(selector);
+        // Move to and click the field with human-like behavior (5s timeout)
+        await Promise.race([
+          cursor.click(selector),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Ghost cursor timeout')), 5000))
+        ]);
         await this.sleep(50 + Math.random() * 100);
       } catch (e) {
-        // Fallback to regular click if ghost cursor fails
+        // Fallback to regular click if ghost cursor fails or times out
         logger.debug({ selector, error: e.message }, 'Ghost cursor click failed, using fallback');
         try {
           await page.click(selector, { timeout: 3000 });
@@ -809,18 +812,22 @@ class AIFormFiller {
   async fillCustomDropdown(page, selector, value, field) {
     logger.debug({ value, fieldName: field.name }, 'Filling custom dropdown (react-select style)');
 
-    // Helper function for clicking with ghost cursor fallback
-    const humanClick = async (sel, timeout = 5000) => {
+    // Helper function for clicking with ghost cursor fallback (with timeout protection)
+    const humanClick = async (sel, clickTimeout = 5000) => {
       if (this.useGhostCursor) {
         try {
           const cursor = this.getGhostCursor(page);
-          await cursor.click(sel);
+          // Add timeout to ghost cursor click
+          await Promise.race([
+            cursor.click(sel),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Ghost cursor timeout')), 3000))
+          ]);
           return;
         } catch (e) {
           logger.debug({ sel, error: e.message }, 'Ghost cursor click failed for dropdown');
         }
       }
-      await page.click(sel, { timeout });
+      await page.click(sel, { timeout: clickTimeout });
     };
 
     try {
