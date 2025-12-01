@@ -20,6 +20,7 @@ import Privacy from './pages/Privacy';
 import FindJob from './pages/FindJob';
 import JobApplicationQuestions from './components/JobApplicationQuestions';
 import Happy from './pages/Happy';
+import Applications from './pages/Applications';
 
 // Layout components
 import ProtectedRoute from './layouts/ProtectedRoute';
@@ -154,6 +155,13 @@ export default function App() {
           </ModernLayout>
         </ProtectedRoute>
       } />
+      <Route path="/applications" element={
+        <ProtectedRoute>
+          <ModernLayout>
+            <Applications />
+          </ModernLayout>
+        </ProtectedRoute>
+      } />
       <Route path="/billing" element={
         <ProtectedRoute>
           <ModernLayout>
@@ -182,7 +190,9 @@ export default function App() {
       <Route path="/privacy" element={<Privacy />} />
       <Route path="/happy" element={
         <ProtectedRoute>
-          <Happy />
+          <ModernLayout>
+            <Happy />
+          </ModernLayout>
         </ProtectedRoute>
       } />
     </Routes>

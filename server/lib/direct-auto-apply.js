@@ -359,12 +359,74 @@ export async function processAutoApplyDirect({ applicationId, jobUrl, atsType, u
 
     logger.info(`✅ Form filled: ${fillResult.fieldsFilled}/${fillResult.fieldsExtracted} fields`);
 
-    // Submit the form
+    // Submit the form with retry logic
     let submitResult = { success: false, error: 'No submit button found' };
+    let validationResult = null;
+    const MAX_SUBMIT_RETRIES = 2;
+    let submitAttempts = 0;
 
     if (fillResult.submitButton) {
-      logger.info('📤 Submitting application...');
-      submitResult = await aiFormFiller.submitForm(page, fillResult.submitButton, userProfile);
+      while (submitAttempts < MAX_SUBMIT_RETRIES) {
+        submitAttempts++;
+        logger.info({ attempt: submitAttempts, maxRetries: MAX_SUBMIT_RETRIES }, '📤 Submitting application...');
+
+        submitResult = await aiFormFiller.submitForm(page, fillResult.submitButton, userProfile);
+
+        // Wait for page to stabilize
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        // Run comprehensive validation
+        logger.info('🔍 Running post-submission validation...');
+        validationResult = await aiFormFiller.validateApplicationSubmission(page, fillResult, submitResult);
+
+        if (validationResult.isValid && validationResult.confidence >= 50) {
+          logger.info({
+            confidence: validationResult.confidence,
+            recommendation: validationResult.recommendation
+          }, '✅ Application validation passed');
+          submitResult.success = true;
+          submitResult.validation = validationResult;
+          break;
+        }
+
+        // If validation failed but we have retries left
+        if (submitAttempts < MAX_SUBMIT_RETRIES) {
+          logger.warn({
+            attempt: submitAttempts,
+            confidence: validationResult.confidence,
+            issues: validationResult.issues
+          }, '⚠️ Validation failed, attempting retry...');
+
+          // Try to fix issues before retry
+          if (validationResult.issues.length > 0) {
+            // Re-extract and fill any empty required fields
+            const extraction = await aiFormFiller.extractor.extractComplete(page);
+            if (extraction.fields.length > 0) {
+              const retryFillResult = await aiFormFiller.fillFields(page, extraction.fields, {});
+              logger.info({ retryFilled: retryFillResult.filled }, 'Retry fill attempt completed');
+            }
+          }
+
+          // Small delay before retry
+          await new Promise(resolve => setTimeout(resolve, 1500));
+        }
+      }
+
+      // If all retries failed, check if we should mark as MANUAL_REQUIRED
+      if (!submitResult.success && validationResult) {
+        submitResult.validation = validationResult;
+
+        // Determine if this should be MANUAL_REQUIRED vs FAILED
+        if (validationResult.confidence >= 25 && validationResult.recommendation === 'UNCERTAIN') {
+          submitResult.requiresManual = true;
+          submitResult.manualReason = validationResult.issues.join('; ');
+          logger.warn({
+            applicationId,
+            confidence: validationResult.confidence,
+            issues: validationResult.issues
+          }, '⚠️ Application uncertain - marking for manual review');
+        }
+      }
     }
 
     // Check if page is asking for email verification
@@ -420,11 +482,12 @@ export async function processAutoApplyDirect({ applicationId, jobUrl, atsType, u
         if (hasGmail) {
           logger.info('📧 Polling Gmail for verification code...');
 
-          // Poll for verification email
+          // Poll for verification email (extended timeout for slow email delivery)
           verificationResult = await pollForVerification(userId, {
-            maxWaitMs: 90000, // 1.5 minutes max
-            pollIntervalMs: 8000, // Every 8 seconds
-            companyName: aggregatedJob.company
+            maxWaitMs: 180000, // 3 minutes max (extended from 1.5 min)
+            pollIntervalMs: 10000, // Every 10 seconds
+            companyName: aggregatedJob.company,
+            retryOnError: true // Retry on temporary Gmail API errors
           });
 
           if (verificationResult.found && verificationResult.code) {
@@ -500,9 +563,10 @@ export async function processAutoApplyDirect({ applicationId, jobUrl, atsType, u
     // Sanitize strings to remove null bytes that PostgreSQL can't handle
     const sanitize = (str) => typeof str === 'string' ? str.replace(/\x00/g, '') : str;
 
-    // Update application status
+    // Update application status based on validation results
     if (submitResult.success) {
       const sanitizedMessages = submitResult.successMessages?.map(sanitize) || [];
+      const validation = submitResult.validation || validationResult;
 
       await prisma.autoApplication.update({
         where: { id: applicationId },
@@ -517,30 +581,94 @@ export async function processAutoApplyDirect({ applicationId, jobUrl, atsType, u
             fieldsFilled: fillResult.fieldsFilled,
             successMessages: sanitizedMessages,
             finalUrl: sanitize(submitResult.currentUrl),
+            validation: validation ? {
+              confidence: validation.confidence,
+              recommendation: validation.recommendation,
+              checks: validation.checks,
+              warnings: validation.warnings
+            } : null,
             verification: verificationResult ? {
               found: verificationResult.found,
               codeUsed: !!verificationResult.code,
               linkFollowed: !!verificationResult.links?.length && !verificationResult.code,
               attempts: verificationResult.attempts,
               duration: verificationResult.duration
-            } : null
+            } : null,
+            submitAttempts
           }
         }
       });
 
-      logger.info({ applicationId }, '✅ Application submitted successfully');
+      logger.info({
+        applicationId,
+        confidence: validation?.confidence,
+        attempts: submitAttempts
+      }, '✅ Application submitted successfully');
+
+    } else if (submitResult.requiresManual) {
+      // Mark for manual application when automation is uncertain
+      await prisma.autoApplication.update({
+        where: { id: applicationId },
+        data: {
+          status: 'MANUAL_REQUIRED',
+          method: 'AI_DIRECT',
+          error: sanitize(submitResult.manualReason || 'Application requires manual review'),
+          completedAt: new Date(),
+          confirmationUrl: sanitize(screenshot),
+          confirmationData: {
+            fieldsExtracted: fillResult.fieldsExtracted,
+            fieldsFilled: fillResult.fieldsFilled,
+            validation: validationResult ? {
+              confidence: validationResult.confidence,
+              recommendation: validationResult.recommendation,
+              issues: validationResult.issues,
+              warnings: validationResult.warnings
+            } : null,
+            applyUrl: jobUrl, // Show user where to apply manually
+            submitAttempts
+          }
+        }
+      });
+
+      logger.warn({
+        applicationId,
+        confidence: validationResult?.confidence,
+        reason: submitResult.manualReason
+      }, '⚠️ Application marked for manual completion');
+
     } else {
+      // Complete failure
+      const validation = submitResult.validation || validationResult;
+
       await prisma.autoApplication.update({
         where: { id: applicationId },
         data: {
           status: 'FAILED',
+          method: 'AI_DIRECT',
           error: sanitize(submitResult.error || 'Form submission failed'),
+          errorType: 'SUBMISSION_FAILED',
           completedAt: new Date(),
-          confirmationUrl: sanitize(screenshot)
+          confirmationUrl: sanitize(screenshot),
+          confirmationData: {
+            fieldsExtracted: fillResult.fieldsExtracted,
+            fieldsFilled: fillResult.fieldsFilled,
+            validation: validation ? {
+              confidence: validation.confidence,
+              recommendation: validation.recommendation,
+              issues: validation.issues
+            } : null,
+            applyUrl: jobUrl, // Show user where to apply manually
+            submitAttempts
+          }
         }
       });
 
-      logger.error({ applicationId, error: submitResult.error }, '❌ Application submission failed');
+      logger.error({
+        applicationId,
+        error: submitResult.error,
+        confidence: validation?.confidence,
+        attempts: submitAttempts
+      }, '❌ Application submission failed');
     }
 
     return {

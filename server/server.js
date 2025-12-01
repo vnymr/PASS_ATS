@@ -55,6 +55,7 @@ import {
 } from './lib/gmail-oauth.js';
 import OpenAI from 'openai';
 import rateLimit from 'express-rate-limit';
+import { apiRateLimit, apiLimiters, getApiRateLimiterHealth } from './lib/api-rate-limiter.js';
 import Stripe from 'stripe';
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 // Import parse libraries
@@ -62,6 +63,8 @@ import mammoth from 'mammoth';
 import fs from 'fs';
 // Import AI Resume Generator
 import AIResumeGenerator from './lib/ai-resume-generator.js';
+// Import Gemini Resume Generator (AI-native approach)
+import { GeminiResumeGenerator, generateAndCompile as geminiGenerateAndCompile, isAvailable as isGeminiAvailable } from './lib/gemini-resume-generator.js';
 
 // Lazy load PDF.js to avoid initialization issues
 let pdfjs = null;
@@ -297,13 +300,15 @@ app.use((req, res, next) => {
 app.get('/health', async (req, res) => {
   try {
     // Basic health check without database dependency
+    const rateLimiterHealth = getApiRateLimiterHealth();
     res.json({
       status: 'healthy',
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
       memory: process.memoryUsage(),
       services: {
-        server: 'running'
+        server: 'running',
+        rateLimiter: rateLimiterHealth.type // 'redis' or 'memory'
       }
     });
   } catch (error) {
@@ -1340,7 +1345,8 @@ Return ONLY a valid JSON object, no other text.`
 });
 
 // Resume generation endpoint - Simplified version
-app.post('/api/generate', authenticateToken, async (req, res) => {
+// Redis rate limit: 10 req/min per user (expensive operation)
+app.post('/api/generate', authenticateToken, apiLimiters.resume, async (req, res) => {
   try {
     const { resumeText, jobDescription, aiMode = 'gpt-5' } = req.body;
 
@@ -1499,7 +1505,8 @@ app.get('/api/job/:jobId/download/:type', authenticateToken, async (req, res) =>
 });
 
 // Enhanced status endpoint with queue progress
-app.get('/api/job/:jobId/status', authenticateToken, async (req, res) => {
+// Redis rate limit: 120 req/min per user (allow polling)
+app.get('/api/job/:jobId/status', authenticateToken, apiLimiters.status, async (req, res) => {
   try {
     const job = await prisma.job.findUnique({
       where: { id: req.params.jobId },
@@ -2840,6 +2847,128 @@ import gmailRouter from './routes/gmail.js';
 
 app.post('/api/generate-ai', authenticateToken, generateResumeEndpoint);
 app.get('/api/check-compilers', authenticateToken, checkCompilersEndpoint);
+
+// Gemini-powered resume generation endpoint (AI-native approach with Google Search grounding)
+app.post('/api/generate-gemini', authenticateToken, async (req, res) => {
+  try {
+    const { jobDescription, userData, enableSearch = true, outputFormat = 'json' } = req.body;
+
+    if (!jobDescription) {
+      return res.status(400).json({ error: 'Job description is required' });
+    }
+
+    // Check if Gemini is available
+    if (!isGeminiAvailable()) {
+      return res.status(503).json({
+        error: 'Gemini AI is not available. Check GEMINI_API_KEY configuration.',
+        fallback: '/api/generate-ai'
+      });
+    }
+
+    // Get user data from profile if not provided
+    let resumeData = userData;
+    if (!userData && req.user) {
+      const profile = await prisma.profile.findUnique({
+        where: { userId: req.user.id }
+      });
+
+      if (!profile?.data) {
+        return res.status(400).json({ error: 'No profile data found. Please complete your profile first.' });
+      }
+
+      resumeData = profile.data;
+    }
+
+    if (!resumeData) {
+      return res.status(400).json({ error: 'User data is required' });
+    }
+
+    logger.info({
+      userId: req.userId,
+      enableSearch,
+      outputFormat,
+      profileSize: JSON.stringify(resumeData).length
+    }, 'Starting Gemini resume generation');
+
+    // Generate resume using Gemini
+    const { latex, pdf, metadata } = await geminiGenerateAndCompile(
+      resumeData,
+      jobDescription,
+      { enableSearch }
+    );
+
+    // Generate job ID for tracking
+    const jobId = `gemini-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+    // Save to database
+    await prisma.job.create({
+      data: {
+        id: jobId,
+        userId: req.userId,
+        status: 'COMPLETED',
+        resumeText: '',
+        jobDescription,
+        aiMode: 'gemini-2.5-flash',
+        metadata: {
+          ...metadata,
+          generator: 'gemini-resume-generator',
+          enableSearch
+        }
+      }
+    });
+
+    // Save PDF artifact
+    if (pdf) {
+      await prisma.artifact.create({
+        data: {
+          jobId,
+          type: 'PDF_OUTPUT',
+          content: pdf,
+          version: 1
+        }
+      });
+    }
+
+    // Save LaTeX artifact
+    await prisma.artifact.create({
+      data: {
+        jobId,
+        type: 'LATEX_SOURCE',
+        content: Buffer.from(latex),
+        version: 1
+      }
+    });
+
+    logger.info({
+      jobId,
+      generationTime: metadata.generationTime,
+      usedCompanyResearch: metadata.usedCompanyResearch
+    }, 'Gemini resume generation completed');
+
+    if (outputFormat === 'pdf') {
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="resume-${jobId}.pdf"`);
+      res.send(pdf);
+    } else {
+      res.json({
+        success: true,
+        jobId,
+        downloadUrl: `/api/job/${jobId}/download/pdf`,
+        metadata: {
+          ...metadata,
+          generator: 'gemini-resume-generator'
+        }
+      });
+    }
+  } catch (error) {
+    logger.error({ error: error.message }, 'Gemini resume generation error');
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      fallback: '/api/generate-ai'
+    });
+  }
+});
 
 // Job extraction endpoint for Chrome extension
 app.post('/api/extract-job', authenticateToken, extractJobHandler);

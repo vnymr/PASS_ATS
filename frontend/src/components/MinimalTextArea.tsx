@@ -25,14 +25,6 @@ export default function MinimalTextArea({
     textareaRef.current?.focus();
   }, []);
 
-  // Auto-resize textarea
-  useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px';
-    }
-  }, [value]);
-
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
     onChange(val);
@@ -63,7 +55,7 @@ export default function MinimalTextArea({
       onClick={handleContainerClick}
       className="w-full cursor-text"
     >
-      <div className="max-w-[780px] mx-auto px-8 py-8">
+      <div className="max-w-[780px] mx-auto px-4 sm:px-8 py-6 sm:py-8">
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -94,13 +86,14 @@ export default function MinimalTextArea({
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
             disabled={disabled}
-            className="w-full bg-transparent border-none outline-none text-foreground resize-none overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full bg-transparent border-none outline-none text-foreground resize-none overflow-y-auto disabled:opacity-50 disabled:cursor-not-allowed"
             style={{
               fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif',
               caretColor: 'var(--text-900)',
               fontSize: '16px',
               lineHeight: '1.5',
-              minHeight: '100px',
+              minHeight: '140px',
+              maxHeight: '140px',
             }}
             autoComplete="off"
             spellCheck="false"

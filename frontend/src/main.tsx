@@ -1,7 +1,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
-import { ClerkProvider } from '@clerk/clerk-react';
+import { ClerkProvider, ClerkLoaded, ClerkLoading } from '@clerk/clerk-react';
 import { ThemeProvider } from 'next-themes';
 import App from './App';
 import './index.css';
@@ -12,6 +12,18 @@ const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY || 'pk_test_p
 // Only throw error if we're in production and still using placeholder
 if (PUBLISHABLE_KEY === 'pk_test_placeholder' && import.meta.env.PROD) {
   logger.warn('Using placeholder Clerk key. Authentication may not work properly.');
+}
+
+function AppLoading() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="flex items-center gap-2">
+        <span className="h-2.5 w-2.5 rounded-full bg-primary animate-bounce [animation-delay:-0.2s]" />
+        <span className="h-2.5 w-2.5 rounded-full bg-primary/80 animate-bounce" />
+        <span className="h-2.5 w-2.5 rounded-full bg-primary/60 animate-bounce [animation-delay:0.2s]" />
+      </div>
+    </div>
+  );
 }
 
 // Error boundary for Clerk loading issues
@@ -77,9 +89,14 @@ createRoot(document.getElementById('root')!).render(
     <ClerkErrorBoundary>
       <ThemeProvider attribute="class" defaultTheme="light">
         <ClerkProvider publishableKey={PUBLISHABLE_KEY} afterSignOutUrl="/">
-          <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-            <App />
-          </BrowserRouter>
+          <ClerkLoading>
+            <AppLoading />
+          </ClerkLoading>
+          <ClerkLoaded>
+            <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+              <App />
+            </BrowserRouter>
+          </ClerkLoaded>
         </ClerkProvider>
       </ThemeProvider>
     </ClerkErrorBoundary>

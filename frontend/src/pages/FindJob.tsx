@@ -11,7 +11,7 @@ import { api } from '../api-clerk';
 import { Search } from 'lucide-react';
 
 const API_BASE_URL = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '').trim();
-const PAGE_SIZE = 100; // Show 100 jobs per page
+const PAGE_SIZE = 25; // PERFORMANCE: Reduced from 100 to 25 for faster initial load
 
 type JobWithExtras = JobType & {
   logoUrl?: string | null;
@@ -123,6 +123,8 @@ export default function FindJob() {
   const [mode, setMode] = useState<'browse' | 'search'>(initialQueryRef.current ? 'search' : 'browse');
   const [jobs, setJobs] = useState<JobWithExtras[]>([]);
   const [selectedJob, setSelectedJob] = useState<JobWithExtras | null>(null);
+  const [selectedJobFull, setSelectedJobFull] = useState<JobWithExtras | null>(null); // Full job with description
+  const [loadingDetail, setLoadingDetail] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [explanation, setExplanation] = useState('');
@@ -139,6 +141,7 @@ export default function FindJob() {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
   const [activeFilters, setActiveFilters] = useState<JobFilters>({});
+  // Use 'recommended' to trigger fast hybrid matcher for personalized results
   const [sortBy, setSortBy] = useState<'recommended' | 'latest' | 'salary'>('recommended');
 
   const debouncedSearch = useDebouncedValue(searchInput, 500);
@@ -181,12 +184,14 @@ export default function FindJob() {
     if (filteredJobs.length === 0) {
       if (selectedJob) {
         setSelectedJob(null);
+        setSelectedJobFull(null);
       }
       return;
     }
 
     if (!selectedJob || !filteredJobs.some(job => job.id === selectedJob.id)) {
       setSelectedJob(filteredJobs[0]);
+      setSelectedJobFull(null); // Clear full data, will be fetched on click
     }
   }, [filteredJobs, selectedJob]);
 
@@ -218,8 +223,11 @@ export default function FindJob() {
         const filterParams = new URLSearchParams();
         filterParams.set('limit', String(PAGE_SIZE));
         filterParams.set('offset', String(offset));
-        filterParams.set('personalized', 'true'); // Always show personalized/recommended jobs
-        filterParams.set('sort', sortToUse); // Pass sort parameter to backend
+        filterParams.set('sort', sortToUse);
+        // Only use personalized mode for 'recommended' sort (slower but more relevant)
+        if (sortToUse === 'recommended') {
+          filterParams.set('personalized', 'true');
+        }
 
         // Add filter parameters
         if (filtersToUse.experienceLevel?.length) {
@@ -507,6 +515,54 @@ export default function FindJob() {
     setCurrentPage(1);
     runSearch(trimmed, { offset: 0, append: false });
   }, [debouncedSearch, mode, activeQuery, runSearch, fetchJobs, setSearchParams]);
+
+  // PERFORMANCE: Fetch full job details when a job is selected (lazy loading)
+  // This avoids loading heavy description/requirements for all jobs in the list
+  const fetchJobDetails = useCallback(async (jobId: string) => {
+    setLoadingDetail(true);
+    try {
+      const token = await getToken();
+      if (!token) {
+        logger.error('No token for job detail fetch');
+        return null;
+      }
+
+      const response = await fetch(buildUrl(`/api/jobs/${jobId}`), {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch job details');
+      }
+
+      const data = await response.json();
+      return normalizeJob(data.job as JobWithExtras);
+    } catch (err) {
+      logger.error('Failed to fetch job details', err);
+      return null;
+    } finally {
+      setLoadingDetail(false);
+    }
+  }, [getToken]);
+
+  // Handle job selection with lazy loading of details
+  const handleSelectJob = useCallback(async (job: JobWithExtras) => {
+    setSelectedJob(job);
+    setIsDetailOpen(true);
+
+    // If job doesn't have description (lite version), fetch full details
+    if (!job.description) {
+      const fullJob = await fetchJobDetails(job.id);
+      if (fullJob) {
+        setSelectedJobFull(fullJob);
+      } else {
+        // Fall back to lite job if fetch fails
+        setSelectedJobFull(job);
+      }
+    } else {
+      setSelectedJobFull(job);
+    }
+  }, [fetchJobDetails]);
 
   // Go to specific page
   const goToPage = useCallback((page: number) => {
@@ -885,7 +941,7 @@ export default function FindJob() {
                   key={job.id}
                   job={job}
                   delay={index * 0.05}
-                  onViewDetails={() => { setSelectedJob(job); setIsDetailOpen(true); }}
+                  onViewDetails={() => handleSelectJob(job)}
                   onGenerateResume={handleGenerateResume}
                   onViewJob={(url) => window.open(url, '_blank', 'noopener')}
                   onAutoApply={job.aiApplyable ? (j) => handleAutoApply(j.id) : undefined}
@@ -1011,14 +1067,26 @@ export default function FindJob() {
           {/* Job Detail Panel - Side by Side on Desktop */}
           {selectedJob && isDetailOpen && !isMobile && (
             <div className="self-start sticky top-24">
-              <JobDetailPanelSimple
-                job={selectedJob as any}
-                isOpen={true}
-                onClose={() => setIsDetailOpen(false)}
-                onGenerateResume={handleGenerateResume}
-                onViewJob={(url) => window.open(url, '_blank', 'noopener')}
-                onAutoApply={selectedJob.aiApplyable ? (j) => handleAutoApply(j.id) : undefined}
-              />
+              {loadingDetail ? (
+                <div className="w-[700px] bg-white rounded-xl border border-gray-200 p-8 animate-pulse">
+                  <div className="w-3/4 h-6 bg-gray-200 rounded mb-4"></div>
+                  <div className="w-1/2 h-4 bg-gray-200 rounded mb-6"></div>
+                  <div className="space-y-3">
+                    <div className="w-full h-4 bg-gray-200 rounded"></div>
+                    <div className="w-full h-4 bg-gray-200 rounded"></div>
+                    <div className="w-3/4 h-4 bg-gray-200 rounded"></div>
+                  </div>
+                </div>
+              ) : (
+                <JobDetailPanelSimple
+                  job={(selectedJobFull || selectedJob) as any}
+                  isOpen={true}
+                  onClose={() => setIsDetailOpen(false)}
+                  onGenerateResume={handleGenerateResume}
+                  onViewJob={(url) => window.open(url, '_blank', 'noopener')}
+                  onAutoApply={selectedJob.aiApplyable ? (j) => handleAutoApply(j.id) : undefined}
+                />
+              )}
             </div>
           )}
         </div>
@@ -1026,15 +1094,28 @@ export default function FindJob() {
 
       {/* Mobile Overlay Detail Panel */}
       {isMobile && selectedJob && (
-        <JobDetailPanel
-          job={selectedJob as any}
-          isOpen={Boolean(selectedJob) && isDetailOpen}
-          onClose={() => setIsDetailOpen(false)}
-          onGenerateResume={handleGenerateResume}
-          onApply={(url) => window.open(url, '_blank', 'noopener')}
-          onAutoApply={selectedJob.aiApplyable ? (job) => handleAutoApply((job as any).id) : undefined}
-          isSidePanel={false}
-        />
+        loadingDetail ? (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
+            <div className="bg-white rounded-xl p-8 animate-pulse max-w-md w-full mx-4">
+              <div className="w-3/4 h-6 bg-gray-200 rounded mb-4"></div>
+              <div className="w-1/2 h-4 bg-gray-200 rounded mb-6"></div>
+              <div className="space-y-3">
+                <div className="w-full h-4 bg-gray-200 rounded"></div>
+                <div className="w-full h-4 bg-gray-200 rounded"></div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <JobDetailPanel
+            job={(selectedJobFull || selectedJob) as any}
+            isOpen={Boolean(selectedJob) && isDetailOpen}
+            onClose={() => setIsDetailOpen(false)}
+            onGenerateResume={handleGenerateResume}
+            onApply={(url) => window.open(url, '_blank', 'noopener')}
+            onAutoApply={selectedJob.aiApplyable ? (job) => handleAutoApply((job as any).id) : undefined}
+            isSidePanel={false}
+          />
+        )
       )}
 
       {/* Filter Panel */}

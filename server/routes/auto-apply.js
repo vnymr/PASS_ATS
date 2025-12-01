@@ -18,6 +18,48 @@ const router = express.Router();
 // Limits both AI usage costs and CAPTCHA credit depletion
 const autoApplyLimiter = rateLimitMiddleware();
 
+// Daily application limit per user
+const DAILY_APPLICATION_LIMIT = 10;
+
+/**
+ * Check if user has exceeded daily application limit
+ * Returns { allowed: boolean, remaining: number, resetAt: Date }
+ */
+async function checkDailyApplicationLimit(userId) {
+  // Get start of today (midnight UTC)
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+
+  // Get end of today (for reset time)
+  const tomorrow = new Date(today);
+  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+
+  // Count applications submitted today
+  const applicationsToday = await prisma.autoApplication.count({
+    where: {
+      userId,
+      createdAt: {
+        gte: today
+      },
+      // Don't count cancelled applications against the limit
+      status: {
+        not: 'CANCELLED'
+      }
+    }
+  });
+
+  const remaining = Math.max(0, DAILY_APPLICATION_LIMIT - applicationsToday);
+  const allowed = applicationsToday < DAILY_APPLICATION_LIMIT;
+
+  return {
+    allowed,
+    remaining,
+    used: applicationsToday,
+    limit: DAILY_APPLICATION_LIMIT,
+    resetAt: tomorrow
+  };
+}
+
 function respondWithAutoApplyError(res, error, fallbackMessage) {
   if (error?.code === 'P2021') {
     return res.status(500).json({
@@ -59,6 +101,28 @@ router.post('/auto-apply', autoApplyLimiter, async (req, res) => {
     const userId = req.userId;
 
     logger.info({ userId, jobId }, 'Auto-apply requested');
+
+    // Check daily application limit (10 per user per day)
+    const dailyLimit = await checkDailyApplicationLimit(userId);
+
+    if (!dailyLimit.allowed) {
+      logger.warn({
+        userId,
+        used: dailyLimit.used,
+        limit: dailyLimit.limit,
+        resetAt: dailyLimit.resetAt
+      }, 'Daily auto-apply limit exceeded');
+
+      return res.status(429).json({
+        error: 'Daily application limit reached',
+        message: `You have reached your daily limit of ${dailyLimit.limit} auto-applications. This helps ensure quality applications and prevents system abuse.`,
+        limit: dailyLimit.limit,
+        used: dailyLimit.used,
+        remaining: 0,
+        resetAt: dailyLimit.resetAt.toISOString(),
+        suggestion: 'Your limit resets at midnight UTC. You can still apply manually to jobs.'
+      });
+    }
 
     // Validate job exists and is AI-applyable
     const job = await prisma.aggregatedJob.findUnique({
@@ -210,7 +274,12 @@ router.post('/auto-apply', autoApplyLimiter, async (req, res) => {
         status: 'QUEUED',
         message: 'Application queued - will be submitted automatically',
         estimatedTime: '2-5 minutes',
-        estimatedCost: 0.05
+        estimatedCost: 0.05,
+        dailyLimit: {
+          remaining: dailyLimit.remaining - 1,
+          limit: dailyLimit.limit,
+          resetAt: dailyLimit.resetAt.toISOString()
+        }
       });
     } else {
       // Direct mode - process immediately using Railway Python browser
@@ -222,7 +291,12 @@ router.post('/auto-apply', autoApplyLimiter, async (req, res) => {
         applicationId: application.id,
         status: 'PROCESSING',
         message: 'Application is being processed directly (no queue)',
-        estimatedTime: '1-3 minutes'
+        estimatedTime: '1-3 minutes',
+        dailyLimit: {
+          remaining: dailyLimit.remaining - 1,
+          limit: dailyLimit.limit,
+          resetAt: dailyLimit.resetAt.toISOString()
+        }
       });
 
       // Process in background (don't await)
@@ -390,14 +464,16 @@ router.get('/auto-apply/stats', async (req, res) => {
   try {
     const userId = req.userId;
 
-    const [total, submitted, failed, totalCost] = await Promise.all([
+    const [total, submitted, failed, manualRequired, totalCost, dailyLimit] = await Promise.all([
       prisma.autoApplication.count({ where: { userId } }),
       prisma.autoApplication.count({ where: { userId, status: 'SUBMITTED' } }),
       prisma.autoApplication.count({ where: { userId, status: 'FAILED' } }),
+      prisma.autoApplication.count({ where: { userId, status: 'MANUAL_REQUIRED' } }),
       prisma.autoApplication.aggregate({
         where: { userId },
         _sum: { cost: true }
-      })
+      }),
+      checkDailyApplicationLimit(userId)
     ]);
 
     // Get applications this week
@@ -413,15 +489,45 @@ router.get('/auto-apply/stats', async (req, res) => {
       total,
       submitted,
       failed,
-      pending: total - submitted - failed,
+      manualRequired,
+      pending: total - submitted - failed - manualRequired,
       thisWeek,
       totalCost: totalCost._sum.cost || 0,
-      averageCost: total > 0 ? (totalCost._sum.cost || 0) / total : 0
+      averageCost: total > 0 ? (totalCost._sum.cost || 0) / total : 0,
+      dailyLimit: {
+        used: dailyLimit.used,
+        remaining: dailyLimit.remaining,
+        limit: dailyLimit.limit,
+        resetAt: dailyLimit.resetAt.toISOString()
+      }
     });
 
   } catch (error) {
     logger.error({ error: error.message, code: error.code }, 'Failed to fetch stats');
     return respondWithAutoApplyError(res, error, 'Failed to fetch stats');
+  }
+});
+
+/**
+ * GET /api/auto-apply/daily-limit
+ * Check user's daily application limit status
+ */
+router.get('/auto-apply/daily-limit', async (req, res) => {
+  try {
+    const userId = req.userId;
+    const dailyLimit = await checkDailyApplicationLimit(userId);
+
+    res.json({
+      allowed: dailyLimit.allowed,
+      used: dailyLimit.used,
+      remaining: dailyLimit.remaining,
+      limit: dailyLimit.limit,
+      resetAt: dailyLimit.resetAt.toISOString()
+    });
+
+  } catch (error) {
+    logger.error({ error: error.message }, 'Failed to check daily limit');
+    return res.status(500).json({ error: 'Failed to check daily limit' });
   }
 });
 

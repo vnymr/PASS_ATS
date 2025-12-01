@@ -368,14 +368,17 @@ export async function searchVerificationEmails(userId, options = {}) {
  */
 export async function pollForVerification(userId, options = {}) {
   const {
-    maxWaitMs = 120000, // 2 minutes max
+    maxWaitMs = 180000, // 3 minutes max (extended for slow email delivery)
     pollIntervalMs = 10000, // Check every 10 seconds
     companyName = null,
-    jobTitle = null
+    jobTitle = null,
+    retryOnError = true // Retry on temporary Gmail API errors
   } = options;
 
   const startTime = Date.now();
   let attempts = 0;
+  let consecutiveErrors = 0;
+  const MAX_CONSECUTIVE_ERRORS = 3;
 
   console.log(`[Email Verification] Starting poll for user ${userId}, max wait: ${maxWaitMs}ms`);
 
@@ -383,23 +386,51 @@ export async function pollForVerification(userId, options = {}) {
     attempts++;
     console.log(`[Email Verification] Poll attempt ${attempts}`);
 
-    const result = await searchVerificationEmails(userId, {
-      maxAgeMinutes: Math.ceil((Date.now() - startTime + 60000) / 60000), // Dynamic window
-      companyName,
-      jobTitle
-    });
+    try {
+      const result = await searchVerificationEmails(userId, {
+        maxAgeMinutes: Math.ceil((Date.now() - startTime + 60000) / 60000), // Dynamic window
+        companyName,
+        jobTitle
+      });
 
-    if (result.found) {
-      console.log(`[Email Verification] Found after ${attempts} attempts, ${Date.now() - startTime}ms`);
-      return {
-        ...result,
-        attempts,
-        duration: Date.now() - startTime
-      };
-    }
+      // Reset error counter on successful API call
+      consecutiveErrors = 0;
 
-    if (result.needsConnection) {
-      return result; // Don't retry if Gmail not connected
+      if (result.found) {
+        console.log(`[Email Verification] Found after ${attempts} attempts, ${Date.now() - startTime}ms`);
+        return {
+          ...result,
+          attempts,
+          duration: Date.now() - startTime
+        };
+      }
+
+      if (result.needsConnection) {
+        return result; // Don't retry if Gmail not connected
+      }
+
+    } catch (error) {
+      consecutiveErrors++;
+      console.error(`[Email Verification] Error on attempt ${attempts}: ${error.message}`);
+
+      // Check if we should retry on error
+      if (retryOnError && consecutiveErrors < MAX_CONSECUTIVE_ERRORS) {
+        console.log(`[Email Verification] Will retry after error (${consecutiveErrors}/${MAX_CONSECUTIVE_ERRORS})`);
+        // Use longer interval after errors
+        await new Promise(resolve => setTimeout(resolve, pollIntervalMs * 1.5));
+        continue;
+      }
+
+      // Too many consecutive errors, give up
+      if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+        console.error(`[Email Verification] Too many consecutive errors, giving up`);
+        return {
+          found: false,
+          error: `Gmail API errors: ${error.message}`,
+          attempts,
+          duration: Date.now() - startTime
+        };
+      }
     }
 
     // Wait before next poll

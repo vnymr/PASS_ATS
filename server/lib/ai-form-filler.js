@@ -2378,6 +2378,284 @@ class AIFormFiller {
       learning: this.learningSystem.getLearningSummary()
     };
   }
+
+  /**
+   * Comprehensive validation that application was properly submitted
+   * Checks: required fields filled, no validation errors, form actually submitted
+   *
+   * @param {Page} page - Playwright page
+   * @param {Object} fillResult - Result from fillFormIntelligently
+   * @param {Object} submitResult - Result from submitForm (if available)
+   * @returns {Object} Validation result with status and issues
+   */
+  async validateApplicationSubmission(page, fillResult, submitResult = null) {
+    logger.info('🔍 Running comprehensive application submission validation...');
+
+    const validation = {
+      isValid: false,
+      confidence: 0, // 0-100 confidence score
+      issues: [],
+      warnings: [],
+      checks: {
+        requiredFieldsFilled: false,
+        noValidationErrors: false,
+        formSubmitted: false,
+        confirmationDetected: false,
+        emailMatch: false
+      },
+      recommendation: 'UNKNOWN'
+    };
+
+    try {
+      // CHECK 1: Verify required fields were actually filled
+      const requiredFieldsCheck = await page.evaluate(() => {
+        const result = {
+          totalRequired: 0,
+          filledRequired: 0,
+          emptyRequired: [],
+          invalidRequired: []
+        };
+
+        const requiredFields = document.querySelectorAll(
+          'input[required], select[required], textarea[required], ' +
+          '[aria-required="true"], .required input, .required select, .required textarea'
+        );
+
+        for (const field of requiredFields) {
+          result.totalRequired++;
+          const value = field.value?.trim() || '';
+          const fieldName = field.name || field.id || field.getAttribute('aria-label') || 'unnamed';
+
+          // Check if empty
+          if (!value || value === '' || value === 'Select...' || value === 'Choose...') {
+            result.emptyRequired.push(fieldName);
+            continue;
+          }
+
+          // Check for validation error indicators on the field
+          const hasError = field.classList.contains('error') ||
+                          field.classList.contains('invalid') ||
+                          field.getAttribute('aria-invalid') === 'true' ||
+                          field.parentElement?.classList.contains('error');
+
+          if (hasError) {
+            result.invalidRequired.push({ name: fieldName, value });
+          } else {
+            result.filledRequired++;
+          }
+        }
+
+        return result;
+      });
+
+      validation.checks.requiredFieldsFilled =
+        requiredFieldsCheck.emptyRequired.length === 0 &&
+        requiredFieldsCheck.invalidRequired.length === 0;
+
+      if (requiredFieldsCheck.emptyRequired.length > 0) {
+        validation.issues.push(`Empty required fields: ${requiredFieldsCheck.emptyRequired.join(', ')}`);
+      }
+      if (requiredFieldsCheck.invalidRequired.length > 0) {
+        validation.issues.push(`Invalid required fields: ${requiredFieldsCheck.invalidRequired.map(f => f.name).join(', ')}`);
+      }
+
+      logger.info({
+        totalRequired: requiredFieldsCheck.totalRequired,
+        filledRequired: requiredFieldsCheck.filledRequired,
+        emptyRequired: requiredFieldsCheck.emptyRequired.length,
+        invalidRequired: requiredFieldsCheck.invalidRequired.length
+      }, 'Required fields check');
+
+      // CHECK 2: Look for validation error messages on the page
+      const pageErrors = await page.evaluate(() => {
+        const errors = [];
+        const errorSelectors = [
+          '.error-message', '.field-error', '.form-error', '.validation-error',
+          '[class*="error-text"]', '[class*="error-msg"]',
+          '[role="alert"]', '.alert-danger', '.alert-error',
+          '.text-red-500', '.text-danger', '.text-error'
+        ];
+
+        for (const selector of errorSelectors) {
+          const elements = document.querySelectorAll(selector);
+          for (const el of elements) {
+            // Only count visible errors
+            if (el.offsetParent !== null && el.textContent?.trim()) {
+              const text = el.textContent.trim();
+              // Filter out success messages that might match selectors
+              if (!text.toLowerCase().includes('success') &&
+                  !text.toLowerCase().includes('thank')) {
+                errors.push(text.substring(0, 100)); // Limit length
+              }
+            }
+          }
+        }
+
+        return [...new Set(errors)]; // Deduplicate
+      });
+
+      validation.checks.noValidationErrors = pageErrors.length === 0;
+
+      if (pageErrors.length > 0) {
+        validation.issues.push(...pageErrors.slice(0, 5)); // Max 5 errors
+      }
+
+      // CHECK 3: Form submission verification (if submitResult provided)
+      if (submitResult) {
+        validation.checks.formSubmitted = submitResult.success === true;
+
+        if (!submitResult.success) {
+          validation.issues.push(submitResult.error || 'Form submission failed');
+        }
+      } else {
+        // Check if form is still visible (indicates not submitted)
+        const formStillVisible = await page.evaluate(() => {
+          const submitButtons = document.querySelectorAll(
+            'button[type="submit"], input[type="submit"], ' +
+            'button:has-text("Submit"), button:has-text("Apply")'
+          );
+          return Array.from(submitButtons).some(btn => btn.offsetParent !== null);
+        });
+
+        validation.checks.formSubmitted = !formStillVisible;
+
+        if (formStillVisible) {
+          validation.warnings.push('Form submit button still visible - form may not have been submitted');
+        }
+      }
+
+      // CHECK 4: Look for confirmation/success indicators
+      const confirmationCheck = await page.evaluate(() => {
+        const indicators = {
+          hasSuccessMessage: false,
+          hasConfirmationNumber: false,
+          hasThankYouPage: false,
+          successText: null
+        };
+
+        // Success message patterns
+        const successPatterns = [
+          /thank\s*you/i,
+          /application\s*(has\s*been\s*)?(received|submitted|sent)/i,
+          /success(fully)?/i,
+          /confirmation/i,
+          /we('ve|\s*have)\s*received/i,
+          /your\s*application/i
+        ];
+
+        // Check page text
+        const bodyText = document.body.textContent || '';
+        for (const pattern of successPatterns) {
+          if (pattern.test(bodyText)) {
+            indicators.hasSuccessMessage = true;
+            const match = bodyText.match(pattern);
+            if (match) {
+              indicators.successText = match[0];
+            }
+            break;
+          }
+        }
+
+        // Check for confirmation number/ID
+        const confirmPatterns = [
+          /confirmation\s*(number|id|#)[\s:]*([A-Z0-9-]+)/i,
+          /reference\s*(number|id|#)[\s:]*([A-Z0-9-]+)/i,
+          /application\s*(id|#)[\s:]*([A-Z0-9-]+)/i
+        ];
+
+        for (const pattern of confirmPatterns) {
+          const match = bodyText.match(pattern);
+          if (match) {
+            indicators.hasConfirmationNumber = true;
+            break;
+          }
+        }
+
+        // Check URL for success indicators
+        const url = window.location.href.toLowerCase();
+        if (url.includes('success') || url.includes('thank') ||
+            url.includes('confirm') || url.includes('complete')) {
+          indicators.hasThankYouPage = true;
+        }
+
+        return indicators;
+      });
+
+      validation.checks.confirmationDetected =
+        confirmationCheck.hasSuccessMessage ||
+        confirmationCheck.hasConfirmationNumber ||
+        confirmationCheck.hasThankYouPage;
+
+      if (confirmationCheck.hasSuccessMessage) {
+        logger.info({ successText: confirmationCheck.successText }, 'Success message detected');
+      }
+
+      // CHECK 5: Verify fill rate from fillResult
+      if (fillResult) {
+        const fillRate = fillResult.fieldsExtracted > 0
+          ? fillResult.fieldsFilled / fillResult.fieldsExtracted
+          : 0;
+
+        if (fillRate < 0.7) {
+          validation.warnings.push(`Only ${Math.round(fillRate * 100)}% of fields were filled`);
+        }
+      }
+
+      // CALCULATE CONFIDENCE SCORE
+      let confidenceScore = 0;
+
+      // Required fields filled: 25 points
+      if (validation.checks.requiredFieldsFilled) confidenceScore += 25;
+      else if (requiredFieldsCheck.emptyRequired.length <= 1) confidenceScore += 15;
+
+      // No validation errors: 25 points
+      if (validation.checks.noValidationErrors) confidenceScore += 25;
+      else if (pageErrors.length <= 2) confidenceScore += 10;
+
+      // Form submitted: 25 points
+      if (validation.checks.formSubmitted) confidenceScore += 25;
+
+      // Confirmation detected: 25 points
+      if (validation.checks.confirmationDetected) confidenceScore += 25;
+      else if (submitResult?.urlChanged) confidenceScore += 15;
+
+      validation.confidence = confidenceScore;
+
+      // DETERMINE RECOMMENDATION
+      if (confidenceScore >= 80) {
+        validation.isValid = true;
+        validation.recommendation = 'SUBMITTED';
+      } else if (confidenceScore >= 50) {
+        validation.isValid = true;
+        validation.recommendation = 'LIKELY_SUBMITTED';
+        validation.warnings.push('Application may have been submitted but confirmation unclear');
+      } else if (confidenceScore >= 25) {
+        validation.isValid = false;
+        validation.recommendation = 'UNCERTAIN';
+        validation.issues.push('Could not confirm application was submitted');
+      } else {
+        validation.isValid = false;
+        validation.recommendation = 'FAILED';
+      }
+
+      logger.info({
+        isValid: validation.isValid,
+        confidence: validation.confidence,
+        recommendation: validation.recommendation,
+        checks: validation.checks,
+        issueCount: validation.issues.length,
+        warningCount: validation.warnings.length
+      }, 'Application validation complete');
+
+      return validation;
+
+    } catch (error) {
+      logger.error({ error: error.message }, 'Application validation failed');
+      validation.issues.push(`Validation error: ${error.message}`);
+      validation.recommendation = 'VALIDATION_ERROR';
+      return validation;
+    }
+  }
 }
 
 export default AIFormFiller;

@@ -254,10 +254,10 @@ class JobRecommendationEngine {
         where.AND = AND;
       }
 
-      // PERFORMANCE FIX: Only fetch a reasonable batch to score
-      // Fetch more jobs to find good matches after scoring/filtering
-      // This prevents loading thousands of jobs into memory
-      const batchSize = Math.min(limit * 20, 2000); // Increased to 2000 for better matches
+      // PERFORMANCE FIX: Reduced batch size for faster response
+      // Trade-off: Fewer jobs scored = faster response, but potentially miss some good matches
+      // With good indexes and pre-filtering by career domain, 500 is sufficient
+      const batchSize = Math.min(limit * 10, 500); // Reduced from 2000 to 500 for speed
 
       const jobs = await prisma.aggregatedJob.findMany({
         where,
@@ -358,8 +358,16 @@ class JobRecommendationEngine {
       // 7. Apply pagination to relevant jobs only
       const paginatedJobs = relevantJobs.slice(offset, offset + limit);
 
+      // PERFORMANCE: Strip heavy fields (description, requirements) from response
+      // These are only needed for scoring, not for the list view
+      // Users fetch full details via GET /api/jobs/:id when they click on a job
+      const liteJobs = paginatedJobs.map(job => {
+        const { description, requirements, ...liteJob } = job;
+        return liteJob;
+      });
+
       return {
-        jobs: paginatedJobs,
+        jobs: liteJobs,
         total: relevantJobs.length,
         hasMore: relevantJobs.length > (offset + limit)
       };
@@ -1280,6 +1288,7 @@ class JobRecommendationEngine {
       ];
     }
 
+    // PERFORMANCE: "Lite" select for list view - excludes heavy fields
     const [jobs, total] = await Promise.all([
       prisma.aggregatedJob.findMany({
         where,
@@ -1292,8 +1301,7 @@ class JobRecommendationEngine {
           company: true,
           location: true,
           salary: true,
-          description: true,
-          requirements: true,
+          // EXCLUDED: description, requirements (fetched on detail view)
           applyUrl: true,
           atsType: true,
           atsComplexity: true,

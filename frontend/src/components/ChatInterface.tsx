@@ -2,7 +2,6 @@ import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LayoutGrid, Briefcase } from 'lucide-react';
 import { UserButton } from '@clerk/clerk-react';
-import MinimalNav from './MinimalNav';
 import { ProcessingStep } from './happy/ProcessingStep';
 import { JobCard } from './happy/JobCard';
 import { SectionHeader } from './happy/SectionHeader';
@@ -324,9 +323,6 @@ export default function ChatInterface({
 
   return (
     <>
-      {/* Minimal Left Navigation */}
-      <MinimalNav />
-
       {/* Top Right - User Button and Panel Buttons */}
       <div className="fixed top-6 right-6 md:top-8 md:right-8 z-40 flex items-center gap-3">
         {showDashboard && (
@@ -393,9 +389,9 @@ export default function ChatInterface({
       <div
         ref={containerRef}
         onClick={handleContainerClick}
-        className="min-h-screen bg-background overflow-y-auto cursor-text"
+        className="min-h-screen bg-background cursor-text"
       >
-        <div className="max-w-[780px] mx-auto px-8 py-16">
+        <div className="max-w-[780px] mx-auto px-4 sm:px-8 py-8 sm:py-16">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}

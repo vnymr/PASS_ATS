@@ -8,6 +8,7 @@ import express from 'express';
 import { prisma } from '../lib/prisma-client.js';
 import jobSyncService from '../lib/job-sync-service.js';
 import jobRecommendationEngine from '../lib/job-recommendation-engine.js';
+import fastJobMatcher from '../lib/fast-job-matcher.js';  // NEW: Fast hybrid search
 import jobProfileMatcher from '../lib/job-profile-matcher.js';
 import logger from '../lib/logger.js';
 import cacheManager from '../lib/cache-manager.js';
@@ -79,13 +80,12 @@ router.get('/jobs', async (req, res) => {
     // Only use personalized for 'recommended' sort - for 'latest' and 'salary', skip personalization
     if (personalized === 'true' && req.userId && sort === 'recommended') {
       // Create cache key from parameters (include offset and sort)
-      const cacheKey = `${filter}-${atsType || 'all'}-${company || 'all'}-${source || 'all'}-${search || 'all'}-${sort}-${limit}-${offset}-${cursor || 'start'}`;
+      const cacheKey = `fast-${filter}-${atsType || 'all'}-${company || 'all'}-${locations || 'all'}-${postedWithin || 'all'}-${limit}-${offset}`;
 
       // Try cache first
       const cached = await cacheManager.getRecommendations(req.userId, cacheKey);
       if (cached) {
-        logger.debug({ userId: req.userId, cacheKey }, 'Recommendations loaded from cache');
-        // Disable browser caching to ensure pagination works correctly
+        logger.debug({ userId: req.userId, cacheKey }, 'Fast recommendations loaded from cache');
         res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
         return res.json({
           ...cached,
@@ -93,54 +93,59 @@ router.get('/jobs', async (req, res) => {
         });
       }
 
-      // Parse array parameters (comma-separated strings)
-      const parseArray = (str) => str ? str.split(',').map(s => s.trim()).filter(Boolean) : undefined;
-
-      // Use recommendation engine with all new filters
-      const result = await jobRecommendationEngine.getRecommendations(req.userId, {
-        filter,
-        atsType,
-        company,
-        source,
-        search,
-        limit: parseInt(limit),
-        offset: parseInt(offset),
-        cursor,
-        // New filters
-        experienceLevel: parseArray(experienceLevel),
-        minYearsExperience: minYearsExperience ? parseInt(minYearsExperience) : undefined,
-        maxYearsExperience: maxYearsExperience ? parseInt(maxYearsExperience) : undefined,
-        minSalary: minSalary ? parseInt(minSalary) : undefined,
-        maxSalary: maxSalary ? parseInt(maxSalary) : undefined,
-        locations: parseArray(locations),
-        workType: parseArray(workType),
-        jobType: parseArray(jobType),
-        postedWithin,
-        requiredSkills: parseArray(requiredSkills),
-        preferredSkills: parseArray(preferredSkills),
-        excludeSkills: parseArray(excludeSkills),
-        companySize: parseArray(companySize),
-        industries: parseArray(industries),
-        benefits: parseArray(benefits),
-        aiApplyable: aiApplyable === 'true' ? true : aiApplyable === 'false' ? false : undefined,
-        applicationComplexity: parseArray(applicationComplexity)
+      // Get user profile for skill matching
+      const userProfile = await prisma.profile.findUnique({
+        where: { userId: req.userId }
       });
 
-      // Cache the result
-      const response = {
-        jobs: result.jobs,
-        total: result.total,
-        limit: parseInt(limit),
-        nextCursor: result.nextCursor,
-        hasMore: result.hasMore,
-        personalized: true
-      };
-      await cacheManager.setRecommendations(req.userId, cacheKey, response);
+      logger.info({
+        userId: req.userId,
+        hasProfile: !!userProfile?.data,
+        profileSkills: userProfile?.data?.skills?.slice(0, 5),
+        experiences: userProfile?.data?.experiences?.length || 0
+      }, 'DEBUG: Profile data for fast matcher');
 
-      // Disable browser caching to ensure pagination works correctly
-      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      if (!userProfile?.data) {
+        logger.warn({ userId: req.userId }, 'No profile found, falling back to recency sort');
+        // Fall through to default listing below
+      } else {
+        // Parse array parameters
+        const parseArray = (str) => str ? str.split(',').map(s => s.trim()).filter(Boolean) : undefined;
+        const locationsArray = parseArray(locations);
 
-      return res.json(response);
+        // Use NEW fast hybrid matcher (50ms vs 7-12 seconds!)
+        const startTime = Date.now();
+        const result = await fastJobMatcher.getRecommendations(userProfile.data, {
+          limit: parseInt(limit),
+          offset: parseInt(offset),
+          location: locationsArray?.[0],  // Primary location filter
+          workType: parseArray(workType)?.[0],
+          minSalary: minSalary ? parseInt(minSalary) : undefined,
+          maxSalary: maxSalary ? parseInt(maxSalary) : undefined,
+          postedWithin,
+          experienceLevel: parseArray(experienceLevel)?.[0],
+          aiApplyable: aiApplyable === 'true' ? true : aiApplyable === 'false' ? false : undefined,
+          atsType,
+          company,
+        });
+        const queryTime = Date.now() - startTime;
+
+        logger.info({ userId: req.userId, queryTime, resultCount: result.jobs.length }, 'Fast matcher completed');
+
+        // Cache the result
+        const response = {
+          jobs: result.jobs,
+          total: result.total,
+          limit: parseInt(limit),
+          offset: parseInt(offset),
+          hasMore: result.hasMore,
+          personalized: true
+        };
+        await cacheManager.setRecommendations(req.userId, cacheKey, response);
+
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        return res.json(response);
+      }
     }
 
     // Otherwise, use default (chronological) listing
@@ -352,6 +357,9 @@ router.get('/jobs', async (req, res) => {
         break;
     }
 
+    // PERFORMANCE: "Lite" select for list view - excludes heavy fields (description, requirements)
+    // These heavy fields are only fetched when user clicks on a specific job (GET /api/jobs/:id)
+    // This reduces payload from ~5MB (100 jobs) to ~100KB (100 jobs)
     const queryOptions = {
       where,
       orderBy,
@@ -362,15 +370,14 @@ router.get('/jobs', async (req, res) => {
         company: true,
         location: true,
         salary: true,
-        description: true,
-        requirements: true,
+        // EXCLUDED for list view: description, requirements (fetched on detail view)
         applyUrl: true,
         atsType: true,
         atsComplexity: true,
         aiApplyable: true,
         postedDate: true,
         source: true,
-        // Include extracted metadata
+        // Include extracted metadata (lightweight summary fields)
         extractedSkills: true,
         extractedExperience: true,
         extractedEducation: true,

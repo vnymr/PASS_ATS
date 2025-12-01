@@ -231,7 +231,7 @@ export default function GenerateResume() {
       />
 
       {/* Content Area */}
-      <div className="max-w-7xl mx-auto px-8 pb-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-8 pb-8">
         {/* Resume Profile Status */}
         <AnimatePresence>
           {!resumeText && (
@@ -473,13 +473,13 @@ export default function GenerateResume() {
             title="Generation History"
             count={getFilteredResumes().length}
             right={
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                 <div className="relative">
                   <Input
                     placeholder="Search resumes..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-9 w-64"
+                    className="pl-9 w-full sm:w-64"
                   />
                   <div className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400">
                     <Icons.search size={16} />

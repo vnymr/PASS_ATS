@@ -240,15 +240,23 @@ model AggregatedJob {
   createdAt             DateTime          @default(now())
   updatedAt             DateTime?         @updatedAt
 
+  // PERFORMANCE INDEXES:
+  // Core filtering indexes
   @@index([aiApplyable, postedDate])
+  @@index([isActive, postedDate])
+  @@index([isActive, aiApplyable, postedDate])
+  @@index([isActive, source, postedDate]) // NEW: Common filter pattern for source-based queries
+
+  // Field-specific indexes
   @@index([lastChecked])
   @@index([atsType])
-  @@index([isActive, postedDate])
   @@index([source])
-  @@index([extractedSkills], type: Gin)
   @@index([company])
   @@index([location])
-  @@index([isActive, aiApplyable, postedDate])
+  @@index([postedDate])  // NEW: Simple date sorting
+
+  // Array field index (PostgreSQL GIN)
+  @@index([extractedSkills], type: Gin)
 }
 
 model AutoApplication {
@@ -343,6 +351,7 @@ enum AutoApplicationStatus {
   FAILED
   CANCELLED
   RETRYING
+  MANUAL_REQUIRED  // Application needs manual completion by user
 }
 
 // Conversation and Chat Models
