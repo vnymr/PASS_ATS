@@ -329,11 +329,23 @@ export async function processAutoApplyDirect({ applicationId, jobUrl, atsType, u
     logger.info({ resumePath }, '📄 Resume file ready');
 
     // Navigate to job application page
+    // Use 'domcontentloaded' instead of 'networkidle' - many job sites have persistent
+    // connections (analytics, websockets) that prevent networkidle from ever firing
     logger.info(`📄 Navigating to ${jobUrl}...`);
     await page.goto(jobUrl, {
-      waitUntil: 'networkidle',
-      timeout: 30000
+      waitUntil: 'domcontentloaded',
+      timeout: 45000
     });
+
+    // Wait for page to be visually ready (key elements loaded)
+    try {
+      await page.waitForLoadState('load', { timeout: 15000 });
+    } catch (e) {
+      logger.debug('Load state timeout - continuing anyway');
+    }
+
+    // Extra wait for dynamic content to render (React/Vue/Angular apps)
+    await new Promise(resolve => setTimeout(resolve, 2000));
 
     // Simulate human browsing behavior - SKIP for Camoufox (remote Firefox has mouse issues)
     // See: https://github.com/microsoft/playwright/issues/9354
