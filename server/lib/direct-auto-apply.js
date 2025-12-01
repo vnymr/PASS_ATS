@@ -297,45 +297,105 @@ export async function processAutoApplyDirect({ applicationId, jobUrl, atsType, u
       return result;
     })();
 
-    // Task 2: Browser launch + navigate to job page
+    // Task 2: Browser launch + navigate to job page (with proxy/Camoufox fallback)
     const browserPromise = (async () => {
-      logger.info('🚀 [PARALLEL] Launching stealth browser...');
-      const launchedBrowser = await launchStealthBrowser({ headless: false });
-      logger.info('✅ [PARALLEL] Browser launched');
+      let launchedBrowser = null;
+      let currentUseCamoufox = useCamoufox;  // May change on retry
+      const maxRetries = 2;
 
-      // Create context
-      const context = useCamoufox
-        ? await createStealthContextCamoufox(launchedBrowser, { applicationId, jobBoardDomain, sessionSeed })
-        : await createStealthContext(launchedBrowser, { applicationId, jobBoardDomain, sessionSeed });
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          logger.info({ attempt, useCamoufox: currentUseCamoufox }, '🚀 [PARALLEL] Launching stealth browser...');
 
-      logger.info({
-        jobBoardDomain,
-        useCamoufox,
-        sessionSeed
-      }, '🔗 [PARALLEL] Browser context created');
+          // On retry after proxy error, use local Playwright (no proxy)
+          if (attempt > 1 && !currentUseCamoufox) {
+            // Force local Playwright browser without proxy
+            const originalCamoufox = process.env.USE_CAMOUFOX;
+            process.env.USE_CAMOUFOX = 'false';
+            launchedBrowser = await launchStealthBrowser({ headless: false });
+            process.env.USE_CAMOUFOX = originalCamoufox;
+            logger.info('✅ [PARALLEL] Local browser launched (no proxy)');
+          } else {
+            launchedBrowser = await launchStealthBrowser({ headless: false });
+            logger.info('✅ [PARALLEL] Browser launched');
+          }
 
-      const newPage = await context.newPage();
-      await applyStealthToPage(newPage, { sessionSeed });
+          // Create context - use appropriate method based on browser type
+          const contextOptions = {
+            applicationId,
+            jobBoardDomain,
+            sessionSeed,
+            skipProxy: attempt > 1  // Skip proxy on retry
+          };
 
-      // Navigate to job page (80 second timeout as requested)
-      logger.info(`📄 [PARALLEL] Navigating to ${jobUrl}...`);
-      await newPage.goto(jobUrl, {
-        waitUntil: 'domcontentloaded',
-        timeout: 80000  // 1 minute 20 seconds
-      });
+          const context = currentUseCamoufox
+            ? await createStealthContextCamoufox(launchedBrowser, contextOptions)
+            : await createStealthContext(launchedBrowser, contextOptions);
 
-      // Wait for page to be visually ready
-      try {
-        await newPage.waitForLoadState('load', { timeout: 20000 });
-      } catch (e) {
-        logger.debug('Load state timeout - continuing anyway');
+          logger.info({
+            jobBoardDomain,
+            useCamoufox: currentUseCamoufox,
+            sessionSeed,
+            attempt
+          }, '🔗 [PARALLEL] Browser context created');
+
+          const newPage = await context.newPage();
+          await applyStealthToPage(newPage, { sessionSeed });
+
+          // Navigate to job page (80 second timeout as requested)
+          logger.info(`📄 [PARALLEL] Navigating to ${jobUrl}...`);
+          await newPage.goto(jobUrl, {
+            waitUntil: 'domcontentloaded',
+            timeout: 80000  // 1 minute 20 seconds
+          });
+
+          // Wait for page to be visually ready
+          try {
+            await newPage.waitForLoadState('load', { timeout: 20000 });
+          } catch (e) {
+            logger.debug('Load state timeout - continuing anyway');
+          }
+
+          // Wait for dynamic content
+          await new Promise(resolve => setTimeout(resolve, 2000));
+
+          logger.info({ usedCamoufox: currentUseCamoufox, attempt }, '✅ [PARALLEL] Page loaded and ready');
+          return { browser: launchedBrowser, page: newPage, context, usedCamoufox: currentUseCamoufox };
+
+        } catch (error) {
+          const isProxyError = error.message?.includes('NS_ERROR_PROXY') ||
+                               error.message?.includes('PROXY_FORBIDDEN') ||
+                               error.message?.includes('ERR_PROXY') ||
+                               error.message?.includes('ERR_TUNNEL');
+
+          logger.warn({
+            error: error.message,
+            attempt,
+            isProxyError,
+            useCamoufox: currentUseCamoufox
+          }, '⚠️ [PARALLEL] Navigation failed');
+
+          // Close browser before retry
+          if (launchedBrowser) {
+            try {
+              await launchedBrowser.close();
+            } catch (e) {
+              // Ignore close errors
+            }
+            launchedBrowser = null;
+          }
+
+          // If proxy error, retry with local Playwright (no Camoufox = no proxy)
+          if (isProxyError && currentUseCamoufox && attempt < maxRetries) {
+            logger.info('🔄 Proxy blocked by site - retrying with LOCAL browser (no proxy)...');
+            currentUseCamoufox = false;  // Switch to local Playwright
+            continue;
+          }
+
+          // If not a proxy error or already tried local, throw
+          throw error;
+        }
       }
-
-      // Wait for dynamic content
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      logger.info('✅ [PARALLEL] Page loaded and ready');
-      return { browser: launchedBrowser, page: newPage, context };
     })();
 
     // Wait for both tasks to complete

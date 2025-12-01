@@ -776,28 +776,36 @@ export async function createStealthContext(browser, options = {}) {
     sessionSeed
   };
 
-  // Get proxy configuration - Priority: options.proxy > proxyRotator > env vars
-  let proxy = options.proxy;
+  // Get proxy configuration - Priority: skipProxy > options.proxy > proxyRotator > env vars
+  let proxy = null;
 
-  if (!proxy && proxyRotator.isConfigured()) {
-    // Use proxy rotator for automatic rotation
-    if (options.jobBoardDomain && options.applicationId) {
-      // Job board specific proxy with sticky session
-      proxy = proxyRotator.getProxyForJobBoard(options.jobBoardDomain, options.applicationId);
-    } else if (options.applicationId) {
-      // Sticky proxy for multi-page forms
-      proxy = proxyRotator.getStickyProxy(options.applicationId);
-    } else {
-      // Rotating proxy (new IP)
-      proxy = proxyRotator.getRotatingProxy();
+  // Check if proxy should be skipped (e.g., after NS_ERROR_PROXY_FORBIDDEN)
+  if (options.skipProxy) {
+    logger.info('⚠️ Proxy SKIPPED (skipProxy=true) - using direct connection');
+    proxy = null;
+  } else {
+    proxy = options.proxy;
+
+    if (!proxy && proxyRotator.isConfigured()) {
+      // Use proxy rotator for automatic rotation
+      if (options.jobBoardDomain && options.applicationId) {
+        // Job board specific proxy with sticky session
+        proxy = proxyRotator.getProxyForJobBoard(options.jobBoardDomain, options.applicationId);
+      } else if (options.applicationId) {
+        // Sticky proxy for multi-page forms
+        proxy = proxyRotator.getStickyProxy(options.applicationId);
+      } else {
+        // Rotating proxy (new IP)
+        proxy = proxyRotator.getRotatingProxy();
+      }
+    } else if (!proxy && process.env.PROXY_SERVER) {
+      // Fallback to environment variables (legacy support)
+      proxy = {
+        server: process.env.PROXY_SERVER,
+        username: process.env.PROXY_USERNAME,
+        password: process.env.PROXY_PASSWORD
+      };
     }
-  } else if (!proxy && process.env.PROXY_SERVER) {
-    // Fallback to environment variables (legacy support)
-    proxy = {
-      server: process.env.PROXY_SERVER,
-      username: process.env.PROXY_USERNAME,
-      password: process.env.PROXY_PASSWORD
-    };
   }
 
   // Add proxy to context if configured
