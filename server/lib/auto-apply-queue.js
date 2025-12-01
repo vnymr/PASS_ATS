@@ -130,24 +130,28 @@ async function applyWithAI(jobUrl, user, jobData, resumePath = null) {
     // Generate application ID for sticky proxy session
     const applicationId = `${jobData.id || 'unknown'}-${user.id || 'user'}-${Date.now()}`;
 
+    // Generate consistent session seed for fingerprint consistency
+    const sessionSeed = parseInt(applicationId.replace(/\D/g, '').slice(0, 8) || '12345', 10);
+
     // Create stealth context with proxy rotation
     // Use Camoufox context if available, otherwise standard context
     const useCamoufox = process.env.USE_CAMOUFOX === 'true';
     const context = useCamoufox
-      ? await createStealthContextCamoufox(browser, { applicationId, jobBoardDomain })
-      : await createStealthContext(browser, { applicationId, jobBoardDomain });
+      ? await createStealthContextCamoufox(browser, { applicationId, jobBoardDomain, sessionSeed })
+      : await createStealthContext(browser, { applicationId, jobBoardDomain, sessionSeed });
 
     logger.info({
       applicationId,
       jobBoardDomain,
       proxyEnabled: proxyRotator.isConfigured(),
-      useCamoufox
+      useCamoufox,
+      sessionSeed
     }, '🔗 Browser context created');
 
     const page = await context.newPage();
 
-    // Apply comprehensive stealth techniques to avoid bot detection
-    await applyStealthToPage(page);
+    // Apply comprehensive stealth techniques to avoid bot detection (with matching sessionSeed)
+    await applyStealthToPage(page, { sessionSeed });
 
     // Transform Greenhouse URLs to direct application page
     let targetUrl = jobUrl;

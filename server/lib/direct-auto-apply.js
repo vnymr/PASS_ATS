@@ -288,24 +288,30 @@ export async function processAutoApplyDirect({ applicationId, jobUrl, atsType, u
     // Extract job board domain for proxy selection
     const jobBoardDomain = new URL(jobUrl).hostname;
 
+    // Generate consistent session seed for fingerprint consistency
+    const sessionSeed = applicationId
+      ? parseInt(applicationId.replace(/\D/g, '').slice(0, 8) || '12345', 10)
+      : Math.floor(Math.random() * 1000000);
+
     // Create stealth context with proxy rotation
     // Use Camoufox context if available, otherwise standard context
     const useCamoufox = process.env.USE_CAMOUFOX === 'true';
     const context = useCamoufox
-      ? await createStealthContextCamoufox(browser, { applicationId, jobBoardDomain })
-      : await createStealthContext(browser, { applicationId, jobBoardDomain });
+      ? await createStealthContextCamoufox(browser, { applicationId, jobBoardDomain, sessionSeed })
+      : await createStealthContext(browser, { applicationId, jobBoardDomain, sessionSeed });
 
     logger.info({
       applicationId,
       jobBoardDomain,
       proxyEnabled: proxyRotator.isConfigured(),
-      useCamoufox
+      useCamoufox,
+      sessionSeed
     }, '🔗 Browser context created with proxy rotation');
 
     const page = await context.newPage();
 
-    // Apply additional stealth techniques to the page
-    await applyStealthToPage(page);
+    // Apply additional stealth techniques to the page (with matching sessionSeed)
+    await applyStealthToPage(page, { sessionSeed });
 
     // Save PDF to temp file
     const fs = await import('fs');
