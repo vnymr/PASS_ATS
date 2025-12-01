@@ -150,6 +150,10 @@ class AIFormFiller {
       learningRecorded: false
     };
 
+    // Track which frame/page we're working with
+    let workingPage = page;
+    let usedIframe = false;
+
     try {
       // Step 1: Check for learned patterns
       const url = page.url();
@@ -159,34 +163,58 @@ class AIFormFiller {
         result.usedLearnedPatterns = true;
       }
 
-      // Step 2: Extract all form fields
+      // Step 1.5: Check for embedded application iframes FIRST
+      // Many ATS like Greenhouse embed forms in iframes
+      logger.info('🔍 Checking for embedded application iframes...');
+      const iframeCheck = await this.findFormFrame(page);
+      if (iframeCheck.found && iframeCheck.frame) {
+        logger.info({ atsType: iframeCheck.atsType }, '✅ Found application iframe - switching context');
+        workingPage = iframeCheck.frame;
+        usedIframe = true;
+        result.usedIframe = true;
+        result.iframeAtsType = iframeCheck.atsType;
+      }
+
+      // Step 2: Extract all form fields from the working page/frame
       logger.info('Extracting form fields...');
-      const extraction = await this.extractor.extractComplete(page);
+      const extraction = await this.extractor.extractComplete(workingPage);
 
       result.fieldsExtracted = extraction.fields.length;
       result.hasCaptcha = extraction.hasCaptcha;
       result.complexity = extraction.complexity.complexity;
 
-      // Step 2.5: Check if we're on a job description page instead of application form
-      // If we have very few fields (1-3), likely need to click "Apply" button first
+      // Step 2.5: If few/no fields found, try clicking Apply button
+      // This handles job description pages that need navigation to the form
       if (extraction.fields.length <= 3) {
         logger.warn({ fieldCount: extraction.fields.length }, '⚠️  Very few fields found - checking for Apply button');
 
+        // Try clicking Apply button on the main page
         const applyButton = await this.findAndClickApplyButton(page);
         if (applyButton.clicked) {
           logger.info({ buttonText: applyButton.text }, '✅ Clicked Apply button - waiting for application form');
 
-          // Wait for navigation or modal to load
+          // Wait for navigation, modal, or iframe to load
           await this.sleep(3000);
 
-          // Re-extract form fields from the actual application page
-          logger.info('Re-extracting form fields from application page...');
-          const newExtraction = await this.extractor.extractComplete(page);
+          // After clicking Apply, check for NEW iframes that may have loaded
+          const newIframeCheck = await this.findFormFrame(page);
+          if (newIframeCheck.found && newIframeCheck.frame) {
+            logger.info({ atsType: newIframeCheck.atsType }, '✅ Found application iframe after clicking Apply');
+            workingPage = newIframeCheck.frame;
+            usedIframe = true;
+            result.usedIframe = true;
+            result.iframeAtsType = newIframeCheck.atsType;
+          }
+
+          // Re-extract form fields from the working page (could be iframe or main page)
+          logger.info('Re-extracting form fields from application page/iframe...');
+          const newExtraction = await this.extractor.extractComplete(workingPage);
 
           if (newExtraction.fields.length > extraction.fields.length) {
             logger.info({
               oldCount: extraction.fields.length,
-              newCount: newExtraction.fields.length
+              newCount: newExtraction.fields.length,
+              usedIframe
             }, '✅ Found more fields after clicking Apply button');
 
             // Update extraction with new data
@@ -199,7 +227,31 @@ class AIFormFiller {
             result.hasCaptcha = newExtraction.hasCaptcha;
             result.complexity = newExtraction.complexity.complexity;
           } else {
+            // Still no fields - check if we need to look harder
             logger.warn('No additional fields found after clicking Apply button');
+
+            // Last attempt: try different iframe selectors more aggressively
+            if (!usedIframe) {
+              const frames = page.frames();
+              for (const frame of frames) {
+                if (frame === page.mainFrame()) continue;
+                try {
+                  const frameFields = await this.extractor.extractComplete(frame);
+                  if (frameFields.fields.length > extraction.fields.length) {
+                    logger.info({ frameUrl: frame.url(), fieldCount: frameFields.fields.length }, '✅ Found fields in secondary frame');
+                    extraction.fields = frameFields.fields;
+                    extraction.submitButton = frameFields.submitButton;
+                    result.fieldsExtracted = frameFields.fields.length;
+                    workingPage = frame;
+                    usedIframe = true;
+                    result.usedIframe = true;
+                    break;
+                  }
+                } catch (e) {
+                  // Continue to next frame
+                }
+              }
+            }
           }
         } else {
           logger.info('No Apply button found - proceeding with current page');
@@ -289,9 +341,9 @@ class AIFormFiller {
         result.warnings.push(...validation.warnings.map(w => w.message));
       }
 
-      // Step 5: Fill the form
-      logger.info('Filling form fields...');
-      const fillResult = await this.fillFields(page, extraction.fields, aiResponses);
+      // Step 5: Fill the form (use workingPage which may be an iframe)
+      logger.info({ usedIframe }, 'Filling form fields...');
+      const fillResult = await this.fillFields(workingPage, extraction.fields, aiResponses);
 
       result.fieldsFilled = fillResult.filled;
       result.errors.push(...fillResult.errors);
@@ -299,6 +351,7 @@ class AIFormFiller {
       // Step 6: Handle any errors with screenshot analysis
       if (fillResult.errors.length > 0) {
         logger.info('Errors detected, analyzing with AI vision...');
+        // Use main page for screenshot (captures full context)
         const errorScreenshot = await this.extractor.captureScreenshot(page);
         result.screenshots.push({
           type: 'error',
@@ -315,10 +368,10 @@ class AIFormFiller {
         if (solution.needsManualIntervention) {
           result.errors.push('Manual intervention required: ' + solution.issue);
         } else if (solution.fieldToRetry && solution.newValue) {
-          // Retry with AI's suggested fix
+          // Retry with AI's suggested fix (use workingPage for the iframe context)
           logger.info('Retrying with AI solution...');
           await this.fillSingleField(
-            page,
+            workingPage,
             extraction.fields.find(f => f.name === solution.fieldToRetry),
             solution.newValue
           );
@@ -340,27 +393,32 @@ class AIFormFiller {
 
       // Step 7: Submit if requested
       if (extraction.submitButton && fillResult.filled > 0) {
-        logger.info({ buttonText: extraction.submitButton.text }, 'Found submit button');
+        logger.info({ buttonText: extraction.submitButton.text, usedIframe }, 'Found submit button');
         result.submitButton = extraction.submitButton;
-        
+
+        // Store the workingPage reference for later use by submitForm
+        result._workingPage = workingPage;
+        result._usedIframe = usedIframe;
+
         // Optional auto-submit (useful for testing)
         if (process.env.AUTO_SUBMIT_FOR_TESTING === 'true') {
           logger.warn('TESTING MODE: AUTO_SUBMIT_FOR_TESTING enabled - attempting auto-submit');
-          
+
           // Wait a bit for any async form updates to complete
           await this.sleep(1000);
-          
-          // Verify form is ready before submitting
-          const readyCheck = await this.verifyFormReadyForSubmission(page);
+
+          // Verify form is ready before submitting (use workingPage for iframe context)
+          const readyCheck = await this.verifyFormReadyForSubmission(workingPage);
           if (!readyCheck.ready && readyCheck.issues.length > 0) {
-            logger.warn({ 
+            logger.warn({
               issues: readyCheck.issues,
               note: 'Form has validation issues but proceeding due to AUTO_SUBMIT_FOR_TESTING'
             }, '⚠️  Form validation warnings before auto-submit');
           }
-          
+
           try {
-            const submitRes = await this.submitForm(page, extraction.submitButton, userProfile);
+            // Use workingPage for submit if we're in an iframe
+            const submitRes = await this.submitForm(workingPage, extraction.submitButton, userProfile);
             result.autoSubmitted = true;
             result.submitResult = submitRes;
             
@@ -2342,65 +2400,228 @@ class AIFormFiller {
   }
 
   /**
+   * Find application form iframe (Greenhouse, Lever, Workday, etc.)
+   * Many ATS platforms embed their forms in iframes
+   * @param {Page} page - Playwright page
+   * @returns {Object} { found: boolean, frame: Frame|null, atsType: string|null }
+   */
+  async findFormFrame(page) {
+    logger.info('🔍 Checking for embedded application form iframes...');
+
+    try {
+      // Common ATS iframe patterns
+      const iframePatterns = [
+        { pattern: 'greenhouse', name: 'Greenhouse' },
+        { pattern: 'lever.co', name: 'Lever' },
+        { pattern: 'workday', name: 'Workday' },
+        { pattern: 'icims', name: 'iCIMS' },
+        { pattern: 'smartrecruiters', name: 'SmartRecruiters' },
+        { pattern: 'jobvite', name: 'Jobvite' },
+        { pattern: 'ashbyhq', name: 'Ashby' },
+        { pattern: 'apply', name: 'Generic Apply' }
+      ];
+
+      // Get all frames in the page
+      const frames = page.frames();
+      logger.info({ frameCount: frames.length }, 'Found frames in page');
+
+      for (const frame of frames) {
+        const url = frame.url();
+        if (!url || url === 'about:blank') continue;
+
+        for (const { pattern, name } of iframePatterns) {
+          if (url.toLowerCase().includes(pattern)) {
+            logger.info({ frameUrl: url, atsType: name }, '✅ Found ATS iframe');
+
+            // Verify frame has form elements
+            try {
+              const formCount = await frame.locator('form, input, select, textarea').count();
+              if (formCount > 0) {
+                logger.info({ formElements: formCount, atsType: name }, '✅ ATS iframe contains form elements');
+                return { found: true, frame, atsType: name };
+              }
+            } catch (e) {
+              logger.debug({ error: e.message }, 'Error checking iframe form elements');
+            }
+          }
+        }
+      }
+
+      // Also check for iframes by ID/class patterns
+      const iframeSelectors = [
+        'iframe#grnhse_iframe',           // Greenhouse
+        'iframe[id*="greenhouse"]',
+        'iframe[src*="greenhouse"]',
+        'iframe[id*="lever"]',
+        'iframe[src*="lever"]',
+        'iframe[id*="apply"]',
+        'iframe[src*="apply"]',
+        'iframe[id*="job"]',
+        'iframe[class*="application"]'
+      ];
+
+      for (const selector of iframeSelectors) {
+        try {
+          const iframeLocator = page.locator(selector).first();
+          const count = await iframeLocator.count();
+
+          if (count > 0) {
+            const frame = await iframeLocator.contentFrame();
+            if (frame) {
+              const url = frame.url();
+              logger.info({ selector, frameUrl: url }, '✅ Found application iframe via selector');
+              return { found: true, frame, atsType: 'Embedded' };
+            }
+          }
+        } catch (e) {
+          // Try next selector
+        }
+      }
+
+      logger.info('No embedded application iframe found');
+      return { found: false, frame: null, atsType: null };
+
+    } catch (error) {
+      logger.error({ error: error.message }, 'Error finding form frame');
+      return { found: false, frame: null, atsType: null };
+    }
+  }
+
+  /**
    * Find and click Apply button to navigate to application form
+   * Enhanced with more ATS-specific selectors
    */
   async findAndClickApplyButton(page) {
     logger.info('🔍 Looking for Apply button...');
 
     try {
-      // Try multiple button text variations
+      // STEP 1: Try ATS-specific selectors first (most reliable)
+      const atsSelectors = [
+        // Greenhouse
+        '#apply_button',
+        '#application_form_submit',
+        '[data-id="apply-button"]',
+        'a[href*="#app"]',
+        'a[href*="greenhouse.io/job_app"]',
+        '.apply-btn',
+        '.js-apply-button',
+
+        // Lever
+        '.postings-btn-wrapper a',
+        '.lever-apply-btn',
+        'a[href*="lever.co/"]',
+
+        // Workday
+        '[data-automation-id="applyButton"]',
+        '[data-automation-id="applyBtn"]',
+        '.WDPT button[type="button"]',
+
+        // Generic job boards
+        '[data-testid="apply-button"]',
+        '[data-cy="apply-button"]',
+        '[aria-label*="Apply"]',
+        '.job-apply-button',
+        '.apply-now-button',
+        '.careers-apply-btn',
+        '#job-apply',
+        '.job-apply',
+        'a.apply',
+        'button.apply'
+      ];
+
+      for (const selector of atsSelectors) {
+        try {
+          const element = page.locator(selector).first();
+          const count = await element.count();
+
+          if (count > 0) {
+            const isVisible = await element.isVisible().catch(() => false);
+            if (isVisible) {
+              const text = await element.textContent().catch(() => 'Apply');
+              logger.info({ text: text?.trim(), selector }, '✅ Found Apply button via ATS selector');
+
+              await element.click();
+              await this.sleep(2000); // Wait for navigation/modal
+              return { clicked: true, text: text?.trim() };
+            }
+          }
+        } catch (error) {
+          // Try next selector
+        }
+      }
+
+      // STEP 2: Try text-based matching with more variations
       const applyTexts = [
         'apply for this position',
+        'apply for this role',
+        'apply for job',
         'apply now',
         'apply for this job',
+        'apply here',
+        'apply online',
+        'apply today',
         'apply',
         'submit application',
         'start application',
-        'begin application'
+        'begin application',
+        'i\'m interested',
+        'easy apply',
+        'quick apply'
       ];
 
       for (const text of applyTexts) {
         try {
-          // Use Playwright's getByRole or getByText for better matching
-          const button = page.getByRole('button', { name: new RegExp(text, 'i') });
+          // Try buttons first
+          const button = page.getByRole('button', { name: new RegExp(`^${text}$`, 'i') });
           const count = await button.count();
 
           if (count > 0) {
-            const buttonText = await button.first().textContent();
-            logger.info({ buttonText, searchText: text }, 'Found Apply button');
+            const isVisible = await button.first().isVisible().catch(() => false);
+            if (isVisible) {
+              const buttonText = await button.first().textContent();
+              logger.info({ buttonText, searchText: text }, '✅ Found Apply button by text');
 
-            await button.first().click();
-            return { clicked: true, text: buttonText };
+              await button.first().click();
+              await this.sleep(2000);
+              return { clicked: true, text: buttonText };
+            }
           }
         } catch (error) {
           // Try next variant
         }
 
-        // Also try links
+        // Try links
         try {
           const link = page.getByRole('link', { name: new RegExp(text, 'i') });
           const count = await link.count();
 
           if (count > 0) {
-            const linkText = await link.first().textContent();
-            logger.info({ linkText, searchText: text }, 'Found Apply link');
+            const isVisible = await link.first().isVisible().catch(() => false);
+            if (isVisible) {
+              const linkText = await link.first().textContent();
+              logger.info({ linkText, searchText: text }, '✅ Found Apply link by text');
 
-            await link.first().click();
-            return { clicked: true, text: linkText };
+              await link.first().click();
+              await this.sleep(2000);
+              return { clicked: true, text: linkText };
+            }
           }
         } catch (error) {
           // Try next variant
         }
       }
 
-      // Try generic selectors as fallback
+      // STEP 3: Try generic CSS selectors
       const genericSelectors = [
         'button:has-text("Apply")',
         'a:has-text("Apply")',
         '[class*="apply"][class*="button"]',
+        '[class*="apply"][class*="btn"]',
+        '[class*="Apply"]',
         '[data-qa*="apply"]',
         '#apply-button',
-        '.apply-button'
+        '.apply-button',
+        'a[href*="apply"]'
       ];
 
       for (const selector of genericSelectors) {
@@ -2409,15 +2630,54 @@ class AIFormFiller {
           const count = await element.count();
 
           if (count > 0) {
-            const text = await element.textContent();
-            logger.info({ text, selector }, 'Found Apply button via selector');
+            const isVisible = await element.isVisible().catch(() => false);
+            if (isVisible) {
+              const text = await element.textContent();
+              logger.info({ text: text?.trim(), selector }, '✅ Found Apply button via generic selector');
 
-            await element.click();
-            return { clicked: true, text };
+              await element.click();
+              await this.sleep(2000);
+              return { clicked: true, text: text?.trim() };
+            }
           }
         } catch (error) {
           // Try next selector
         }
+      }
+
+      // STEP 4: Look for any prominent CTA button in job description area
+      try {
+        const ctaSelectors = [
+          '.job-details button:visible',
+          '.job-description button:visible',
+          '.careers-content button:visible',
+          'main button:visible',
+          'article button:visible'
+        ];
+
+        for (const selector of ctaSelectors) {
+          try {
+            const buttons = page.locator(selector);
+            const count = await buttons.count();
+
+            for (let i = 0; i < Math.min(count, 5); i++) {
+              const btn = buttons.nth(i);
+              const text = await btn.textContent().catch(() => '');
+              const textLower = text?.toLowerCase() || '';
+
+              if (textLower.includes('apply') || textLower.includes('submit') || textLower.includes('interested')) {
+                logger.info({ text: text?.trim() }, '✅ Found Apply button in job content');
+                await btn.click();
+                await this.sleep(2000);
+                return { clicked: true, text: text?.trim() };
+              }
+            }
+          } catch (e) {
+            // Continue
+          }
+        }
+      } catch (e) {
+        // Continue
       }
 
       logger.info('No Apply button found');

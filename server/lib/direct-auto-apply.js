@@ -384,7 +384,17 @@ export async function processAutoApplyDirect({ applicationId, jobUrl, atsType, u
       throw new Error(fillResult.errors?.join('; ') || 'Form filling failed');
     }
 
-    logger.info(`✅ Form filled: ${fillResult.fieldsFilled}/${fillResult.fieldsExtracted} fields`);
+    logger.info({
+      fieldsFilled: fillResult.fieldsFilled,
+      fieldsExtracted: fillResult.fieldsExtracted,
+      usedIframe: fillResult.usedIframe || false,
+      iframeAtsType: fillResult.iframeAtsType
+    }, '✅ Form filled');
+
+    // Use the working page from fillResult (may be an iframe)
+    // This ensures submit/validation happen in the correct context
+    const workingPage = fillResult._workingPage || page;
+    const usedIframe = fillResult._usedIframe || false;
 
     // Submit the form with retry logic
     let submitResult = { success: false, error: 'No submit button found' };
@@ -395,14 +405,15 @@ export async function processAutoApplyDirect({ applicationId, jobUrl, atsType, u
     if (fillResult.submitButton) {
       while (submitAttempts < MAX_SUBMIT_RETRIES) {
         submitAttempts++;
-        logger.info({ attempt: submitAttempts, maxRetries: MAX_SUBMIT_RETRIES }, '📤 Submitting application...');
+        logger.info({ attempt: submitAttempts, maxRetries: MAX_SUBMIT_RETRIES, usedIframe }, '📤 Submitting application...');
 
-        submitResult = await aiFormFiller.submitForm(page, fillResult.submitButton, userProfile);
+        // Submit using workingPage (may be iframe context)
+        submitResult = await aiFormFiller.submitForm(workingPage, fillResult.submitButton, userProfile);
 
         // Wait for page to stabilize
         await new Promise(resolve => setTimeout(resolve, 2000));
 
-        // Run comprehensive validation
+        // Run comprehensive validation (use main page for URL checks, workingPage for form checks)
         logger.info('🔍 Running post-submission validation...');
         validationResult = await aiFormFiller.validateApplicationSubmission(page, fillResult, submitResult);
 
@@ -424,12 +435,12 @@ export async function processAutoApplyDirect({ applicationId, jobUrl, atsType, u
             issues: validationResult.issues
           }, '⚠️ Validation failed, attempting retry...');
 
-          // Try to fix issues before retry
+          // Try to fix issues before retry (use workingPage for iframe context)
           if (validationResult.issues.length > 0) {
             // Re-extract and fill any empty required fields
-            const extraction = await aiFormFiller.extractor.extractComplete(page);
+            const extraction = await aiFormFiller.extractor.extractComplete(workingPage);
             if (extraction.fields.length > 0) {
-              const retryFillResult = await aiFormFiller.fillFields(page, extraction.fields, {});
+              const retryFillResult = await aiFormFiller.fillFields(workingPage, extraction.fields, {});
               logger.info({ retryFilled: retryFillResult.filled }, 'Retry fill attempt completed');
             }
           }
