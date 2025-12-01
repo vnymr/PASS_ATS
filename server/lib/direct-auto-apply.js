@@ -335,12 +335,24 @@ export async function processAutoApplyDirect({ applicationId, jobUrl, atsType, u
       timeout: 30000
     });
 
-    // Simulate human browsing behavior (mouse movements, scrolling) to evade bot detection
-    logger.info('🤖 Simulating human browsing behavior...');
-    try {
-      await simulateHumanBrowsing(page);
-    } catch (e) {
-      logger.debug({ error: e.message }, 'Human browsing simulation failed, continuing...');
+    // Simulate human browsing behavior - SKIP for Camoufox (remote Firefox has mouse issues)
+    // See: https://github.com/microsoft/playwright/issues/9354
+    if (!useCamoufox) {
+      logger.info('🤖 Simulating human browsing behavior...');
+      try {
+        await simulateHumanBrowsing(page, { timeout: 8000 });
+      } catch (e) {
+        logger.debug({ error: e.message }, 'Human browsing simulation failed, continuing...');
+      }
+    } else {
+      // For Camoufox, just do a simple scroll with page.evaluate (more reliable)
+      logger.info('🦊 Camoufox: Using simple scroll instead of mouse simulation');
+      try {
+        await page.evaluate(() => window.scrollBy({ top: 300, behavior: 'smooth' }));
+        await new Promise(r => setTimeout(r, 1000));
+      } catch (e) {
+        logger.debug({ error: e.message }, 'Simple scroll failed, continuing...');
+      }
     }
 
     // Additional human-like delay

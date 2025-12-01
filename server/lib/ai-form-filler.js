@@ -21,8 +21,11 @@ class AIFormFiller {
     this.maxRetries = 3;
     this.typingDelay = 50; // ms between keystrokes for natural typing
 
-    // Ghost cursor mode for human-like mouse movements (improved bot detection evasion)
-    this.useGhostCursor = options.useGhostCursor !== false; // Enabled by default
+    // Ghost cursor mode - DISABLED by default due to issues with remote browsers (Camoufox/Firefox)
+    // Ghost cursor was designed for local Puppeteer, not remote WebSocket connections
+    // See: https://github.com/microsoft/playwright/issues/9354 (Firefox mouse move issues)
+    // See: https://github.com/microsoft/playwright/issues/15317 (protocol errors)
+    this.useGhostCursor = options.useGhostCursor === true; // Disabled by default
     this.ghostCursors = new WeakMap(); // Cache cursors per page
   }
 
