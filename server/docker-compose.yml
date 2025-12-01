@@ -62,11 +62,14 @@ services:
       - HEALTH_PORT=8080
       - BROWSER_PORT=3000
       - CAMOUFOX_HEADLESS=true
-      # Proxy configuration (optional)
+      # Proxy configuration for IPRoyal residential proxies
       - PROXY_SERVER=${PROXY_SERVER}
+      - PROXY_HOST=${PROXY_HOST}
+      - PROXY_PORT=${PROXY_PORT}
       - PROXY_USERNAME=${PROXY_USERNAME}
       - PROXY_PASSWORD=${PROXY_PASSWORD}
-      - CAMOUFOX_GEOIP=${CAMOUFOX_GEOIP:-false}
+      - PROXY_COUNTRY=${PROXY_COUNTRY:-us}
+      - CAMOUFOX_GEOIP=${CAMOUFOX_GEOIP:-true}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/ready"]
       interval: 30s
