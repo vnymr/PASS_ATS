@@ -3035,11 +3035,11 @@ apiRouter.use(conversationsRouter);
 apiRouter.use(routinesRouter);
 apiRouter.use(gmailRouter);
 
-// Mount the API router
-app.use('/api', apiRouter);
-
-// Worker routes (separate from main API - workers have their own auth)
+// Worker routes FIRST (separate auth system, must be before main API router)
 app.use('/api/worker', workerRouter);
+
+// Mount the API router (has authenticateToken middleware)
+app.use('/api', apiRouter);
 
 // Migration endpoint (protected by secret key, no auth token needed)
 app.use('/api', migrateDatabaseRouter);
