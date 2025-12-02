@@ -279,6 +279,7 @@ model AutoApplication {
   completedAt       DateTime?
   user              User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
   job               AggregatedJob           @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  workerSession     WorkerSession?          // Link to worker session if using worker mode
 
   @@unique([userId, jobId])
   @@index([userId, status])
@@ -495,4 +496,93 @@ enum RoutineType {
   DAILY_DIGEST
   WEEKLY_SUMMARY
   CUSTOM
+}
+
+// ============================================
+// WORKER-ASSISTED AUTO-APPLY SYSTEM
+// Human workers click submit after AI fills forms
+// ============================================
+
+model Worker {
+  id              Int             @id @default(autoincrement())
+  email           String          @unique
+  password        String          // bcrypt hashed
+  name            String
+  isActive        Boolean         @default(true)
+  role            WorkerRole      @default(OPERATOR)
+
+  // Stats
+  totalCompleted  Int             @default(0)
+  totalFailed     Int             @default(0)
+  totalSkipped    Int             @default(0)
+  avgTimeSeconds  Int?
+
+  // Session tracking
+  lastActiveAt    DateTime?
+  currentSessionId String?
+
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  // Relations
+  sessions        WorkerSession[]
+
+  @@index([isActive])
+  @@index([email])
+}
+
+model WorkerSession {
+  id                  String              @id @default(cuid())
+
+  // Worker assignment
+  workerId            Int?
+  worker              Worker?             @relation(fields: [workerId], references: [id])
+
+  // Link to existing auto application
+  autoApplicationId   String              @unique
+  autoApplication     AutoApplication     @relation(fields: [autoApplicationId], references: [id], onDelete: Cascade)
+
+  // Status tracking
+  status              WorkerSessionStatus @default(QUEUED)
+
+  // Browser session info
+  browserSessionId    String?
+  vncUrl              String?
+
+  // Timing
+  queuedAt            DateTime            @default(now())
+  assignedAt          DateTime?
+  aiStartedAt         DateTime?
+  aiCompletedAt       DateTime?
+  submittedAt         DateTime?
+  completedAt         DateTime?
+
+  // Form state snapshot
+  formData            Json?
+  screenshotUrl       String?             @db.Text
+
+  // Worker feedback
+  workerNotes         String?             @db.Text
+  failReason          String?
+  skipReason          String?
+
+  @@index([status])
+  @@index([workerId, status])
+  @@index([queuedAt])
+}
+
+enum WorkerRole {
+  OPERATOR
+  ADMIN
+}
+
+enum WorkerSessionStatus {
+  QUEUED
+  ASSIGNED
+  AI_PROCESSING
+  READY_FOR_SUBMIT
+  SUBMITTED
+  COMPLETED
+  FAILED
+  SKIPPED
 }

@@ -2844,6 +2844,8 @@ import healthRouter from './routes/health.js';
 import conversationsRouter from './routes/conversations.js';
 import routinesRouter from './routes/routines.js';
 import gmailRouter from './routes/gmail.js';
+import workerRouter from './routes/worker.js';
+import { workerWebSocket } from './lib/worker-websocket.js';
 
 app.post('/api/generate-ai', authenticateToken, generateResumeEndpoint);
 app.get('/api/check-compilers', authenticateToken, checkCompilersEndpoint);
@@ -3036,6 +3038,9 @@ apiRouter.use(gmailRouter);
 // Mount the API router
 app.use('/api', apiRouter);
 
+// Worker routes (separate from main API - workers have their own auth)
+app.use('/api/worker', workerRouter);
+
 // Migration endpoint (protected by secret key, no auth token needed)
 app.use('/api', migrateDatabaseRouter);
 
@@ -3067,6 +3072,10 @@ const server = app.listen(PORT, () => {
 
   // Start routine executor for automated task scheduling
   startRoutineExecutor();
+
+  // Initialize Worker WebSocket for real-time worker dashboard updates
+  workerWebSocket.initialize(server);
+  logger.info('✅ Worker WebSocket initialized on /ws/worker');
 
   // Start SMART job sync service (tiered frequency for fresh jobs)
   smartJobSync.start();

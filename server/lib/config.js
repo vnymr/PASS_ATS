@@ -101,6 +101,7 @@ export const config = {
       ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
       : [
           'http://localhost:3000',
+          'http://localhost:3001',  // Worker dashboard
           'http://localhost:5173',
           'http://localhost:8080',
           'https://happyresumes.com',
