@@ -1,0 +1,113 @@
+{
+  "metadata": {
+    "url": "https://job-boards.greenhouse.io/angi/jobs/8065358002",
+    "domain": "job-boards.greenhouse.io",
+    "timestamp": "2025-11-26T08:53:18.067Z",
+    "success": true
+  },
+  "formStructure": {
+    "totalFields": 21,
+    "fieldTypes": {
+      "text": 17,
+      "tel": 1,
+      "file": 2,
+      "textarea": 1
+    },
+    "requiredFields": [
+      {
+        "name": "unnamed_4",
+        "type": "text",
+        "label": ""
+      },
+      {
+        "name": "unnamed_13",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_15",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_18",
+        "type": "text",
+        "label": "Select..."
+      }
+    ]
+  },
+  "aiResponses": {
+    "4000602002": "Prefer not to disclose",
+    "4000603002": "Male",
+    "first_name": "John",
+    "last_name": "Doe",
+    "email": "john@example.com",
+    "country": "United States",
+    "unnamed_4": "Senior Software Engineer",
+    "phone": "+1-555-123-4567",
+    "resume": "John_Doe_Resume.pdf",
+    "cover_letter": "John_Doe_Cover_Letter.pdf",
+    "question_32351236002": "linkedin.com/in/johndoe",
+    "question_32351237002": "N/A",
+    "question_32351238002": "LinkedIn job posting",
+    "question_32351239002": "Yes",
+    "unnamed_13": "United States",
+    "question_32351240002": "No",
+    "unnamed_15": "Full-time",
+    "question_32351241002": "$120,000 - $150,000",
+    "question_32351242002": "I acknowledge receipt of the California Consumer Privacy Act Notice above and consent to the collection, use, and retention of my personal information as described for purposes related to recruitment, hiring, and employment administration. I understand the categories of information that may be collected and I authorize Angi to process my information for the stated purposes.",
+    "unnamed_18": "Agree",
+    "question_32351243002": "John Doe\n123 Market St, Apt 100\nSan Francisco, CA 94103\nUnited States"
+  },
+  "problemsSolved": [
+    {
+      "problem": "Failed to fill unnamed_4: Field not found with any selector strategy: unnamed_4",
+      "solution": {
+        "issue": "Failed to analyze screenshot",
+        "solution": "Manual intervention required",
+        "needsManualIntervention": true
+      },
+      "timestamp": "2025-11-26T08:53:18.067Z"
+    },
+    {
+      "problem": "Failed to fill unnamed_18: Field not found with any selector strategy: unnamed_18",
+      "timestamp": "2025-11-26T08:53:18.067Z"
+    }
+  ],
+  "patterns": {
+    "commonQuestions": [
+      {
+        "label": "How did you hear about this job?",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What is your target salary range for a new role?*",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "Which categories describe you? Select all that apply to you:",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What is your current gender identity?",
+        "type": "text",
+        "category": "other"
+      }
+    ],
+    "fieldNamingConventions": {
+      "camelCase": 0,
+      "snake_case": 15,
+      "kebabCase": 0,
+      "standard": 6
+    },
+    "formLayout": {
+      "totalFields": 21,
+      "visibleFields": 21,
+      "requiredFields": 4,
+      "optionalFields": 17
+    }
+  }
+}

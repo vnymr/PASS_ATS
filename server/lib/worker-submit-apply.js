@@ -24,7 +24,9 @@ import {
 import { getOrGenerateTailoredResume } from './direct-auto-apply.js';
 import { workerWebSocket } from './worker-websocket.js';
 
-const aiFormFiller = new AIFormFiller();
+// Use FAST MODE - fills forms in <10 seconds (no fake cursor movements, minimal delays)
+// Human worker will provide real mouse movements when clicking submit
+const aiFormFiller = new AIFormFiller({ fastMode: true });
 
 // Track active browser sessions (sessionId -> { browser, page, context })
 const activeBrowserSessions = new Map();
@@ -84,7 +86,14 @@ export async function processForWorkerSubmit(session, workerId) {
       : await createStealthContext(browser, { applicationId: sessionId, sessionSeed, skipProxy: true });
 
     page = await context.newPage();
-    await applyStealthToPage(page, { sessionSeed });
+
+    // IMPORTANT: Skip Chrome stealth injection for Camoufox (Firefox-based)
+    // Camoufox handles ALL fingerprinting at C++ level
+    if (!useCamoufox) {
+      await applyStealthToPage(page, { sessionSeed });
+    } else {
+      logger.info('🦊 Skipping JS stealth - Camoufox handles fingerprinting at C++ level');
+    }
 
     // Store browser session for later cleanup
     activeBrowserSessions.set(sessionId, { browser, page, context });
@@ -137,20 +146,19 @@ export async function processForWorkerSubmit(session, workerId) {
     }
 
     // ============================================
-    // STEP 4: Simulate human browsing
+    // STEP 4: Simple page interaction (no fake cursor movements)
     // ============================================
-    workerWebSocket.notifyAiProgress(workerId, sessionId, 'Simulating human behavior...');
+    // NOTE: Removed simulateHumanBrowsing() - Bezier curves and overshoot
+    // patterns are DETECTED as bot behavior by DataDome/PerimeterX.
+    // For worker-assisted mode, the human will provide real mouse movements.
+    workerWebSocket.notifyAiProgress(workerId, sessionId, 'Preparing form...');
 
-    if (!useCamoufox) {
-      try {
-        await simulateHumanBrowsing(page, { timeout: 5000 });
-      } catch (e) {
-        logger.debug('Human browsing simulation failed, continuing');
-      }
-    } else {
-      // Simple scroll for Camoufox
-      await page.evaluate(() => window.scrollBy({ top: 300, behavior: 'smooth' }));
-      await new Promise(r => setTimeout(r, 1000));
+    // Just a simple scroll to see the page - no fake cursor movements
+    try {
+      await page.evaluate(() => window.scrollBy({ top: 200, behavior: 'smooth' }));
+      await new Promise(r => setTimeout(r, 800 + Math.random() * 400));
+    } catch (e) {
+      logger.debug('Initial scroll failed, continuing');
     }
 
     // ============================================

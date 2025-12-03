@@ -54,42 +54,61 @@ class FreeAutoDiscovery {
   }
 
   /**
-   * Parse SimplifyJobs markdown table format
+   * Parse SimplifyJobs markdown - now uses HTML tables
    */
   parseSimplifyMarkdown(markdown) {
     const jobs = [];
 
-    // Find table rows (skip header)
-    const lines = markdown.split('\n');
-    const tableStartIndex = lines.findIndex(line => line.includes('| Company |'));
+    // New format uses HTML tables with <tr> and <td> tags
+    // Extract all table rows
+    const rowRegex = /<tr>\s*([\s\S]*?)<\/tr>/gi;
+    let rowMatch;
 
-    if (tableStartIndex === -1) {
-      logger.warn('Could not find job table in SimplifyJobs markdown');
-      return [];
-    }
+    while ((rowMatch = rowRegex.exec(markdown)) !== null) {
+      const rowContent = rowMatch[1];
 
-    // Parse each row
-    for (let i = tableStartIndex + 2; i < lines.length; i++) {
-      const line = lines[i].trim();
+      // Skip header rows (contain <th>)
+      if (rowContent.includes('<th')) continue;
 
-      if (!line.startsWith('|') || line === '') break;
+      // Extract cells
+      const cellRegex = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+      const cells = [];
+      let cellMatch;
 
-      const columns = line.split('|').map(col => col.trim()).filter(col => col !== '');
+      while ((cellMatch = cellRegex.exec(rowContent)) !== null) {
+        cells.push(cellMatch[1]);
+      }
 
-      if (columns.length >= 4) {
-        const [company, role, location, application] = columns;
+      // Need at least 4 cells: Company, Role, Location, Application
+      if (cells.length >= 4) {
+        const [companyCell, roleCell, locationCell, applicationCell] = cells;
 
-        // Extract URL from markdown link [text](url)
-        const urlMatch = application.match(/\[.*?\]\((.*?)\)/);
-        const applyUrl = urlMatch ? urlMatch[1] : '';
+        // Extract company name from <a> tag
+        const companyMatch = companyCell.match(/<a[^>]*>([^<]+)<\/a>/i);
+        const company = companyMatch ? companyMatch[1].trim() : this.cleanHTML(companyCell);
 
-        if (applyUrl) {
+        // Extract role (may contain emojis like 🛂)
+        const role = this.cleanHTML(roleCell).trim();
+
+        // Extract location (may have <details> for multiple locations)
+        let location = this.cleanHTML(locationCell).replace(/<\/?details>/g, '').replace(/<\/?summary>/g, '').trim();
+        // Clean up multiple locations
+        if (location.includes('</br>')) {
+          location = location.split('</br>')[0].trim();
+        }
+
+        // Extract apply URL - look for job board URL (not simplify.jobs)
+        // Pattern: href="https://job-boards.greenhouse.io/..." or other ATS URLs
+        const urlMatch = applicationCell.match(/href="(https?:\/\/(?:job-boards\.greenhouse\.io|jobs\.lever\.co|wd\d*\.myworkdayjobs\.com|jobs\.ashbyhq\.com|apply\.workable\.com)[^"]+)"/i);
+        const applyUrl = urlMatch ? urlMatch[1].split('?')[0] : ''; // Remove tracking params
+
+        if (applyUrl && role && company) {
           jobs.push({
             externalId: `simplify-${this.hash(applyUrl)}`,
             source: 'simplify',
             title: this.cleanText(role),
             company: this.cleanText(company),
-            location: this.cleanText(location),
+            location: location || 'Unknown',
             description: `${role} at ${company} - ${location}`,
             applyUrl: applyUrl,
             atsType: this.detectATSFromUrl(applyUrl),
@@ -100,6 +119,7 @@ class FreeAutoDiscovery {
       }
     }
 
+    logger.info(`   Parsed ${jobs.length} jobs from SimplifyJobs HTML tables`);
     return jobs;
   }
 
@@ -195,28 +215,11 @@ class FreeAutoDiscovery {
     logger.info('📥 Fetching from RSS feeds...');
 
     const feeds = {
-      // Remote job boards
-      remotive: 'https://remotive.com/api/remote-jobs/feed',
+      // Remote job boards (verified working)
       weworkremotely: 'https://weworkremotely.com/remote-jobs.rss',
 
-      // Indeed - multiple searches
-      indeed_se: 'https://rss.indeed.com/rss?q=software+engineer&l=',
-      indeed_dev: 'https://rss.indeed.com/rss?q=developer&l=',
-      indeed_fullstack: 'https://rss.indeed.com/rss?q=full+stack+developer&l=',
-      indeed_frontend: 'https://rss.indeed.com/rss?q=frontend+engineer&l=',
-      indeed_backend: 'https://rss.indeed.com/rss?q=backend+engineer&l=',
-
-      // Stack Overflow (if available)
-      // stackoverflow: 'https://stackoverflow.com/jobs/feed',
-
-      // Himalayas (remote jobs)
-      himalayas: 'https://himalayas.app/jobs/rss',
-
-      // AngelList/Wellfound
-      // wellfound: 'https://wellfound.com/jobs.rss', // May not exist
-
-      // Otta (UK/EU jobs)
-      // otta: 'https://otta.com/feed', // May not exist as RSS
+      // Note: remotive RSS (feed) returns 404, use JSON API instead via fetchRemotiveJobs()
+      // Note: Indeed RSS may be blocked, keeping for now but may fail
     };
 
     const allJobs = [];
@@ -249,6 +252,46 @@ class FreeAutoDiscovery {
     }
 
     return allJobs;
+  }
+
+  /**
+   * 3b. Remotive Jobs (JSON API)
+   * Their RSS feed is dead (404), but JSON API works
+   */
+  async fetchRemotiveJobs() {
+    logger.info('📥 Fetching from Remotive API...');
+
+    try {
+      const response = await fetch('https://remotive.com/api/remote-jobs?limit=100', {
+        signal: AbortSignal.timeout(10000)
+      });
+
+      if (!response.ok) {
+        logger.warn(`Remotive API returned ${response.status}`);
+        return [];
+      }
+
+      const data = await response.json();
+      const jobs = (data.jobs || []).map(job => ({
+        externalId: `remotive-${job.id}`,
+        source: 'remotive',
+        title: job.title,
+        company: job.company_name,
+        location: job.candidate_required_location || 'Remote',
+        salary: job.salary || null,
+        description: job.description || '',
+        applyUrl: job.url,
+        atsType: this.detectATSFromUrl(job.url),
+        aiApplyable: this.isAIApplyable(job.url),
+        postedDate: job.publication_date ? new Date(job.publication_date) : new Date()
+      }));
+
+      logger.info(`✅ Found ${jobs.length} jobs from Remotive`);
+      return jobs;
+    } catch (error) {
+      logger.error({ error: error.message }, 'Failed to fetch Remotive jobs');
+      return [];
+    }
   }
 
   /**
@@ -469,11 +512,13 @@ class FreeAutoDiscovery {
       simplifyJobs,
       hnJobs,
       rssJobs,
+      remotiveJobs,
       ycJobs
     ] = await Promise.all([
       this.fetchSimplifyJobs(),
       this.fetchHackerNewsJobs(),
       this.fetchRSSFeeds(),
+      this.fetchRemotiveJobs(),
       this.fetchYCJobs()
     ]);
 
@@ -481,6 +526,7 @@ class FreeAutoDiscovery {
       ...simplifyJobs,
       ...hnJobs,
       ...rssJobs,
+      ...remotiveJobs,
       ...ycJobs
     ];
 
@@ -491,6 +537,7 @@ class FreeAutoDiscovery {
     logger.info(`   - SimplifyJobs: ${simplifyJobs.length}`);
     logger.info(`   - Hacker News: ${hnJobs.length}`);
     logger.info(`   - RSS Feeds: ${rssJobs.length}`);
+    logger.info(`   - Remotive: ${remotiveJobs.length}`);
     logger.info(`   - Y Combinator: ${ycJobs.length}`);
 
     return {
@@ -500,6 +547,7 @@ class FreeAutoDiscovery {
         simplify: simplifyJobs.length,
         hackernews: hnJobs.length,
         rss: rssJobs.length,
+        remotive: remotiveJobs.length,
         yc: ycJobs.length
       }
     };

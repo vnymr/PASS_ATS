@@ -15,6 +15,7 @@
  */
 
 import smartAggregator from './job-sources/smart-aggregator.js';
+import freeAutoDiscovery from './job-sources/free-auto-discovery.js';
 import googleDiscovery from './job-sources/google-company-discovery.js';
 import { prisma } from './prisma-client.js';
 import logger from './logger.js';
@@ -212,6 +213,7 @@ class SmartJobSync {
 
   /**
    * Full sync with parallel discovery (every 6 hours)
+   * Now includes free sources (SimplifyJobs, HN, Remotive, etc.)
    */
   async runFullSyncWithDiscovery() {
     if (this.isRunning.fullSync) {
@@ -225,17 +227,27 @@ class SmartJobSync {
     try {
       logger.info('🔄 Starting FULL SYNC with parallel discovery...');
 
-      // Run discovery and job fetching in PARALLEL
-      const [discoveryResult, jobsResult] = await Promise.all([
+      // Run discovery, ATS fetching, AND free sources in PARALLEL
+      const [discoveryResult, jobsResult, freeResult] = await Promise.all([
         // Discovery: Find new companies
         this.runDiscovery(),
 
-        // Fetch: Get jobs from all known companies
-        smartAggregator.aggregateAll({ freshOnly: true })
+        // Fetch: Get jobs from all known companies (Greenhouse, Lever, Ashby, Workable)
+        smartAggregator.aggregateAll({ freshOnly: true }),
+
+        // Fetch: Get jobs from free sources (SimplifyJobs, HN, Remotive, RSS, YC)
+        freeAutoDiscovery.aggregateAll().catch(err => {
+          logger.warn(`Free sources fetch failed: ${err.message}`);
+          return { jobs: [], stats: {} };
+        })
       ]);
 
+      // Combine all jobs
+      const allJobs = [...jobsResult.jobs, ...freeResult.jobs];
+      logger.info(`   Free sources: ${freeResult.jobs?.length || 0} jobs (SimplifyJobs: ${freeResult.stats?.simplify || 0}, HN: ${freeResult.stats?.hackernews || 0}, Remotive: ${freeResult.stats?.remotive || 0})`);
+
       // Save all jobs
-      const { saved, updated, closed } = await this.saveJobsWithChangeDetection(jobsResult.jobs);
+      const { saved, updated, closed } = await this.saveJobsWithChangeDetection(allJobs);
 
       const duration = Date.now() - startTime;
       this.stats.lastFullSync = new Date();
@@ -248,6 +260,7 @@ class SmartJobSync {
       return {
         jobs: { saved, updated, closed },
         discovery: discoveryResult,
+        freeStats: freeResult.stats,
         duration
       };
 

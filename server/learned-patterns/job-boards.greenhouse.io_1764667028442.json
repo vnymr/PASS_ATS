@@ -1,0 +1,158 @@
+{
+  "metadata": {
+    "url": "https://job-boards.greenhouse.io/lucidsoftware/jobs/5710302004",
+    "domain": "job-boards.greenhouse.io",
+    "timestamp": "2025-12-02T09:17:08.442Z",
+    "success": true
+  },
+  "formStructure": {
+    "totalFields": 32,
+    "fieldTypes": {
+      "text": 27,
+      "tel": 1,
+      "file": 2,
+      "number": 2
+    },
+    "requiredFields": [
+      {
+        "name": "unnamed_5",
+        "type": "text",
+        "label": ""
+      },
+      {
+        "name": "unnamed_19",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_21",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_26",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_28",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_30",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_32",
+        "type": "text",
+        "label": "Select..."
+      }
+    ]
+  },
+  "aiResponses": {
+    "first_name": "John",
+    "last_name": "Doe",
+    "preferred_name": "John",
+    "email": "john@example.com",
+    "country": "United States",
+    "unnamed_5": "I am an experienced software engineer with a strong foundation in JavaScript, React, Node.js, and Python, and practical production experience deploying services on AWS with Docker and PostgreSQL. At Tech Corp I focused on building scalable front-end applications using React and worked closely with backend teams to design Node.js APIs; I also participated in CI/CD pipeline improvements and containerization efforts to streamline deployments. At StartupXYZ I wore multiple hats—implementing user-facing features, iterating quickly on product requirements, and taking ownership of end-to-end delivery from design to production.\n\nMy approach combines pragmatic engineering with a focus on user impact: I prioritize clear, maintainable code and automations that reduce manual work for engineering teams. I bring a collaborative mindset—mentoring junior engineers, partnering with product managers, and collaborating with designers—to deliver high-quality features on schedule. My skillset (React, Node.js, Python, AWS, Docker, PostgreSQL) aligns well with modern full-stack engineering needs and positions me to contribute immediately to product and infrastructure initiatives.",
+    "phone": "+1-555-123-4567",
+    "resume": "John_Doe_Resume.pdf",
+    "cover_letter": "John_Doe_CoverLetter.pdf",
+    "school--0": "Stanford University",
+    "degree--0": "BS Computer Science",
+    "discipline--0": "Computer Science",
+    "start-month--0": "September",
+    "start-year--0": 2010,
+    "end-month--0": "June",
+    "end-year--0": 2014,
+    "question_14642598004": "linkedin.com/in/johndoe",
+    "question_14642599004": "No",
+    "unnamed_19": "LinkedIn",
+    "question_14642600004": "I understand that if I am not currently located in Raleigh, NC that advance relocation will be required to be considered for this position. I am currently based in San Francisco, CA and I acknowledge the relocation requirement. I am prepared to make arrangements to relocate to Raleigh to join the team and understand the importance of being on-site as required by the role.\n\nI am able to relocate within a reasonable timeframe and would target a 45–90 day window to complete logistics, secure housing, and transition responsibilities at my current commitments. I am comfortable coordinating with your relocation resources and can provide a specific relocation timeline as part of next-step conversations. I appreciate the transparency on relocation expectations and remain enthusiastic about making the move to contribute fully on-site.",
+    "unnamed_21": "Yes",
+    "question_14642601004": "$140,000",
+    "question_14642602004": "San Francisco, CA",
+    "question_14642603004": "3.8",
+    "gender": "Male",
+    "unnamed_26": "Male",
+    "hispanic_ethnicity": "No",
+    "unnamed_28": "No",
+    "veteran_status": "Not a veteran",
+    "unnamed_30": "Not a veteran",
+    "disability_status": "No",
+    "unnamed_32": "No"
+  },
+  "problemsSolved": [
+    {
+      "problem": "Failed to fill unnamed_5: Field not found with any selector strategy: unnamed_5",
+      "solution": {
+        "issue": "Failed to analyze screenshot",
+        "solution": "Manual intervention required",
+        "needsManualIntervention": true
+      },
+      "timestamp": "2025-12-02T09:17:08.443Z"
+    },
+    {
+      "problem": "Dropdown \"degree--0\" failed: Failed to fill custom dropdown \"degree--0\" after 3 attempts. AI provided: \"BS Computer Science\". Error: Failed to select: No options found in dropdown. Available options: none",
+      "timestamp": "2025-12-02T09:17:08.443Z"
+    },
+    {
+      "problem": "Dropdown \"unnamed_19\" failed: Failed to fill custom dropdown \"unnamed_19\" after 3 attempts. AI provided: \"LinkedIn\". Error: Dropdown menu did not open after multiple attempts",
+      "timestamp": "2025-12-02T09:17:08.443Z"
+    },
+    {
+      "problem": "Failed to fill unnamed_21: Field not found with any selector strategy: unnamed_21",
+      "timestamp": "2025-12-02T09:17:08.443Z"
+    },
+    {
+      "problem": "Dropdown \"unnamed_26\" failed: Failed to fill custom dropdown \"unnamed_26\" after 3 attempts. AI provided: \"Male\". Error: Dropdown menu did not open after multiple attempts",
+      "timestamp": "2025-12-02T09:17:08.443Z"
+    },
+    {
+      "problem": "Dropdown \"unnamed_28\" failed: Failed to fill custom dropdown \"unnamed_28\" after 3 attempts. AI provided: \"No\". Error: Dropdown menu did not open after multiple attempts",
+      "timestamp": "2025-12-02T09:17:08.443Z"
+    },
+    {
+      "problem": "Dropdown \"unnamed_30\" failed: Failed to fill custom dropdown \"unnamed_30\" after 3 attempts. AI provided: \"Not a veteran\". Error: Dropdown menu did not open after multiple attempts",
+      "timestamp": "2025-12-02T09:17:08.443Z"
+    },
+    {
+      "problem": "Dropdown \"unnamed_32\" failed: Failed to fill custom dropdown \"unnamed_32\" after 3 attempts. AI provided: \"No\". Error: Dropdown menu did not open after multiple attempts",
+      "timestamp": "2025-12-02T09:17:08.443Z"
+    }
+  ],
+  "patterns": {
+    "commonQuestions": [
+      {
+        "label": "What is your desired annual compensation?*",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What is your current location (city, state)?*",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What is your most recent cumulative GPA? *",
+        "type": "text",
+        "category": "other"
+      }
+    ],
+    "fieldNamingConventions": {
+      "camelCase": 0,
+      "snake_case": 20,
+      "kebabCase": 7,
+      "standard": 5
+    },
+    "formLayout": {
+      "totalFields": 32,
+      "visibleFields": 32,
+      "requiredFields": 7,
+      "optionalFields": 25
+    }
+  }
+}

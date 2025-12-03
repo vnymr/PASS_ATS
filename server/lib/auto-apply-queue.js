@@ -150,8 +150,13 @@ async function applyWithAI(jobUrl, user, jobData, resumePath = null) {
 
     const page = await context.newPage();
 
-    // Apply comprehensive stealth techniques to avoid bot detection (with matching sessionSeed)
-    await applyStealthToPage(page, { sessionSeed });
+    // IMPORTANT: Skip Chrome stealth injection for Camoufox (Firefox-based)
+    // Camoufox handles ALL fingerprinting at C++ level
+    if (!useCamoufox) {
+      await applyStealthToPage(page, { sessionSeed });
+    } else {
+      logger.info('🦊 Skipping JS stealth - Camoufox handles fingerprinting at C++ level');
+    }
 
     // Transform Greenhouse URLs to direct application page
     let targetUrl = jobUrl;

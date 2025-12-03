@@ -1,0 +1,555 @@
+/**
+ * Test Auto-Apply with Real User from Database
+ *
+ * This script tests the complete auto-apply flow:
+ * 1. Fetches a real user with profile data from the database
+ * 2. Fetches an AI-applyable job from the database
+ * 3. Triggers auto-apply with 2Captcha integration
+ * 4. Monitors the application status
+ */
+
+import 'dotenv/config';
+import { prisma } from '../lib/prisma-client.js';
+import { launchBrowser } from '../lib/browser-launcher.js';
+import AIFormFiller from '../lib/ai-form-filler.js';
+import fs from 'fs';
+import path from 'path';
+
+const TEST_CONFIG = {
+  outputDir: path.resolve(process.cwd(), 'test-output')
+};
+
+/**
+ * Fetch a real user with profile data
+ */
+async function getRealUser() {
+  console.log('🔍 Fetching real user with profile...');
+
+  const user = await prisma.user.findFirst({
+    where: {
+      profile: {
+        isNot: null
+      }
+    },
+    include: {
+      profile: true
+    }
+  });
+
+  if (!user) {
+    throw new Error('No users with profiles found in database');
+  }
+
+  console.log(`✅ Found user: ${user.email}`);
+
+  // Transform profile data to expected format
+  const profileData = user.profile.data;
+
+  let applicationData = profileData.applicationData;
+
+  // Handle legacy profile structure
+  if (!applicationData && (profileData.name || profileData.email || profileData.experiences)) {
+    applicationData = {
+      personalInfo: {
+        fullName: profileData.name || `${profileData.firstName || ''} ${profileData.lastName || ''}`.trim(),
+        email: profileData.email || user.email,
+        phone: profileData.phone || '',
+        location: profileData.location || '',
+        linkedin: profileData.linkedin || '',
+        website: profileData.website || '',
+        github: profileData.github || ''
+      },
+      experience: profileData.experiences || profileData.experience || [],
+      education: profileData.education || [],
+      skills: profileData.skills || []
+    };
+  }
+
+  if (!applicationData) {
+    throw new Error('User profile does not have application data');
+  }
+
+  console.log(`   Name: ${applicationData.personalInfo?.fullName}`);
+  console.log(`   Email: ${applicationData.personalInfo?.email}`);
+  console.log(`   Experience: ${applicationData.experience?.length || 0} entries`);
+  console.log(`   Education: ${applicationData.education?.length || 0} entries`);
+  console.log(`   Skills: ${applicationData.skills?.length || 0} skills`);
+
+  return {
+    userId: user.id,
+    email: user.email,
+    profile: applicationData
+  };
+}
+
+/**
+ * Fetch an AI-applyable job from database
+ */
+async function getAIApplyableJob() {
+  console.log('\n🔍 Fetching AI-applyable job...');
+
+  const job = await prisma.aggregatedJob.findFirst({
+    where: {
+      aiApplyable: true,
+      isActive: true,
+      applyUrl: {
+        not: null
+      }
+    },
+    orderBy: {
+      createdAt: 'desc'
+    }
+  });
+
+  if (!job) {
+    throw new Error('No AI-applyable jobs found in database');
+  }
+
+  console.log(`✅ Found job: ${job.title} at ${job.company}`);
+  console.log(`   Location: ${job.location}`);
+  console.log(`   ATS Type: ${job.atsType}`);
+  console.log(`   Apply URL: ${job.applyUrl}`);
+
+  return job;
+}
+
+/**
+ * Create application record in database
+ */
+async function createApplication(userId, jobId) {
+  console.log('\n📝 Creating application record...');
+
+  // Check for existing application
+  const existing = await prisma.autoApplication.findUnique({
+    where: {
+      userId_jobId: {
+        userId,
+        jobId
+      }
+    }
+  });
+
+  if (existing) {
+    console.log(`⚠️  Application already exists with status: ${existing.status}`);
+    console.log('   Using existing application...');
+    return existing;
+  }
+
+  const application = await prisma.autoApplication.create({
+    data: {
+      userId,
+      jobId,
+      status: 'PROCESSING',
+      method: 'AI_AUTO'
+    }
+  });
+
+  console.log(`✅ Application created with ID: ${application.id}`);
+  return application;
+}
+
+/**
+ * Update application status
+ */
+async function updateApplicationStatus(applicationId, status, metadata = {}) {
+  await prisma.autoApplication.update({
+    where: { id: applicationId },
+    data: {
+      status,
+      ...metadata,
+      updatedAt: new Date()
+    }
+  });
+}
+
+/**
+ * Test auto-apply with real user and real job
+ */
+async function testRealUserAutoApply() {
+  console.log('🧪 Testing Auto-Apply with Real User\n');
+  console.log('='.repeat(80));
+
+  if (!fs.existsSync(TEST_CONFIG.outputDir)) {
+    fs.mkdirSync(TEST_CONFIG.outputDir, { recursive: true });
+  }
+
+  // Verify 2Captcha is configured
+  if (process.env.TWOCAPTCHA_API_KEY) {
+    console.log('✅ 2Captcha API key configured');
+  } else {
+    console.warn('⚠️  2Captcha API key not configured - CAPTCHA solving will fail');
+  }
+
+  let browser;
+  let applicationId;
+
+  try {
+    // Step 1: Get real user
+    const user = await getRealUser();
+
+    // Step 2: Get AI-applyable job
+    const job = await getAIApplyableJob();
+
+    // Step 3: Create application record
+    const application = await createApplication(user.userId, job.id);
+    applicationId = application.id;
+
+    // Step 4: Launch browser and fill form
+    console.log('\n🌐 Launching browser...');
+    browser = await launchBrowser({
+      headless: false,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-blink-features=AutomationControlled'
+      ],
+      slowMo: 100
+    });
+
+    const page = await browser.newPage();
+    const filler = new AIFormFiller();
+
+    // Set realistic viewport
+    await page.setViewport({ width: 1920, height: 1080 });
+
+    // Set user agent to avoid bot detection
+    await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+
+    console.log('\n📋 Loading job page...');
+    await page.goto(job.applyUrl, {
+      waitUntil: 'networkidle2',
+      timeout: 60000
+    });
+
+    // Take initial screenshot
+    await page.screenshot({
+      path: path.join(TEST_CONFIG.outputDir, `application-${applicationId}-1-initial.png`),
+      fullPage: true
+    });
+    console.log(`📸 Screenshot saved: application-${applicationId}-1-initial.png`);
+
+    // Try to find and click "Apply" button
+    console.log('\n🔍 Looking for application form...');
+
+    const applyButtonSelectors = [
+      'button:contains("Apply")',
+      'a:contains("Apply")',
+      '[data-qa="apply-button"]',
+      '.apply-button',
+      '#apply-button'
+    ];
+
+    let foundApplyButton = false;
+    for (const selector of applyButtonSelectors) {
+      try {
+        const button = await page.$(selector);
+        if (button) {
+          console.log(`✅ Found apply button: ${selector}`);
+          await button.click();
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          foundApplyButton = true;
+          break;
+        }
+      } catch (error) {
+        // Continue to next selector
+      }
+    }
+
+    if (!foundApplyButton) {
+      console.log('ℹ️  No apply button found - assuming already on application form');
+    }
+
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    // Take form screenshot
+    await page.screenshot({
+      path: path.join(TEST_CONFIG.outputDir, `application-${applicationId}-2-form.png`),
+      fullPage: true
+    });
+    console.log(`📸 Screenshot saved: application-${applicationId}-2-form.png`);
+
+    // Extract job details
+    console.log('\n📝 Extracting job details from page...');
+    const jobData = await page.evaluate(() => {
+      const getText = (selector) => {
+        const el = document.querySelector(selector);
+        return el ? el.textContent.trim() : '';
+      };
+
+      return {
+        title: getText('h1') || getText('.job-title') || 'Not found',
+        company: getText('.company-name') || getText('[data-company]') || 'Not found',
+        location: getText('.job-location') || getText('[data-location]') || 'Not found',
+        description: getText('.job-description') || getText('[data-description]') || ''
+      };
+    });
+
+    console.log('Job Details from Page:');
+    console.log(`  Title: ${jobData.title}`);
+    console.log(`  Company: ${jobData.company}`);
+    console.log(`  Location: ${jobData.location}`);
+
+    // Step 5: AI Form Filling with CAPTCHA support
+    console.log('\n🤖 AI filling application form...');
+    console.log('   (CAPTCHA solving enabled with 2Captcha)');
+    console.log('   This may take 30-90 seconds...\n');
+
+    const startTime = Date.now();
+
+    const result = await filler.fillFormIntelligently(
+      page,
+      user.profile,
+      {
+        title: job.title,
+        company: job.company,
+        location: job.location,
+        description: job.description || jobData.description
+      }
+    );
+
+    const duration = Date.now() - startTime;
+
+    // Take screenshot after filling
+    await page.screenshot({
+      path: path.join(TEST_CONFIG.outputDir, `application-${applicationId}-3-filled.png`),
+      fullPage: true
+    });
+    console.log(`📸 Screenshot saved: application-${applicationId}-3-filled.png`);
+
+    // Display Results
+    console.log('\n📊 RESULTS:');
+    console.log('='.repeat(80));
+    console.log(`✅ Success: ${result.success}`);
+    console.log(`⏱️  Duration: ${(duration / 1000).toFixed(2)}s`);
+    console.log(`📋 Fields extracted: ${result.fieldsExtracted}`);
+    console.log(`✍️  Fields filled: ${result.fieldsFilled}`);
+    console.log(`📈 Completion rate: ${((result.fieldsFilled / result.fieldsExtracted) * 100).toFixed(1)}%`);
+    console.log(`💰 AI cost: $${result.cost.toFixed(4)}`);
+
+    if (result.captchaSolved) {
+      console.log(`🔓 CAPTCHA solved: Yes ($${result.captchaCost.toFixed(4)})`);
+      console.log(`💰 Total cost: $${(result.cost + result.captchaCost).toFixed(4)}`);
+    } else {
+      console.log(`🔒 CAPTCHA detected: ${result.hasCaptcha ? 'Yes (unsolved)' : 'No'}`);
+    }
+
+    console.log(`📊 Form complexity: ${result.complexity || 'Unknown'}`);
+
+    if (result.errors.length > 0) {
+      console.log(`\n❌ Errors (${result.errors.length}):`);
+      result.errors.forEach((err, i) => {
+        console.log(`   ${i + 1}. ${err}`);
+      });
+    }
+
+    if (result.warnings.length > 0) {
+      console.log(`\n⚠️  Warnings (${result.warnings.length}):`);
+      result.warnings.forEach((warn, i) => {
+        console.log(`   ${i + 1}. ${warn}`);
+      });
+    }
+
+    // Step 6: Handle submission
+    if (result.submitButton) {
+      console.log(`\n📤 Submit button found: "${result.submitButton.text}"`);
+      console.log('   Selector:', result.submitButton.selector);
+
+      console.log('\n⚠️  Ready to submit! Options:');
+      console.log('   1. Type "yes" and press Enter to submit application');
+      console.log('   2. Press Ctrl+C to cancel and review manually');
+      console.log('\n   Waiting for your input...');
+
+      // Update application metadata
+      await updateApplicationStatus(applicationId, 'READY_TO_SUBMIT', {
+        metadata: {
+          fieldsExtracted: result.fieldsExtracted,
+          fieldsFilled: result.fieldsFilled,
+          completionRate: (result.fieldsFilled / result.fieldsExtracted) * 100,
+          aiCost: result.cost,
+          captchaSolved: result.captchaSolved,
+          captchaCost: result.captchaCost || 0,
+          formComplexity: result.complexity,
+          errors: result.errors,
+          warnings: result.warnings
+        }
+      });
+
+      // Wait for user confirmation
+      const readline = require('readline').createInterface({
+        input: process.stdin,
+        output: process.stdout
+      });
+
+      const shouldSubmit = await new Promise(resolve => {
+        readline.question('Submit application? (yes/no): ', answer => {
+          readline.close();
+          resolve(answer.toLowerCase() === 'yes');
+        });
+      });
+
+      if (shouldSubmit) {
+        console.log('\n📤 Submitting application...');
+
+        try {
+          const submitted = await filler.submitForm(page, result.submitButton);
+
+          if (submitted) {
+            await page.screenshot({
+              path: path.join(TEST_CONFIG.outputDir, `application-${applicationId}-4-submitted.png`),
+              fullPage: true
+            });
+            console.log('✅ Application submitted successfully!');
+
+            await updateApplicationStatus(applicationId, 'SUBMITTED', {
+              submittedAt: new Date(),
+              completedAt: new Date(),
+              cost: (result.cost + (result.captchaCost || 0))
+            });
+          } else {
+            console.log('❌ Failed to submit application');
+            await updateApplicationStatus(applicationId, 'FAILED', {
+              completedAt: new Date(),
+              error: 'Submission failed'
+            });
+          }
+        } catch (submitError) {
+          console.error('❌ Submission error:', submitError.message);
+          await updateApplicationStatus(applicationId, 'FAILED', {
+            completedAt: new Date(),
+            error: submitError.message
+          });
+        }
+      } else {
+        console.log('\n❌ Submission cancelled by user');
+        await updateApplicationStatus(applicationId, 'CANCELLED', {
+          completedAt: new Date()
+        });
+      }
+    } else {
+      console.log('\n⚠️  No submit button found');
+      await updateApplicationStatus(applicationId, 'NEEDS_REVIEW', {
+        completedAt: new Date(),
+        error: 'No submit button found'
+      });
+    }
+
+    // Save detailed results
+    const testResults = {
+      applicationId,
+      userId: user.userId,
+      userEmail: user.email,
+      jobId: job.id,
+      jobTitle: job.title,
+      company: job.company,
+      applyUrl: job.applyUrl,
+      atsType: job.atsType,
+      timestamp: new Date().toISOString(),
+      duration,
+      success: result.success,
+      fieldsExtracted: result.fieldsExtracted,
+      fieldsFilled: result.fieldsFilled,
+      completionRate: (result.fieldsFilled / result.fieldsExtracted) * 100,
+      aiCost: result.cost,
+      captchaSolved: result.captchaSolved,
+      captchaCost: result.captchaCost || 0,
+      totalCost: result.cost + (result.captchaCost || 0),
+      complexity: result.complexity,
+      errors: result.errors,
+      warnings: result.warnings,
+      submitButtonFound: !!result.submitButton
+    };
+
+    fs.writeFileSync(
+      path.join(TEST_CONFIG.outputDir, `application-${applicationId}-results.json`),
+      JSON.stringify(testResults, null, 2)
+    );
+
+    console.log('\n💾 Results saved to:', `application-${applicationId}-results.json`);
+    console.log('📸 Screenshots saved to: test-output/');
+
+    console.log('\n' + '='.repeat(80));
+    if (result.success && !result.hasCaptcha) {
+      console.log('✅ AUTO-APPLY TEST PASSED!');
+      console.log('   - Form filled successfully');
+      console.log('   - All fields populated');
+      console.log('   - No CAPTCHA encountered');
+    } else if (result.success && result.captchaSolved) {
+      console.log('✅ AUTO-APPLY TEST PASSED (with CAPTCHA)!');
+      console.log('   - Form filled successfully');
+      console.log('   - CAPTCHA solved automatically');
+      console.log('   - Ready for submission');
+    } else if (result.hasCaptcha && !result.captchaSolved) {
+      console.log('⚠️  CAPTCHA DETECTED BUT NOT SOLVED');
+      console.log('   - Form filled successfully');
+      console.log('   - CAPTCHA solving failed');
+      console.log('   - Manual intervention required');
+    } else {
+      console.log('⚠️  NEEDS REVIEW');
+      console.log('   - Check screenshots for issues');
+      console.log('   - Review error messages');
+    }
+    console.log('='.repeat(80));
+
+    // Keep browser open for review
+    console.log('\n⏸️  Browser will stay open for manual review...');
+    console.log('   Press Ctrl+C to close');
+
+    await new Promise(() => {}); // Keep running
+
+  } catch (error) {
+    console.error('\n❌ Test failed:', error);
+
+    if (applicationId) {
+      await updateApplicationStatus(applicationId, 'FAILED', {
+        completedAt: new Date(),
+        error: error.message
+      });
+    }
+
+    throw error;
+  } finally {
+    if (browser) {
+      // Browser stays open for manual review
+    }
+
+    await prisma.$disconnect();
+  }
+}
+
+// Run the test
+console.log('🔍 Checking prerequisites...\n');
+
+if (!process.env.OPENAI_API_KEY && !process.env.GEMINI_API_KEY) {
+  console.error('❌ No AI API key configured (OPENAI_API_KEY or GEMINI_API_KEY)!');
+  process.exit(1);
+}
+
+if (!process.env.DATABASE_URL) {
+  console.error('❌ DATABASE_URL not configured!');
+  process.exit(1);
+}
+
+console.log('✅ AI API key configured');
+console.log('✅ Database configured');
+console.log('✅ Output directory:', TEST_CONFIG.outputDir);
+
+if (process.env.TWOCAPTCHA_API_KEY) {
+  console.log('✅ 2Captcha configured');
+} else {
+  console.warn('⚠️  2Captcha not configured - CAPTCHA solving will fail');
+}
+
+console.log('\n🚀 Starting real user auto-apply test in 3 seconds...');
+console.log('   Press Ctrl+C to cancel\n');
+
+setTimeout(() => {
+  testRealUserAutoApply()
+    .then(() => {
+      console.log('\n✅ Test completed!');
+    })
+    .catch(error => {
+      console.error('\n❌ Test failed:', error);
+      process.exit(1);
+    });
+}, 3000);

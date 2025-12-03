@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clerk Debug - Happy Resumes</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 40px;
+            max-width: 800px;
+            width: 100%;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 16px;
+        }
+        .status {
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+        .status.loading {
+            background: #fff3cd;
+            color: #856404;
+            border: 2px solid #ffc107;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 2px solid #28a745;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 2px solid #dc3545;
+        }
+        .info-box {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+        .info-box h3 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+        .info-box p {
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 8px;
+        }
+        .code {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            overflow-x: auto;
+            margin: 15px 0;
+        }
+        .btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-right: 10px;
+            margin-top: 10px;
+        }
+        .btn:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+        .btn.secondary {
+            background: #6c757d;
+        }
+        .btn.secondary:hover {
+            background: #5a6268;
+        }
+        ul {
+            margin-left: 20px;
+            color: #666;
+        }
+        ul li {
+            margin: 8px 0;
+            line-height: 1.6;
+        }
+        .diagnostic {
+            margin-top: 20px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+        .diagnostic h3 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+        .diagnostic-item {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            margin: 8px 0;
+            background: white;
+            border-radius: 5px;
+        }
+        .diagnostic-item .icon {
+            font-size: 24px;
+            margin-right: 15px;
+        }
+        .diagnostic-item .label {
+            font-weight: 600;
+            color: #333;
+            margin-right: 10px;
+        }
+        .diagnostic-item .value {
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Clerk Authentication Debug</h1>
+        <p class="subtitle">Diagnosing authentication issues on happyresumes.com</p>
+
+        <div id="status" class="status loading">
+            ⏳ Testing Clerk connection...
+        </div>
+
+        <div class="diagnostic">
+            <h3>📊 Diagnostic Information</h3>
+            <div class="diagnostic-item">
+                <span class="icon">🌐</span>
+                <span class="label">Current URL:</span>
+                <span class="value" id="current-url"></span>
+            </div>
+            <div class="diagnostic-item">
+                <span class="icon">🔑</span>
+                <span class="label">Publishable Key:</span>
+                <span class="value" id="pub-key"></span>
+            </div>
+            <div class="diagnostic-item">
+                <span class="icon">🛡️</span>
+                <span class="label">Ad Blocker:</span>
+                <span class="value" id="ad-blocker"></span>
+            </div>
+            <div class="diagnostic-item">
+                <span class="icon">📦</span>
+                <span class="label">Clerk Script:</span>
+                <span class="value" id="clerk-script"></span>
+            </div>
+        </div>
+
+        <div id="error-details"></div>
+
+        <div class="info-box">
+            <h3>🔧 Common Solutions</h3>
+            <ul>
+                <li><strong>Disable ad blockers</strong> - uBlock Origin, Brave Shields, etc. often block Clerk</li>
+                <li><strong>Add domain in Clerk Dashboard</strong> - Go to dashboard.clerk.com → Domains → Add happyresumes.com</li>
+                <li><strong>Clear browser cache</strong> - Hard refresh with Cmd+Shift+R (Mac) or Ctrl+Shift+R (Windows)</li>
+                <li><strong>Check CORS settings</strong> - Verify Railway environment variables</li>
+            </ul>
+        </div>
+
+        <button class="btn" onclick="window.location.href='/'">← Back to Home</button>
+        <button class="btn secondary" onclick="runDiagnostics()">🔄 Re-run Diagnostics</button>
+    </div>
+
+    <script>
+        // Set current URL
+        document.getElementById('current-url').textContent = window.location.href;
+
+        // Check for Clerk publishable key
+        const clerkKey = 'pk_test_cHJlcGFyZWQtc2FpbGZpc2gtNDkuY2xlcmsuYWNjb3VudHMuZGV2JA';
+        document.getElementById('pub-key').textContent = clerkKey ? clerkKey.substring(0, 20) + '...' : 'Not found';
+
+        function runDiagnostics() {
+            const statusEl = document.getElementById('status');
+            const errorDetailsEl = document.getElementById('error-details');
+
+            statusEl.className = 'status loading';
+            statusEl.textContent = '⏳ Running diagnostics...';
+            errorDetailsEl.innerHTML = '';
+
+            // Test 1: Check if ad blocker is present
+            const adBlockTest = document.createElement('div');
+            adBlockTest.className = 'ad banner ad-unit ad-zone ads pub_300x250 pub_300x250m pub_728x90 text-ad textAd text_ad text_ads text-ads text-ad-links';
+            adBlockTest.style.position = 'absolute';
+            adBlockTest.style.top = '-999px';
+            document.body.appendChild(adBlockTest);
+
+            setTimeout(() => {
+                const isBlocked = adBlockTest.offsetHeight === 0;
+                document.getElementById('ad-blocker').textContent = isBlocked ? '⚠️ Detected (may block Clerk)' : '✅ Not detected';
+                document.body.removeChild(adBlockTest);
+            }, 100);
+
+            // Test 2: Try to load Clerk script
+            const clerkScript = document.createElement('script');
+            clerkScript.src = 'https://prepared-sailfish-49.clerk.accounts.dev/npm/@clerk/clerk-js@latest/dist/clerk.browser.js';
+            clerkScript.onerror = () => {
+                document.getElementById('clerk-script').textContent = '❌ Failed to load';
+                statusEl.className = 'status error';
+                statusEl.textContent = '❌ Clerk Failed to Load';
+
+                errorDetailsEl.innerHTML = `
+                    <div class="info-box" style="border-left-color: #dc3545;">
+                        <h3>❌ Error Detected</h3>
+                        <p><strong>Issue:</strong> Clerk scripts are being blocked</p>
+                        <p><strong>Most likely cause:</strong> Ad blocker or browser privacy extension</p>
+                        <p><strong>Solution:</strong></p>
+                        <div class="code">
+1. Disable ad blocker for happyresumes.com
+2. Or whitelist: *.clerk.accounts.dev
+3. Refresh page
+                        </div>
+                    </div>
+                `;
+            };
+            clerkScript.onload = () => {
+                document.getElementById('clerk-script').textContent = '✅ Loaded successfully';
+                statusEl.className = 'status success';
+                statusEl.textContent = '✅ Clerk is working!';
+
+                errorDetailsEl.innerHTML = `
+                    <div class="info-box" style="border-left-color: #28a745;">
+                        <h3>✅ Clerk is Working!</h3>
+                        <p>Authentication should work now. If you still see issues on the main site:</p>
+                        <ul>
+                            <li>Make sure you added <strong>happyresumes.com</strong> to Clerk Dashboard → Domains</li>
+                            <li>Clear your browser cache and cookies</li>
+                            <li>Try in an incognito/private window</li>
+                        </ul>
+                    </div>
+                `;
+            };
+            document.head.appendChild(clerkScript);
+        }
+
+        // Run diagnostics on load
+        runDiagnostics();
+    </script>
+</body>
+</html>

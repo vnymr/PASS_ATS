@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node test-fixes-validation.js:*)",
+      "Bash(node:*)",
+      "Bash(HEADLESS=false node:*)",
+      "Bash(cat:*)",
+      "Bash(SKIP_CAPTCHA_FOR_TESTING=true node:*)",
+      "Bash(SKIP_CAPTCHA_FOR_TESTING=true HEADLESS=false node:*)",
+      "WebSearch",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(npx playwright:*)",
+      "Bash(for file in scripts/test-*.js scripts/quick-test-form-filler.js)",
+      "Bash(do)",
+      "Bash(if [ -f \"$file\" ])",
+      "Bash(then)",
+      "Bash(fi)",
+      "Bash(done)",
+      "Bash(timeout 120 node:*)",
+      "Bash(git tag:*)",
+      "Bash(git branch:*)",
+      "Bash(git push:*)",
+      "Bash([ -n \"$OPENAI_API_KEY\" ])"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

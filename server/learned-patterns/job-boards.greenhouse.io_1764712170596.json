@@ -1,0 +1,142 @@
+{
+  "metadata": {
+    "url": "https://job-boards.greenhouse.io/lucidsoftware/jobs/5710302004",
+    "domain": "job-boards.greenhouse.io",
+    "timestamp": "2025-12-02T21:49:30.596Z",
+    "success": true
+  },
+  "formStructure": {
+    "totalFields": 32,
+    "fieldTypes": {
+      "text": 27,
+      "tel": 1,
+      "file": 2,
+      "number": 2
+    },
+    "requiredFields": [
+      {
+        "name": "unnamed_5",
+        "type": "text",
+        "label": ""
+      },
+      {
+        "name": "unnamed_19",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_21",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_26",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_28",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_30",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_32",
+        "type": "text",
+        "label": "Select..."
+      }
+    ]
+  },
+  "aiResponses": {
+    "first_name": "John",
+    "last_name": "Doe",
+    "preferred_name": "John",
+    "email": "john@example.com",
+    "country": "United States",
+    "unnamed_5": "I am a senior software engineer with a BS in Computer Science from Stanford University and over a decade of hands-on experience building scalable web applications. At Tech Corp I led a team to migrate a monolithic Rails/Node codebase to a microservices architecture using Node.js, Docker, and AWS ECS, reducing service deployment time by 60% and improving end-to-end request latency by 40%. At StartupXYZ I architected and implemented a customer-facing React single-page application backed by Node.js APIs and PostgreSQL, which contributed to a 25% increase in user retention over six months.\n\nMy core strengths are full-stack JavaScript (React, Node.js), Python for backend automation, and cloud-native deployments on AWS. I routinely design CI/CD pipelines, containerize services with Docker, and optimize relational databases (PostgreSQL) for high-concurrency workloads. For example, at Tech Corp I led a database indexing and query-refactoring effort that reduced a critical analytics query from 12s to 1.2s and saved significant compute cost in our reporting pipeline.\n\nI enjoy working in collaborative, product-focused teams and mentoring engineers on best practices. I bring a pragmatic, metrics-driven approach to solving problems, and I’m excited to apply my experience in building reliable, performant systems to contribute immediately to product and infrastructure goals.",
+    "phone": "+1-555-123-4567",
+    "resume": "John_Doe_Resume.pdf",
+    "cover_letter": "John_Doe_Cover_Letter.pdf",
+    "school--0": "Stanford University",
+    "degree--0": "BS",
+    "discipline--0": "Computer Science",
+    "start-month--0": "September",
+    "start-year--0": 2010,
+    "end-month--0": "June",
+    "end-year--0": 2014,
+    "question_14642598004": "linkedin.com/in/johndoe",
+    "question_14642599004": "No",
+    "unnamed_19": "LinkedIn",
+    "question_14642600004": "I understand that if I am not currently located in Raleigh, NC that advance relocation will be required to be considered for this position. I currently live in San Francisco, CA and am prepared to relocate for the right opportunity.\n\nI can be available to relocate within approximately 4–8 weeks depending on final timing and logistics. I am committed to making a smooth transition and will coordinate all necessary arrangements to ensure I can start on the agreed timeline.",
+    "unnamed_21": "Yes",
+    "question_14642601004": "140000",
+    "question_14642602004": "San Francisco, CA",
+    "question_14642603004": "3.7",
+    "gender": "Male",
+    "unnamed_26": "Prefer not to answer",
+    "hispanic_ethnicity": "No",
+    "unnamed_28": "Prefer not to answer",
+    "veteran_status": "No",
+    "unnamed_30": "No",
+    "disability_status": "No",
+    "unnamed_32": "No"
+  },
+  "problemsSolved": [
+    {
+      "problem": "Failed to fill unnamed_5: Field not found with any selector strategy: unnamed_5",
+      "solution": {
+        "issue": "Failed to analyze screenshot",
+        "solution": "Manual intervention required",
+        "needsManualIntervention": true
+      },
+      "timestamp": "2025-12-02T21:49:30.596Z"
+    },
+    {
+      "problem": "Failed to fill unnamed_21: Field not found with any selector strategy: unnamed_21",
+      "timestamp": "2025-12-02T21:49:30.596Z"
+    },
+    {
+      "problem": "Dropdown \"unnamed_30\" failed: Failed to fill custom dropdown \"unnamed_30\" after 3 attempts. AI provided: \"No\". Error: Dropdown menu did not open after multiple attempts",
+      "timestamp": "2025-12-02T21:49:30.596Z"
+    },
+    {
+      "problem": "Dropdown \"unnamed_32\" failed: Failed to fill custom dropdown \"unnamed_32\" after 3 attempts. AI provided: \"No\". Error: Dropdown menu did not open after multiple attempts",
+      "timestamp": "2025-12-02T21:49:30.596Z"
+    }
+  ],
+  "patterns": {
+    "commonQuestions": [
+      {
+        "label": "What is your desired annual compensation?*",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What is your current location (city, state)?*",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What is your most recent cumulative GPA? *",
+        "type": "text",
+        "category": "other"
+      }
+    ],
+    "fieldNamingConventions": {
+      "camelCase": 0,
+      "snake_case": 20,
+      "kebabCase": 7,
+      "standard": 5
+    },
+    "formLayout": {
+      "totalFields": 32,
+      "visibleFields": 32,
+      "requiredFields": 7,
+      "optionalFields": 25
+    }
+  }
+}

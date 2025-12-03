@@ -1,0 +1,772 @@
+/**
+ * Test Complex Forms with Lots of Dropdowns, Radio Buttons, and Choices
+ * This tests the AI's ability to handle complex decision-making
+ */
+
+import 'dotenv/config';
+import { launchBrowser } from '../lib/browser-launcher.js';
+import AIFormFiller from '../lib/ai-form-filler.js';
+import fs from 'fs';
+import path from 'path';
+
+const TEST_CONFIG = {
+  userProfile: {
+    fullName: 'Sarah Martinez',
+    email: 'sarah.martinez@example.com',
+    phone: '+1 (555) 345-6789',
+    location: 'Austin, TX',
+    linkedIn: 'https://linkedin.com/in/sarahmartinez',
+    portfolio: 'https://sarahmartinez.dev',
+
+    experience: [
+      {
+        title: 'Senior Software Engineer',
+        company: 'TechCorp',
+        duration: '2020-Present',
+        responsibilities: 'Led development of cloud-native applications using React, Node.js, and AWS'
+      },
+      {
+        title: 'Software Engineer',
+        company: 'StartupXYZ',
+        duration: '2018-2020',
+        responsibilities: 'Built full-stack applications and managed database systems'
+      }
+    ],
+
+    education: [{
+      degree: 'Bachelor of Science',
+      field: 'Computer Science',
+      school: 'University of Texas',
+      year: '2018'
+    }],
+
+    skills: ['JavaScript', 'React', 'Node.js', 'Python', 'AWS', 'Docker', 'PostgreSQL', 'GraphQL'],
+
+    // Additional profile data for complex questions
+    currentEmploymentStatus: 'employed',
+    willingToRelocate: true,
+    sponsorshipRequired: false,
+    yearsOfExperience: 6,
+    salaryExpectation: 140000,
+    startDate: 'flexible',
+    workAuthorization: 'us_citizen',
+    veteranStatus: 'not_veteran',
+    disability: 'no',
+    gender: 'female',
+    ethnicity: 'hispanic',
+    remotePreference: 'hybrid'
+  },
+
+  jobData: {
+    title: 'Senior Full Stack Engineer',
+    company: 'Tech Innovations Inc',
+    description: 'Building next-generation cloud applications with React and Node.js',
+    requirements: '5+ years experience, strong in JavaScript, cloud platforms',
+    location: 'Austin, TX (Hybrid)',
+    salary: '$130k - $160k'
+  },
+
+  outputDir: path.resolve(process.cwd(), 'test-output')
+};
+
+/**
+ * Create a highly complex test form with many dropdowns and choices
+ */
+function createComplexTestForm() {
+  const htmlContent = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Complex Job Application - Tech Innovations Inc</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #f0f2f5;
+    }
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 30px;
+      border-radius: 10px;
+      margin-bottom: 30px;
+    }
+    .header h1 { margin: 0 0 10px 0; }
+    .section {
+      background: white;
+      padding: 25px;
+      margin-bottom: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .section h2 {
+      color: #667eea;
+      margin-top: 0;
+      border-bottom: 2px solid #667eea;
+      padding-bottom: 10px;
+    }
+    .form-group {
+      margin-bottom: 20px;
+    }
+    label {
+      display: block;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 8px;
+    }
+    .required { color: #e74c3c; }
+    input[type="text"],
+    input[type="email"],
+    input[type="tel"],
+    input[type="url"],
+    input[type="number"],
+    input[type="date"],
+    textarea,
+    select {
+      width: 100%;
+      padding: 10px;
+      border: 2px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+      transition: border-color 0.3s;
+    }
+    input:focus, textarea:focus, select:focus {
+      border-color: #667eea;
+      outline: none;
+    }
+    textarea {
+      min-height: 120px;
+      resize: vertical;
+    }
+    .radio-group, .checkbox-group {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .radio-option, .checkbox-option {
+      display: flex;
+      align-items: center;
+      padding: 10px;
+      border: 2px solid #e0e0e0;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .radio-option:hover, .checkbox-option:hover {
+      border-color: #667eea;
+      background: #f8f9ff;
+    }
+    .radio-option input, .checkbox-option input {
+      margin-right: 10px;
+      width: auto;
+    }
+    .radio-option label, .checkbox-option label {
+      margin: 0;
+      font-weight: normal;
+      cursor: pointer;
+    }
+    .hint {
+      font-size: 12px;
+      color: #666;
+      margin-top: 5px;
+    }
+    .submit-btn {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 15px 40px;
+      border: none;
+      border-radius: 6px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      width: 100%;
+      transition: transform 0.2s;
+    }
+    .submit-btn:hover {
+      transform: translateY(-2px);
+    }
+    #confirmation {
+      display: none;
+      background: #d4edda;
+      border: 2px solid #c3e6cb;
+      color: #155724;
+      padding: 30px;
+      border-radius: 10px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Senior Full Stack Engineer</h1>
+    <p>Tech Innovations Inc • Austin, TX (Hybrid) • $130k - $160k</p>
+  </div>
+
+  <form id="applicationForm" onsubmit="handleSubmit(event)">
+
+    <!-- Section 1: Basic Information -->
+    <div class="section">
+      <h2>1. Basic Information</h2>
+
+      <div class="form-group">
+        <label>Full Name <span class="required">*</span></label>
+        <input type="text" name="fullName" required>
+      </div>
+
+      <div class="form-group">
+        <label>Email Address <span class="required">*</span></label>
+        <input type="email" name="email" required>
+      </div>
+
+      <div class="form-group">
+        <label>Phone Number <span class="required">*</span></label>
+        <input type="tel" name="phone" required>
+      </div>
+
+      <div class="form-group">
+        <label>Current Location <span class="required">*</span></label>
+        <input type="text" name="location" required>
+      </div>
+
+      <div class="form-group">
+        <label>LinkedIn Profile URL</label>
+        <input type="url" name="linkedIn" placeholder="https://linkedin.com/in/yourprofile">
+      </div>
+
+      <div class="form-group">
+        <label>Portfolio/Website</label>
+        <input type="url" name="portfolio" placeholder="https://yourwebsite.com">
+      </div>
+    </div>
+
+    <!-- Section 2: Professional Experience -->
+    <div class="section">
+      <h2>2. Professional Experience</h2>
+
+      <div class="form-group">
+        <label>Total Years of Professional Experience <span class="required">*</span></label>
+        <select name="yearsExperience" required>
+          <option value="">Select...</option>
+          <option value="0-1">0-1 years</option>
+          <option value="2-3">2-3 years</option>
+          <option value="4-5">4-5 years</option>
+          <option value="6-8">6-8 years</option>
+          <option value="9-12">9-12 years</option>
+          <option value="13+">13+ years</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Current Employment Status <span class="required">*</span></label>
+        <div class="radio-group">
+          <div class="radio-option">
+            <input type="radio" id="employed" name="employmentStatus" value="employed" required>
+            <label for="employed">Currently Employed</label>
+          </div>
+          <div class="radio-option">
+            <input type="radio" id="unemployed" name="employmentStatus" value="unemployed">
+            <label for="unemployed">Unemployed - Actively Looking</label>
+          </div>
+          <div class="radio-option">
+            <input type="radio" id="student" name="employmentStatus" value="student">
+            <label for="student">Student</label>
+          </div>
+          <div class="radio-option">
+            <input type="radio" id="freelance" name="employmentStatus" value="freelance">
+            <label for="freelance">Freelance/Contract</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Primary Technical Skills <span class="required">*</span></label>
+        <div class="checkbox-group">
+          <div class="checkbox-option">
+            <input type="checkbox" id="skill_js" name="skills" value="javascript">
+            <label for="skill_js">JavaScript/TypeScript</label>
+          </div>
+          <div class="checkbox-option">
+            <input type="checkbox" id="skill_react" name="skills" value="react">
+            <label for="skill_react">React</label>
+          </div>
+          <div class="checkbox-option">
+            <input type="checkbox" id="skill_node" name="skills" value="nodejs">
+            <label for="skill_node">Node.js</label>
+          </div>
+          <div class="checkbox-option">
+            <input type="checkbox" id="skill_python" name="skills" value="python">
+            <label for="skill_python">Python</label>
+          </div>
+          <div class="checkbox-option">
+            <input type="checkbox" id="skill_aws" name="skills" value="aws">
+            <label for="skill_aws">AWS/Cloud Platforms</label>
+          </div>
+          <div class="checkbox-option">
+            <input type="checkbox" id="skill_docker" name="skills" value="docker">
+            <label for="skill_docker">Docker/Kubernetes</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Highest Level of Education <span class="required">*</span></label>
+        <select name="education" required>
+          <option value="">Select...</option>
+          <option value="high_school">High School Diploma</option>
+          <option value="associate">Associate Degree</option>
+          <option value="bachelor">Bachelor's Degree</option>
+          <option value="master">Master's Degree</option>
+          <option value="phd">Ph.D.</option>
+          <option value="bootcamp">Coding Bootcamp</option>
+          <option value="self_taught">Self-Taught</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Section 3: Position-Specific Questions -->
+    <div class="section">
+      <h2>3. Position-Specific Questions</h2>
+
+      <div class="form-group">
+        <label>Why do you want to join Tech Innovations Inc? <span class="required">*</span></label>
+        <textarea name="whyCompany" required placeholder="Tell us what excites you about this opportunity..."></textarea>
+      </div>
+
+      <div class="form-group">
+        <label>Describe your experience with React and Node.js <span class="required">*</span></label>
+        <textarea name="techExperience" required placeholder="Share specific projects and accomplishments..."></textarea>
+      </div>
+
+      <div class="form-group">
+        <label>What's your preferred work arrangement? <span class="required">*</span></label>
+        <div class="radio-group">
+          <div class="radio-option">
+            <input type="radio" id="remote" name="workPreference" value="remote" required>
+            <label for="remote">Fully Remote</label>
+          </div>
+          <div class="radio-option">
+            <input type="radio" id="hybrid" name="workPreference" value="hybrid">
+            <label for="hybrid">Hybrid (2-3 days in office)</label>
+          </div>
+          <div class="radio-option">
+            <input type="radio" id="onsite" name="workPreference" value="onsite">
+            <label for="onsite">Fully On-site</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Expected Salary Range (Annual) <span class="required">*</span></label>
+        <select name="salaryRange" required>
+          <option value="">Select...</option>
+          <option value="80-100">$80,000 - $100,000</option>
+          <option value="100-120">$100,000 - $120,000</option>
+          <option value="120-140">$120,000 - $140,000</option>
+          <option value="140-160">$140,000 - $160,000</option>
+          <option value="160-180">$160,000 - $180,000</option>
+          <option value="180+">$180,000+</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>When can you start? <span class="required">*</span></label>
+        <select name="startDate" required>
+          <option value="">Select...</option>
+          <option value="immediately">Immediately</option>
+          <option value="2-weeks">2 weeks notice</option>
+          <option value="1-month">1 month notice</option>
+          <option value="2-months">2 months notice</option>
+          <option value="flexible">Flexible</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Section 4: Legal & Compliance -->
+    <div class="section">
+      <h2>4. Legal & Compliance</h2>
+
+      <div class="form-group">
+        <label>Work Authorization Status <span class="required">*</span></label>
+        <div class="radio-group">
+          <div class="radio-option">
+            <input type="radio" id="us_citizen" name="workAuth" value="us_citizen" required>
+            <label for="us_citizen">U.S. Citizen</label>
+          </div>
+          <div class="radio-option">
+            <input type="radio" id="green_card" name="workAuth" value="green_card">
+            <label for="green_card">Green Card Holder</label>
+          </div>
+          <div class="radio-option">
+            <input type="radio" id="work_visa" name="workAuth" value="work_visa">
+            <label for="work_visa">Work Visa (H1B, etc.)</label>
+          </div>
+          <div class="radio-option">
+            <input type="radio" id="need_sponsorship" name="workAuth" value="need_sponsorship">
+            <label for="need_sponsorship">Will Require Sponsorship</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Are you willing to relocate? <span class="required">*</span></label>
+        <div class="radio-group">
+          <div class="radio-option">
+            <input type="radio" id="relocate_yes" name="relocate" value="yes" required>
+            <label for="relocate_yes">Yes, willing to relocate</label>
+          </div>
+          <div class="radio-option">
+            <input type="radio" id="relocate_no" name="relocate" value="no">
+            <label for="relocate_no">No, prefer current location</label>
+          </div>
+          <div class="radio-option">
+            <input type="radio" id="relocate_maybe" name="relocate" value="maybe">
+            <label for="relocate_maybe">Open to discussing</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Veteran Status (Optional for EEO)</label>
+        <select name="veteranStatus">
+          <option value="">Prefer not to answer</option>
+          <option value="not_veteran">I am not a protected veteran</option>
+          <option value="veteran">I am a protected veteran</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Gender (Optional for EEO)</label>
+        <select name="gender">
+          <option value="">Prefer not to answer</option>
+          <option value="male">Male</option>
+          <option value="female">Female</option>
+          <option value="non_binary">Non-binary</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Ethnicity (Optional for EEO)</label>
+        <select name="ethnicity">
+          <option value="">Prefer not to answer</option>
+          <option value="hispanic">Hispanic or Latino</option>
+          <option value="white">White</option>
+          <option value="black">Black or African American</option>
+          <option value="asian">Asian</option>
+          <option value="native">American Indian or Alaska Native</option>
+          <option value="pacific">Native Hawaiian or Pacific Islander</option>
+          <option value="two_more">Two or More Races</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Disability Status (Optional for EEO)</label>
+        <div class="radio-group">
+          <div class="radio-option">
+            <input type="radio" id="disability_no" name="disability" value="no">
+            <label for="disability_no">No, I don't have a disability</label>
+          </div>
+          <div class="radio-option">
+            <input type="radio" id="disability_yes" name="disability" value="yes">
+            <label for="disability_yes">Yes, I have a disability</label>
+          </div>
+          <div class="radio-option">
+            <input type="radio" id="disability_no_answer" name="disability" value="no_answer">
+            <label for="disability_no_answer">I don't wish to answer</label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 5: Additional Information -->
+    <div class="section">
+      <h2>5. Additional Information</h2>
+
+      <div class="form-group">
+        <label>How did you hear about this position? <span class="required">*</span></label>
+        <select name="source" required>
+          <option value="">Select...</option>
+          <option value="linkedin">LinkedIn</option>
+          <option value="indeed">Indeed</option>
+          <option value="company_website">Company Website</option>
+          <option value="referral">Employee Referral</option>
+          <option value="recruiter">Recruiter</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Are you comfortable with the following? (Check all that apply)</label>
+        <div class="checkbox-group">
+          <div class="checkbox-option">
+            <input type="checkbox" id="travel" name="preferences" value="travel">
+            <label for="travel">Occasional travel (10-20%)</label>
+          </div>
+          <div class="checkbox-option">
+            <input type="checkbox" id="oncall" name="preferences" value="oncall">
+            <label for="oncall">On-call rotation</label>
+          </div>
+          <div class="checkbox-option">
+            <input type="checkbox" id="flexible_hours" name="preferences" value="flexible_hours">
+            <label for="flexible_hours">Flexible working hours</label>
+          </div>
+          <div class="checkbox-option">
+            <input type="checkbox" id="remote_team" name="preferences" value="remote_team">
+            <label for="remote_team">Working with distributed teams</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Additional Comments or Questions</label>
+        <textarea name="additionalComments" placeholder="Anything else you'd like us to know?"></textarea>
+      </div>
+    </div>
+
+    <button type="submit" class="submit-btn">Submit Application</button>
+  </form>
+
+  <div id="confirmation">
+    <h1>✅ Application Submitted Successfully!</h1>
+    <p>Thank you for applying to Tech Innovations Inc. We'll review your application and get back to you within 5-7 business days.</p>
+  </div>
+
+  <script>
+    function handleSubmit(event) {
+      event.preventDefault();
+      document.getElementById('applicationForm').style.display = 'none';
+      document.getElementById('confirmation').style.display = 'block';
+      window.scrollTo(0, 0);
+
+      // Log form data
+      const formData = new FormData(event.target);
+      console.log('=== APPLICATION SUBMITTED ===');
+      for (let [key, value] of formData.entries()) {
+        console.log(key + ':', value);
+      }
+
+      return false;
+    }
+  </script>
+</body>
+</html>
+  `;
+
+  const htmlPath = path.join(TEST_CONFIG.outputDir, 'complex-application-form.html');
+  fs.writeFileSync(htmlPath, htmlContent);
+  console.log(`✅ Created complex test form: ${htmlPath}`);
+  return htmlPath;
+}
+
+/**
+ * Main test function
+ */
+async function runTest() {
+  console.log('🧪 Testing Complex Form Handling\n');
+  console.log('='.repeat(80));
+  console.log('This test includes:');
+  console.log('  ✓ Multiple dropdown/select fields (10+)');
+  console.log('  ✓ Radio button groups (8 groups)');
+  console.log('  ✓ Checkbox groups (2 groups with multiple options)');
+  console.log('  ✓ Text inputs and textareas');
+  console.log('  ✓ Complex decision-making questions');
+  console.log('  ✓ EEO/compliance questions');
+  console.log('='.repeat(80));
+
+  if (!fs.existsSync(TEST_CONFIG.outputDir)) {
+    fs.mkdirSync(TEST_CONFIG.outputDir, { recursive: true });
+  }
+
+  // Create complex form
+  console.log('\n📝 Step 1: Creating complex application form...');
+  const formPath = createComplexTestForm();
+
+  // Launch browser
+  console.log('\n🌐 Step 2: Launching browser...');
+  const browser = await launchBrowser({
+    headless: false,
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    slowMo: 50
+  });
+
+  try {
+    const page = await browser.newPage();
+    const filler = new AIFormFiller();
+
+    // Navigate to form
+    console.log('📋 Loading complex form...');
+    await page.goto(`file://${formPath}`, { waitUntil: 'networkidle' });
+
+    // Screenshot before
+    await page.screenshot({
+      path: path.join(TEST_CONFIG.outputDir, 'complex-form-before.png'),
+      fullPage: true
+    });
+
+    // Fill with AI
+    console.log('\n🤖 Step 3: AI filling complex form...');
+    console.log('   Watching AI make decisions for:');
+    console.log('   - Dropdowns (education, salary, start date, etc.)');
+    console.log('   - Radio buttons (employment status, work preference, etc.)');
+    console.log('   - Checkboxes (skills, preferences)');
+    console.log('   - Essay questions\n');
+
+    const startTime = Date.now();
+    const result = await filler.fillFormIntelligently(
+      page,
+      TEST_CONFIG.userProfile,
+      TEST_CONFIG.jobData
+    );
+    const duration = Date.now() - startTime;
+
+    // Screenshot after
+    await page.screenshot({
+      path: path.join(TEST_CONFIG.outputDir, 'complex-form-after.png'),
+      fullPage: true
+    });
+
+    // Analyze what was filled
+    console.log('\n📊 Analyzing Results...\n');
+    console.log('='.repeat(80));
+
+    // Get filled values for verification
+    const filledData = await page.evaluate(() => {
+      const data = {};
+      const form = document.getElementById('applicationForm');
+      const formData = new FormData(form);
+
+      for (let [key, value] of formData.entries()) {
+        if (!data[key]) {
+          data[key] = value;
+        } else if (Array.isArray(data[key])) {
+          data[key].push(value);
+        } else {
+          data[key] = [data[key], value];
+        }
+      }
+
+      return data;
+    });
+
+    console.log('✅ FILLED FORM DATA:');
+    console.log(JSON.stringify(filledData, null, 2));
+
+    // Calculate completion metrics
+    const totalFields = result.fieldsExtracted;
+    const filledFields = result.fieldsFilled;
+    const completionRate = (filledFields / totalFields * 100).toFixed(1);
+
+    console.log('\n📈 COMPLETION METRICS:');
+    console.log('='.repeat(80));
+    console.log(`Total Fields: ${totalFields}`);
+    console.log(`Fields Filled: ${filledFields}`);
+    console.log(`Completion Rate: ${completionRate}%`);
+    console.log(`Duration: ${(duration / 1000).toFixed(2)}s`);
+    console.log(`AI Cost: $${result.cost.toFixed(4)}`);
+
+    if (result.errors.length > 0) {
+      console.log(`\n❌ Errors (${result.errors.length}):`);
+      result.errors.forEach((err, i) => console.log(`   ${i + 1}. ${err}`));
+    }
+
+    if (result.warnings.length > 0) {
+      console.log(`\n⚠️  Warnings (${result.warnings.length}):`);
+      result.warnings.forEach((warn, i) => console.log(`   ${i + 1}. ${warn}`));
+    }
+
+    // Field type breakdown
+    const fieldTypes = {};
+    await page.evaluate(() => {
+      const inputs = document.querySelectorAll('input, select, textarea');
+      return Array.from(inputs).map(el => ({
+        type: el.type || el.tagName.toLowerCase(),
+        name: el.name,
+        filled: el.value ? true : false
+      }));
+    }).then(fields => {
+      fields.forEach(field => {
+        if (!fieldTypes[field.type]) {
+          fieldTypes[field.type] = { total: 0, filled: 0 };
+        }
+        fieldTypes[field.type].total++;
+        if (field.filled) fieldTypes[field.type].filled++;
+      });
+    });
+
+    console.log('\n📋 FIELD TYPE BREAKDOWN:');
+    console.log('='.repeat(80));
+    Object.entries(fieldTypes).forEach(([type, stats]) => {
+      const rate = (stats.filled / stats.total * 100).toFixed(0);
+      const status = rate === '100' ? '✅' : rate >= '80' ? '⚠️ ' : '❌';
+      console.log(`${status} ${type.padEnd(15)} ${stats.filled}/${stats.total} (${rate}%)`);
+    });
+
+    // Wait for inspection
+    console.log('\n⏸️  Pausing for 10 seconds for manual inspection...');
+    await new Promise(resolve => setTimeout(resolve, 10000));
+
+    // Save detailed results
+    const testResults = {
+      success: result.success,
+      completionRate: parseFloat(completionRate),
+      duration,
+      cost: result.cost,
+      totalFields,
+      filledFields,
+      fieldTypes,
+      filledData,
+      errors: result.errors,
+      warnings: result.warnings,
+      timestamp: new Date().toISOString()
+    };
+
+    fs.writeFileSync(
+      path.join(TEST_CONFIG.outputDir, 'complex-form-results.json'),
+      JSON.stringify(testResults, null, 2)
+    );
+
+    console.log('\n' + '='.repeat(80));
+    if (parseFloat(completionRate) >= 95) {
+      console.log('✅ COMPLEX FORM TEST PASSED!');
+      console.log(`   ${completionRate}% completion rate`);
+      console.log('   AI successfully handled:');
+      console.log('   ✓ Multiple dropdowns');
+      console.log('   ✓ Radio button groups');
+      console.log('   ✓ Checkbox selections');
+      console.log('   ✓ Essay questions');
+      console.log('   ✓ Complex decision-making');
+    } else if (parseFloat(completionRate) >= 85) {
+      console.log('⚠️  COMPLEX FORM TEST - NEEDS IMPROVEMENT');
+      console.log(`   ${completionRate}% completion rate (target: 95%)`);
+    } else {
+      console.log('❌ COMPLEX FORM TEST FAILED');
+      console.log(`   Only ${completionRate}% completion rate`);
+    }
+    console.log('='.repeat(80));
+
+  } catch (error) {
+    console.error('\n❌ Test failed:', error);
+    throw error;
+  } finally {
+    await browser.close();
+  }
+}
+
+console.log('🚀 Starting complex form test in 2 seconds...\n');
+
+setTimeout(() => {
+  runTest()
+    .then(() => {
+      console.log('\n✅ Complex form test completed!');
+      process.exit(0);
+    })
+    .catch(error => {
+      console.error('\n❌ Complex form test failed:', error);
+      process.exit(1);
+    });
+}, 2000);

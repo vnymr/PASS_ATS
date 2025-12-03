@@ -24,8 +24,8 @@ from typing import Optional, Dict, List
 
 # Configuration
 ENDPOINT_FILE = Path("/tmp/camoufox_endpoint.txt")
-HEALTH_PORT = int(os.getenv('HEALTH_PORT', '8080'))
-BROWSER_PORT = int(os.getenv('BROWSER_PORT', '3000'))
+HEALTH_PORT = int(os.getenv('HEALTH_PORT', '9090'))  # Health check endpoint
+BROWSER_PORT = int(os.getenv('BROWSER_PORT', '8080'))  # Browser WebSocket - NOT 3000 (Node server uses 3000)
 POOL_SIZE = int(os.getenv('BROWSER_POOL_SIZE', '3'))
 ENVIRONMENT = os.getenv('ENVIRONMENT', 'development')
 # Hostname to advertise for WebSocket connections (for Railway internal networking)
@@ -188,9 +188,22 @@ def launch_browser_instance(browser_id: str, port: int, headless: bool = True) -
     import orjson
     import hashlib
 
-    # Build launch arguments
+    # Build launch arguments - OPTIMAL CONFIGURATION
+    # See: https://camoufox.com/python/usage/
+    #
+    # Key features:
+    # - humanize: C++ level cursor simulation (undetectable)
+    # - disable_coop: Allow cross-origin iframes (Cloudflare Turnstile)
+    # - block_webrtc: Prevent IP leaks when using proxy
+    # - os: Match operating system to proxy country for consistency
+    #
     launch_args = {
         'headless': headless,
+        'humanize': 2.0,  # C++ cursor movement, max 2 seconds (more realistic than default 1.5)
+        'disable_coop': True,  # CRITICAL: Allow Cloudflare Turnstile iframes
+        'block_webrtc': True,  # Prevent WebRTC IP leaks (important with proxy)
+        'os': ['windows', 'macos'],  # Randomize between common OS (not linux - less common)
+        'i_know_what_im_doing': True,  # Acknowledge disable_coop warning
     }
 
     # Configure proxy if provided
@@ -226,8 +239,12 @@ def launch_browser_instance(browser_id: str, port: int, headless: bool = True) -
             proxy_config['password'] = sticky_password
         launch_args['proxy'] = proxy_config
 
-        if os.getenv('CAMOUFOX_GEOIP', 'false').lower() == 'true':
+        # GeoIP is enabled by default when using proxy
+        # This auto-matches timezone, locale, and geolocation to proxy IP
+        # Can be disabled with CAMOUFOX_GEOIP=false
+        if os.getenv('CAMOUFOX_GEOIP', 'true').lower() == 'true':
             launch_args['geoip'] = True
+            print(f"[{browser_id}] GeoIP enabled - auto-matching location to proxy IP", flush=True)
 
         print(f"[{browser_id}] Proxy configured: {proxy_server} (country: {proxy_country})", flush=True)
 
@@ -269,24 +286,29 @@ def launch_browser_instance(browser_id: str, port: int, headless: bool = True) -
                         browser_index = int(browser_id.split('_')[1])
                         proxy_port = BROWSER_PORT + browser_index  # 3000, 3001, 3002...
 
-                        # Start socat proxy to forward external connections
-                        start_socat_proxy(proxy_port, dynamic_port, browser_id)
+                        # Try to start socat proxy to forward external connections
+                        socat_proc = start_socat_proxy(proxy_port, dynamic_port, browser_id)
 
-                        # Rewrite endpoint to use proxy port instead of dynamic port
-                        # Keep the path (session ID) from original endpoint
-                        path = ws_endpoint.split('/', 3)[-1] if ws_endpoint.count('/') >= 3 else ''
-                        proxied_endpoint = f"ws://localhost:{proxy_port}/{path}"
+                        # Use proxied endpoint if socat succeeded, otherwise use dynamic endpoint directly
+                        if socat_proc:
+                            # socat proxy is running - use fixed port
+                            path = ws_endpoint.split('/', 3)[-1] if ws_endpoint.count('/') >= 3 else ''
+                            final_endpoint = f"ws://localhost:{proxy_port}/{path}"
+                            print(f"[{browser_id}] Ready at: {final_endpoint} (proxied from {dynamic_port})", flush=True)
+                        else:
+                            # socat not available - use dynamic endpoint directly
+                            final_endpoint = ws_endpoint
+                            print(f"[{browser_id}] Ready at: {final_endpoint} (direct, no socat)", flush=True)
 
                         browser_pool[browser_id] = {
-                            'endpoint': proxied_endpoint,
+                            'endpoint': final_endpoint,
                             'original_endpoint': ws_endpoint,
-                            'proxy_port': proxy_port,
+                            'proxy_port': proxy_port if socat_proc else None,
                             'dynamic_port': dynamic_port,
                             'process': process,
                             'status': 'ready',
                             'started_at': datetime.now(timezone.utc).isoformat()
                         }
-                        print(f"[{browser_id}] Ready at: {proxied_endpoint} (proxied from {dynamic_port})", flush=True)
                     else:
                         # Fallback if port extraction fails
                         browser_pool[browser_id] = {

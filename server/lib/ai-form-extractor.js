@@ -303,7 +303,7 @@ class AIFormExtractor {
               fieldData.selector = `[name="${input.name}"]`;
             }
           } else {
-            // Generate unique selector
+            // Generate unique selector with positional index for complex selectors
             let path = [];
             let element = input;
             while (element && element.tagName !== 'BODY') {
@@ -318,7 +318,20 @@ class AIFormExtractor {
               element = element.parentElement;
               if (path.length > 5) break;
             }
-            fieldData.selector = path.join(' > ');
+            let cssPath = path.join(' > ');
+
+            // Check if this selector is unique - if not, we need to add positional info
+            const allMatches = document.querySelectorAll(cssPath);
+            if (allMatches.length > 1) {
+              // Find position of this element among matches
+              const matchIndex = Array.from(allMatches).indexOf(input);
+              if (matchIndex >= 0) {
+                // Store the index for later use in form filling
+                fieldData.selectorIndex = matchIndex;
+                fieldData.totalMatches = allMatches.length;
+              }
+            }
+            fieldData.selector = cssPath;
           }
 
           // For select/dropdown fields, extract options

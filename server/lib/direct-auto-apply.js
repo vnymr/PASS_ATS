@@ -21,7 +21,8 @@ import {
   hasActiveGmailConnection
 } from './email-verification-checker.js';
 
-const aiFormFiller = new AIFormFiller();
+// Use FAST MODE - fills forms in <10 seconds (no fake cursor movements, minimal delays)
+const aiFormFiller = new AIFormFiller({ fastMode: true });
 
 /**
  * Find or generate a tailored resume for the job
@@ -340,7 +341,16 @@ export async function processAutoApplyDirect({ applicationId, jobUrl, atsType, u
           }, '🔗 [PARALLEL] Browser context created');
 
           const newPage = await context.newPage();
-          await applyStealthToPage(newPage, { sessionSeed });
+
+          // IMPORTANT: Skip Chrome stealth injection for Camoufox (Firefox-based)
+          // Camoufox handles ALL fingerprinting at C++ level
+          // Injecting Chrome-specific JS (window.chrome, etc) would cause inconsistencies
+          // See: https://camoufox.com/stealth/ - "does not support injecting Chromium fingerprints"
+          if (!currentUseCamoufox) {
+            await applyStealthToPage(newPage, { sessionSeed });
+          } else {
+            logger.info('🦊 Skipping JS stealth injection - Camoufox handles fingerprinting at C++ level');
+          }
 
           // Navigate to job page (80 second timeout as requested)
           logger.info(`📄 [PARALLEL] Navigating to ${jobUrl}...`);

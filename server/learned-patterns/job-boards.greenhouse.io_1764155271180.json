@@ -1,0 +1,147 @@
+{
+  "metadata": {
+    "url": "https://job-boards.greenhouse.io/angi/jobs/8065358002",
+    "domain": "job-boards.greenhouse.io",
+    "timestamp": "2025-11-26T11:07:51.180Z",
+    "success": true
+  },
+  "formStructure": {
+    "totalFields": 21,
+    "fieldTypes": {
+      "text": 17,
+      "tel": 1,
+      "file": 2,
+      "textarea": 1
+    },
+    "requiredFields": [
+      {
+        "name": "unnamed_4",
+        "type": "text",
+        "label": ""
+      },
+      {
+        "name": "unnamed_12",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_14",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_17",
+        "type": "text",
+        "label": "Select..."
+      }
+    ]
+  },
+  "aiResponses": {
+    "4000602002": [
+      "Prefer not to say"
+    ],
+    "4000603002": "Male",
+    "first_name": "John",
+    "last_name": "Doe",
+    "email": "john@example.com",
+    "country": "United States",
+    "unnamed_4": "Software Engineer",
+    "phone": "+1-555-123-4567",
+    "resume": "John_Doe_Resume.pdf",
+    "cover_letter": "John_Doe_Cover_Letter.pdf",
+    "question_32351236002": "linkedin.com/in/johndoe",
+    "question_32351237002": "N/A",
+    "question_32351238002": "LinkedIn job posting",
+    "question_32351239002": "Yes",
+    "unnamed_12": true,
+    "question_32351240002": "No",
+    "unnamed_14": true,
+    "question_32351241002": "$150,000 - $180,000",
+    "question_32351242002": "I acknowledge and consent to the California Consumer Privacy Act notice and authorize Angi to collect and process my personal information as described for recruitment and employment purposes.",
+    "unnamed_17": true,
+    "question_32351243002": "123 Market St, Apt 10\nSan Francisco, CA 94103\nUnited States"
+  },
+  "problemsSolved": [
+    {
+      "problem": "Dropdown \"country\" failed: Failed to fill custom dropdown \"country\" after 3 attempts. AI provided: \"United States\". Error: Dropdown menu did not open after multiple attempts",
+      "solution": {
+        "issue": "Failed to analyze screenshot",
+        "solution": "Manual intervention required",
+        "needsManualIntervention": true
+      },
+      "timestamp": "2025-11-26T11:07:51.181Z"
+    },
+    {
+      "problem": "Dropdown \"unnamed_4\" failed: Failed to fill custom dropdown \"unnamed_4\" after 3 attempts. AI provided: \"Software Engineer\". Error: Dropdown menu did not open after multiple attempts",
+      "timestamp": "2025-11-26T11:07:51.181Z"
+    },
+    {
+      "problem": "Dropdown \"question_32351239002\" failed: Failed to fill custom dropdown \"question_32351239002\" after 3 attempts. AI provided: \"Yes\". Error: Dropdown menu did not open after multiple attempts",
+      "timestamp": "2025-11-26T11:07:51.181Z"
+    },
+    {
+      "problem": "Dropdown \"unnamed_12\" failed: Failed to fill custom dropdown \"unnamed_12\" after 3 attempts. AI provided: \"true\". Error: Dropdown menu did not open after multiple attempts",
+      "timestamp": "2025-11-26T11:07:51.181Z"
+    },
+    {
+      "problem": "Dropdown \"question_32351240002\" failed: Failed to fill custom dropdown \"question_32351240002\" after 3 attempts. AI provided: \"No\". Error: Dropdown menu did not open after multiple attempts",
+      "timestamp": "2025-11-26T11:07:51.181Z"
+    },
+    {
+      "problem": "Dropdown \"unnamed_14\" failed: Failed to fill custom dropdown \"unnamed_14\" after 3 attempts. AI provided: \"true\". Error: Dropdown menu did not open after multiple attempts",
+      "timestamp": "2025-11-26T11:07:51.181Z"
+    },
+    {
+      "problem": "Dropdown \"question_32351242002\" failed: Failed to fill custom dropdown \"question_32351242002\" after 3 attempts. AI provided: \"I acknowledge and consent to the California Consumer Privacy Act notice and authorize Angi to collect and process my personal information as described for recruitment and employment purposes.\". Error: Dropdown menu did not open after multiple attempts",
+      "timestamp": "2025-11-26T11:07:51.181Z"
+    },
+    {
+      "problem": "Dropdown \"unnamed_17\" failed: Failed to fill custom dropdown \"unnamed_17\" after 3 attempts. AI provided: \"true\". Error: Dropdown menu did not open after multiple attempts",
+      "timestamp": "2025-11-26T11:07:51.181Z"
+    },
+    {
+      "problem": "Dropdown \"4000602002\" failed: Failed to fill custom dropdown \"4000602002\" after 3 attempts. AI provided: \"Prefer not to say\". Error: Dropdown menu did not open after multiple attempts",
+      "timestamp": "2025-11-26T11:07:51.181Z"
+    },
+    {
+      "problem": "Dropdown \"4000603002\" failed: Failed to fill custom dropdown \"4000603002\" after 3 attempts. AI provided: \"Male\". Error: Dropdown menu did not open after multiple attempts",
+      "timestamp": "2025-11-26T11:07:51.181Z"
+    }
+  ],
+  "patterns": {
+    "commonQuestions": [
+      {
+        "label": "How did you hear about this job?",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What is your target salary range for a new role?*",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "Which categories describe you? Select all that apply to you:",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What is your current gender identity?",
+        "type": "text",
+        "category": "other"
+      }
+    ],
+    "fieldNamingConventions": {
+      "camelCase": 0,
+      "snake_case": 15,
+      "kebabCase": 0,
+      "standard": 6
+    },
+    "formLayout": {
+      "totalFields": 21,
+      "visibleFields": 21,
+      "requiredFields": 4,
+      "optionalFields": 17
+    }
+  }
+}

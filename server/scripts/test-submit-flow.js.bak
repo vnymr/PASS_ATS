@@ -1,0 +1,187 @@
+/**
+ * Test Submit Button Functionality
+ * Tests the complete form filling and submission flow
+ */
+
+import 'dotenv/config';
+import { launchBrowser } from '../lib/browser-launcher.js';
+import AIFormFiller from '../lib/ai-form-filler.js';
+import fs from 'fs';
+import path from 'path';
+
+// Test configuration
+const TEST_CONFIG = {
+  userProfile: {
+    fullName: 'Alex Johnson',
+    email: 'alex.johnson@example.com',
+    phone: '+1 (555) 234-5678',
+    location: 'Seattle, WA',
+    linkedIn: 'https://linkedin.com/in/alexjohnson',
+    portfolio: 'https://alexjohnson.dev',
+    experience: [{
+      title: 'Senior Developer',
+      company: 'Tech Giants Inc',
+      duration: '2019-Present',
+      responsibilities: 'Led teams building cloud-native applications'
+    }],
+    education: [{
+      degree: 'Bachelor of Science',
+      field: 'Software Engineering',
+      school: 'Stanford University',
+      year: '2019'
+    }],
+    skills: ['JavaScript', 'Python', 'React', 'AWS', 'Kubernetes']
+  },
+
+  jobData: {
+    title: 'Lead Software Engineer',
+    company: 'Innovation Corp',
+    description: 'Join our team to build next-generation applications',
+    requirements: '7+ years experience',
+    location: 'Remote'
+  },
+
+  outputDir: path.resolve(process.cwd(), 'test-output')
+};
+
+async function runTest() {
+  console.log('🧪 Testing Submit Button Functionality\n');
+  console.log('='.repeat(80));
+
+  const browser = await launchBrowser({
+    headless: false,
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    slowMo: 100
+  });
+
+  try {
+    const page = await browser.newPage();
+    const filler = new AIFormFiller();
+
+    // Load the test form we created earlier
+    const formPath = path.join(TEST_CONFIG.outputDir, 'test-application-form.html');
+
+    if (!fs.existsSync(formPath)) {
+      throw new Error('Test form not found. Run test-file-upload.js first to create it.');
+    }
+
+    console.log('📋 Loading test form...');
+    await page.goto(`file://${formPath}`, { waitUntil: 'networkidle2' });
+
+    // Step 1: Fill the form
+    console.log('\n🤖 Step 1: Filling form with AI...');
+    const fillResult = await filler.fillFormIntelligently(
+      page,
+      TEST_CONFIG.userProfile,
+      TEST_CONFIG.jobData
+    );
+
+    console.log(`✅ Form filled: ${fillResult.fieldsFilled}/${fillResult.fieldsExtracted} fields`);
+
+    if (!fillResult.success) {
+      throw new Error('Form filling failed: ' + fillResult.errors.join(', '));
+    }
+
+    if (!fillResult.submitButton) {
+      throw new Error('No submit button found!');
+    }
+
+    // Step 2: Take screenshot before submit
+    await page.screenshot({
+      path: path.join(TEST_CONFIG.outputDir, 'submit-test-before.png'),
+      fullPage: true
+    });
+    console.log('📸 Screenshot before submit saved');
+
+    // Step 3: Test submit button click
+    console.log('\n📤 Step 2: Testing submit button...');
+    console.log(`   Button selector: ${fillResult.submitButton.selector}`);
+    console.log(`   Button text: "${fillResult.submitButton.text}"`);
+
+    // Click submit
+    const submitSuccess = await filler.submitForm(page, fillResult.submitButton);
+
+    // Wait for confirmation to appear
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    // Step 4: Verify submission
+    console.log('\n✅ Step 3: Verifying submission...');
+
+    const confirmationVisible = await page.evaluate(() => {
+      const confirmation = document.getElementById('submitConfirmation');
+      return confirmation && confirmation.style.display !== 'none';
+    });
+
+    const formHidden = await page.evaluate(() => {
+      const form = document.getElementById('applicationForm');
+      return form && form.style.display === 'none';
+    });
+
+    // Take screenshot after submit
+    await page.screenshot({
+      path: path.join(TEST_CONFIG.outputDir, 'submit-test-after.png'),
+      fullPage: true
+    });
+    console.log('📸 Screenshot after submit saved');
+
+    // Display results
+    console.log('\n📊 Results:');
+    console.log('='.repeat(80));
+    console.log(`✅ Submit button clicked: ${submitSuccess}`);
+    console.log(`✅ Confirmation visible: ${confirmationVisible}`);
+    console.log(`✅ Form hidden: ${formHidden}`);
+
+    // Wait for manual inspection
+    console.log('\n⏸️  Pausing for 5 seconds for manual inspection...');
+    await new Promise(resolve => setTimeout(resolve, 5000));
+
+    // Save results
+    const testResults = {
+      submitButtonFound: !!fillResult.submitButton,
+      submitButtonClicked: submitSuccess,
+      confirmationVisible,
+      formHidden,
+      overallSuccess: submitSuccess && confirmationVisible && formHidden,
+      timestamp: new Date().toISOString()
+    };
+
+    fs.writeFileSync(
+      path.join(TEST_CONFIG.outputDir, 'submit-test-results.json'),
+      JSON.stringify(testResults, null, 2)
+    );
+
+    console.log('\n' + '='.repeat(80));
+    if (testResults.overallSuccess) {
+      console.log('✅ SUBMIT BUTTON TEST PASSED!');
+      console.log('   - Submit button found and clicked');
+      console.log('   - Confirmation message displayed');
+      console.log('   - Form properly hidden after submission');
+    } else {
+      console.log('❌ SUBMIT BUTTON TEST FAILED!');
+      if (!submitSuccess) console.log('   ❌ Submit button click failed');
+      if (!confirmationVisible) console.log('   ❌ Confirmation not visible');
+      if (!formHidden) console.log('   ❌ Form not hidden');
+    }
+    console.log('='.repeat(80));
+
+  } catch (error) {
+    console.error('\n❌ Test failed:', error);
+    throw error;
+  } finally {
+    await browser.close();
+  }
+}
+
+console.log('🚀 Starting submit button test in 2 seconds...\n');
+
+setTimeout(() => {
+  runTest()
+    .then(() => {
+      console.log('\n✅ Submit button test completed!');
+      process.exit(0);
+    })
+    .catch(error => {
+      console.error('\n❌ Submit button test failed:', error);
+      process.exit(1);
+    });
+}, 2000);

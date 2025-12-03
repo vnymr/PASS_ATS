@@ -1,7 +1,7 @@
 {
   "domain": "job-boards.greenhouse.io",
   "firstSeen": "2025-11-26T07:24:40.626Z",
-  "lastUpdated": "2025-11-26T13:17:32.055Z",
+  "lastUpdated": "2025-12-02T21:49:30.609Z",
   "applications": [
     {
       "timestamp": "2025-11-26T07:24:40.621Z",
@@ -57,6 +57,31 @@
       "timestamp": "2025-11-26T13:17:32.053Z",
       "fieldsCount": 21,
       "problemsSolved": 2
+    },
+    {
+      "timestamp": "2025-12-02T08:33:25.289Z",
+      "fieldsCount": 32,
+      "problemsSolved": 19
+    },
+    {
+      "timestamp": "2025-12-02T09:17:08.442Z",
+      "fieldsCount": 32,
+      "problemsSolved": 8
+    },
+    {
+      "timestamp": "2025-12-02T09:28:53.223Z",
+      "fieldsCount": 32,
+      "problemsSolved": 3
+    },
+    {
+      "timestamp": "2025-12-02T19:52:23.790Z",
+      "fieldsCount": 32,
+      "problemsSolved": 3
+    },
+    {
+      "timestamp": "2025-12-02T21:49:30.596Z",
+      "fieldsCount": 32,
+      "problemsSolved": 4
     }
   ],
   "commonPatterns": {
@@ -83,7 +108,79 @@
         "name": "unnamed_18",
         "type": "text",
         "label": "Select...",
-        "count": 11
+        "count": 12
+      },
+      "unnamed_5": {
+        "name": "unnamed_5",
+        "type": "text",
+        "label": "",
+        "count": 5
+      },
+      "unnamed_20": {
+        "name": "unnamed_20",
+        "type": "text",
+        "label": "Select...",
+        "count": 1
+      },
+      "unnamed_25": {
+        "name": "unnamed_25",
+        "type": "text",
+        "label": "Select...",
+        "count": 1
+      },
+      "unnamed_27": {
+        "name": "unnamed_27",
+        "type": "text",
+        "label": "Select...",
+        "count": 1
+      },
+      "unnamed_29": {
+        "name": "unnamed_29",
+        "type": "text",
+        "label": "Select...",
+        "count": 1
+      },
+      "unnamed_31": {
+        "name": "unnamed_31",
+        "type": "text",
+        "label": "Select...",
+        "count": 1
+      },
+      "unnamed_19": {
+        "name": "unnamed_19",
+        "type": "text",
+        "label": "Select...",
+        "count": 4
+      },
+      "unnamed_21": {
+        "name": "unnamed_21",
+        "type": "text",
+        "label": "Select...",
+        "count": 4
+      },
+      "unnamed_26": {
+        "name": "unnamed_26",
+        "type": "text",
+        "label": "Select...",
+        "count": 4
+      },
+      "unnamed_28": {
+        "name": "unnamed_28",
+        "type": "text",
+        "label": "Select...",
+        "count": 4
+      },
+      "unnamed_30": {
+        "name": "unnamed_30",
+        "type": "text",
+        "label": "Select...",
+        "count": 4
+      },
+      "unnamed_32": {
+        "name": "unnamed_32",
+        "type": "text",
+        "label": "Select...",
+        "count": 4
       }
     },
     "questionTypes": [
@@ -306,6 +403,81 @@
         "label": "What is your current gender identity?",
         "type": "text",
         "category": "other"
+      },
+      {
+        "label": "What is your desired annual compensation?*",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What is your current location (city, state)?*",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What is your most recent cumulative GPA? *",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What is your desired annual compensation?*",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What is your current location (city, state)?*",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What is your most recent cumulative GPA? *",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What is your desired annual compensation?*",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What is your current location (city, state)?*",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What is your most recent cumulative GPA? *",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What is your desired annual compensation?*",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What is your current location (city, state)?*",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What is your most recent cumulative GPA? *",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What is your desired annual compensation?*",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What is your current location (city, state)?*",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What is your most recent cumulative GPA? *",
+        "type": "text",
+        "category": "other"
       }
     ],
     "successStrategies": [
@@ -451,6 +623,179 @@
       {
         "problem": "Failed to fill unnamed_18: Field not found with any selector strategy: unnamed_18",
         "timestamp": "2025-11-26T13:17:32.053Z"
+      },
+      {
+        "problem": "Dropdown \"country\" failed: Failed to fill custom dropdown \"country\" after 3 attempts. AI provided: \"United States\". Error: Dropdown menu did not open after multiple attempts",
+        "solution": {
+          "issue": "Failed to analyze screenshot",
+          "solution": "Manual intervention required",
+          "needsManualIntervention": true
+        },
+        "timestamp": "2025-12-02T08:33:25.289Z"
+      },
+      {
+        "problem": "Dropdown \"unnamed_5\" failed: Failed to fill custom dropdown \"unnamed_5\" after 3 attempts. AI provided: \"I am a Senior Software Engineer with approximately 7 years of professional experience building production web applications and backend services. At Tech Corp I led a team of four engineers to design and launch a React/Node.js customer dashboard that served over 100,000 users; I owned the frontend architecture, implemented server-side rendering to improve first meaningful paint by 35%, and introduced a TypeScript-based component library to reduce UI bugs. At StartupXYZ I helped design and operate microservices on AWS using Docker and PostgreSQL; I implemented CI/CD pipelines that reduced deploy time from hours to under 15 minutes and introduced observability practices that cut mean time to resolution for incidents by over 40%.\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-12-02T08:33:25.289Z"
+      },
+      {
+        "problem": "Dropdown \"school--0\" failed: Failed to fill custom dropdown \"school--0\" after 3 attempts. AI provided: \"Stanford University\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-12-02T08:33:25.289Z"
+      },
+      {
+        "problem": "Dropdown \"degree--0\" failed: Failed to fill custom dropdown \"degree--0\" after 3 attempts. AI provided: \"BS\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-12-02T08:33:25.289Z"
+      },
+      {
+        "problem": "Dropdown \"discipline--0\" failed: Failed to fill custom dropdown \"discipline--0\" after 3 attempts. AI provided: \"Computer Science\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-12-02T08:33:25.289Z"
+      },
+      {
+        "problem": "Dropdown \"start-month--0\" failed: Failed to fill custom dropdown \"start-month--0\" after 3 attempts. AI provided: \"September\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-12-02T08:33:25.289Z"
+      },
+      {
+        "problem": "Dropdown \"end-month--0\" failed: Failed to fill custom dropdown \"end-month--0\" after 3 attempts. AI provided: \"June\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-12-02T08:33:25.289Z"
+      },
+      {
+        "problem": "Dropdown \"question_14642599004\" failed: Failed to fill custom dropdown \"question_14642599004\" after 3 attempts. AI provided: \"No\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-12-02T08:33:25.289Z"
+      },
+      {
+        "problem": "Dropdown \"unnamed_18\" failed: Failed to fill custom dropdown \"unnamed_18\" after 3 attempts. AI provided: \"Yes\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-12-02T08:33:25.289Z"
+      },
+      {
+        "problem": "Dropdown \"question_14642600004\" failed: Failed to fill custom dropdown \"question_14642600004\" after 3 attempts. AI provided: \"Yes\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-12-02T08:33:25.289Z"
+      },
+      {
+        "problem": "Dropdown \"unnamed_20\" failed: Failed to fill custom dropdown \"unnamed_20\" after 3 attempts. AI provided: \"Full-time\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-12-02T08:33:25.289Z"
+      },
+      {
+        "problem": "Dropdown \"gender\" failed: Failed to fill custom dropdown \"gender\" after 3 attempts. AI provided: \"Male\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-12-02T08:33:25.289Z"
+      },
+      {
+        "problem": "Dropdown \"unnamed_25\" failed: Failed to fill custom dropdown \"unnamed_25\" after 3 attempts. AI provided: \"He/Him\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-12-02T08:33:25.289Z"
+      },
+      {
+        "problem": "Dropdown \"hispanic_ethnicity\" failed: Failed to fill custom dropdown \"hispanic_ethnicity\" after 3 attempts. AI provided: \"No\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-12-02T08:33:25.289Z"
+      },
+      {
+        "problem": "Dropdown \"unnamed_27\" failed: Failed to fill custom dropdown \"unnamed_27\" after 3 attempts. AI provided: \"White or Caucasian\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-12-02T08:33:25.289Z"
+      },
+      {
+        "problem": "Dropdown \"veteran_status\" failed: Failed to fill custom dropdown \"veteran_status\" after 3 attempts. AI provided: \"Not a veteran\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-12-02T08:33:25.289Z"
+      },
+      {
+        "problem": "Dropdown \"unnamed_29\" failed: Failed to fill custom dropdown \"unnamed_29\" after 3 attempts. AI provided: \"No\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-12-02T08:33:25.289Z"
+      },
+      {
+        "problem": "Dropdown \"disability_status\" failed: Failed to fill custom dropdown \"disability_status\" after 3 attempts. AI provided: \"No\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-12-02T08:33:25.289Z"
+      },
+      {
+        "problem": "Dropdown \"unnamed_31\" failed: Failed to fill custom dropdown \"unnamed_31\" after 3 attempts. AI provided: \"Yes\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-12-02T08:33:25.289Z"
+      },
+      {
+        "problem": "Failed to fill unnamed_5: Field not found with any selector strategy: unnamed_5",
+        "solution": {
+          "issue": "Failed to analyze screenshot",
+          "solution": "Manual intervention required",
+          "needsManualIntervention": true
+        },
+        "timestamp": "2025-12-02T09:17:08.443Z"
+      },
+      {
+        "problem": "Dropdown \"degree--0\" failed: Failed to fill custom dropdown \"degree--0\" after 3 attempts. AI provided: \"BS Computer Science\". Error: Failed to select: No options found in dropdown. Available options: none",
+        "timestamp": "2025-12-02T09:17:08.443Z"
+      },
+      {
+        "problem": "Dropdown \"unnamed_19\" failed: Failed to fill custom dropdown \"unnamed_19\" after 3 attempts. AI provided: \"LinkedIn\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-12-02T09:17:08.443Z"
+      },
+      {
+        "problem": "Failed to fill unnamed_21: Field not found with any selector strategy: unnamed_21",
+        "timestamp": "2025-12-02T09:17:08.443Z"
+      },
+      {
+        "problem": "Dropdown \"unnamed_26\" failed: Failed to fill custom dropdown \"unnamed_26\" after 3 attempts. AI provided: \"Male\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-12-02T09:17:08.443Z"
+      },
+      {
+        "problem": "Dropdown \"unnamed_28\" failed: Failed to fill custom dropdown \"unnamed_28\" after 3 attempts. AI provided: \"No\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-12-02T09:17:08.443Z"
+      },
+      {
+        "problem": "Dropdown \"unnamed_30\" failed: Failed to fill custom dropdown \"unnamed_30\" after 3 attempts. AI provided: \"Not a veteran\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-12-02T09:17:08.443Z"
+      },
+      {
+        "problem": "Dropdown \"unnamed_32\" failed: Failed to fill custom dropdown \"unnamed_32\" after 3 attempts. AI provided: \"No\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-12-02T09:17:08.443Z"
+      },
+      {
+        "problem": "Failed to fill unnamed_5: Field not found with any selector strategy: unnamed_5",
+        "solution": {
+          "issue": "Failed to analyze screenshot",
+          "solution": "Manual intervention required",
+          "needsManualIntervention": true
+        },
+        "timestamp": "2025-12-02T09:28:53.223Z"
+      },
+      {
+        "problem": "Failed to fill unnamed_21: Field not found with any selector strategy: unnamed_21",
+        "timestamp": "2025-12-02T09:28:53.223Z"
+      },
+      {
+        "problem": "Failed to fill unnamed_32: Field not found with any selector strategy: unnamed_32",
+        "timestamp": "2025-12-02T09:28:53.223Z"
+      },
+      {
+        "problem": "Failed to fill unnamed_5: Field not found with any selector strategy: unnamed_5",
+        "solution": {
+          "issue": "Failed to analyze screenshot",
+          "solution": "Manual intervention required",
+          "needsManualIntervention": true
+        },
+        "timestamp": "2025-12-02T19:52:23.790Z"
+      },
+      {
+        "problem": "Failed to fill unnamed_21: Field not found with any selector strategy: unnamed_21",
+        "timestamp": "2025-12-02T19:52:23.790Z"
+      },
+      {
+        "problem": "Failed to fill unnamed_32: Field not found with any selector strategy: unnamed_32",
+        "timestamp": "2025-12-02T19:52:23.790Z"
+      },
+      {
+        "problem": "Failed to fill unnamed_5: Field not found with any selector strategy: unnamed_5",
+        "solution": {
+          "issue": "Failed to analyze screenshot",
+          "solution": "Manual intervention required",
+          "needsManualIntervention": true
+        },
+        "timestamp": "2025-12-02T21:49:30.596Z"
+      },
+      {
+        "problem": "Failed to fill unnamed_21: Field not found with any selector strategy: unnamed_21",
+        "timestamp": "2025-12-02T21:49:30.596Z"
+      },
+      {
+        "problem": "Dropdown \"unnamed_30\" failed: Failed to fill custom dropdown \"unnamed_30\" after 3 attempts. AI provided: \"No\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-12-02T21:49:30.596Z"
+      },
+      {
+        "problem": "Dropdown \"unnamed_32\" failed: Failed to fill custom dropdown \"unnamed_32\" after 3 attempts. AI provided: \"No\". Error: Dropdown menu did not open after multiple attempts",
+        "timestamp": "2025-12-02T21:49:30.596Z"
       }
     ]
   }

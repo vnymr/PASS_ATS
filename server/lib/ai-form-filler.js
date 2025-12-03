@@ -21,11 +21,15 @@ class AIFormFiller {
     this.maxRetries = 3;
     this.typingDelay = 50; // ms between keystrokes for natural typing
 
+    // FAST MODE - fills forms in <10 seconds with minimal delays
+    // For worker-assisted mode where a human will click submit anyway
+    this.fastMode = options.fastMode === true;
+
     // Ghost cursor mode - DISABLED by default due to issues with remote browsers (Camoufox/Firefox)
     // Ghost cursor was designed for local Puppeteer, not remote WebSocket connections
     // See: https://github.com/microsoft/playwright/issues/9354 (Firefox mouse move issues)
     // See: https://github.com/microsoft/playwright/issues/15317 (protocol errors)
-    this.useGhostCursor = options.useGhostCursor === true; // Disabled by default
+    this.useGhostCursor = options.useGhostCursor === true && !this.fastMode; // Disabled in fast mode
     this.ghostCursors = new WeakMap(); // Cache cursors per page
   }
 
@@ -43,6 +47,32 @@ class AIFormFiller {
       this.ghostCursors.set(page, cursor);
     }
     return this.ghostCursors.get(page);
+  }
+
+  /**
+   * Get keyboard access from a page or frame
+   * Frames don't have direct .keyboard property, need to access via parent page
+   * @param {Page|Frame} pageOrFrame - Playwright page or frame
+   * @returns {Keyboard|null} Keyboard object or null if not available
+   */
+  getKeyboard(pageOrFrame) {
+    // If it's a page, use keyboard directly
+    if (pageOrFrame.keyboard) {
+      return pageOrFrame.keyboard;
+    }
+    // If it's a frame, get keyboard from the page
+    if (typeof pageOrFrame.page === 'function') {
+      const page = pageOrFrame.page();
+      if (page && page.keyboard) {
+        return page.keyboard;
+      }
+    }
+    // Fallback: try to get from parent context
+    if (pageOrFrame._page && pageOrFrame._page.keyboard) {
+      return pageOrFrame._page.keyboard;
+    }
+    logger.warn('Could not get keyboard from page/frame');
+    return null;
   }
 
   /**
@@ -625,10 +655,16 @@ class AIFormFiller {
         return false;
       }
 
-      // 2. Location/autocomplete fields - these need special handling
+      // 2. Location/autocomplete fields - these need special handling (type first, then select)
+      // School and discipline fields are also autocomplete - they load options via API when you type
       if (element.id?.includes('location') || element.name?.includes('location') ||
+          element.id?.includes('school') || element.name?.includes('school') ||
+          element.id?.includes('discipline') || element.name?.includes('discipline') ||
           element.placeholder?.toLowerCase().includes('city') ||
-          element.placeholder?.toLowerCase().includes('location')) {
+          element.placeholder?.toLowerCase().includes('location') ||
+          element.placeholder?.toLowerCase().includes('school') ||
+          element.placeholder?.toLowerCase().includes('discipline') ||
+          element.placeholder?.toLowerCase().includes('select a school')) {
         return false;
       }
 
@@ -687,13 +723,22 @@ class AIFormFiller {
       return;
     }
 
-    // Check if this is an autocomplete field (e.g., location)
+    // Check if this is an autocomplete field (e.g., location, school, discipline)
+    // These fields load options dynamically via API when you type
     const isAutocompleteField =
       field.name?.includes('location') ||
+      field.name?.includes('school') ||
+      field.name?.includes('discipline') ||
       field.label?.toLowerCase().includes('location') ||
       field.label?.toLowerCase().includes('city') ||
+      field.label?.toLowerCase().includes('school') ||
+      field.label?.toLowerCase().includes('university') ||
+      field.label?.toLowerCase().includes('discipline') ||
       field.placeholder?.toLowerCase().includes('city') ||
-      field.placeholder?.toLowerCase().includes('location');
+      field.placeholder?.toLowerCase().includes('location') ||
+      field.placeholder?.toLowerCase().includes('school') ||
+      field.placeholder?.toLowerCase().includes('select a school') ||
+      field.placeholder?.toLowerCase().includes('discipline');
 
     if (isAutocompleteField && field.type === 'text') {
       logger.info({
@@ -781,51 +826,61 @@ class AIFormFiller {
   }
 
   /**
-   * Fill text input with human-like typing
-   * ENHANCED: Uses ghost cursor for human-like mouse movements
+   * Fill text input
+   * Fast mode: Direct fill with minimal delays (no cursor movements)
+   * Normal mode: Uses ghost cursor for human-like mouse movements
    */
   async fillTextInput(page, selector, text) {
-    // Add human-like "reading time" before filling important fields
+    // FAST MODE: Direct fill, no cursor movements, minimal delays
+    if (this.fastMode) {
+      try {
+        await page.fill(selector, '');
+        await this.sleep(50); // Brief pause (capped at 50-150ms in fast mode)
+        await page.fill(selector, String(text));
+        await this.sleep(100); // Let React/Vue handlers fire
+      } catch (error) {
+        // Fallback to evaluate if fill fails
+        await page.evaluate(({sel, val}) => {
+          const element = document.querySelector(sel);
+          if (element) {
+            element.value = val;
+            element.dispatchEvent(new Event('input', { bubbles: true }));
+            element.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+        }, {sel: selector, val: String(text)});
+      }
+      return;
+    }
+
+    // NORMAL MODE: Human-like delays and optional cursor movements
     const fieldName = selector.toLowerCase();
     if (fieldName.includes('email') || fieldName.includes('phone') ||
         fieldName.includes('location') || fieldName.includes('name')) {
-      // Simulate reading the field label (500ms - 1.5s)
       await this.sleep(500 + Math.random() * 1000);
     }
 
-    // Use ghost cursor for human-like click if enabled (with timeout protection)
     if (this.useGhostCursor) {
       try {
         const cursor = this.getGhostCursor(page);
-        // Move to and click the field with human-like behavior (5s timeout)
         await Promise.race([
           cursor.click(selector),
           new Promise((_, reject) => setTimeout(() => reject(new Error('Ghost cursor timeout')), 5000))
         ]);
         await this.sleep(50 + Math.random() * 100);
       } catch (e) {
-        // Fallback to regular click if ghost cursor fails or times out
         logger.debug({ selector, error: e.message }, 'Ghost cursor click failed, using fallback');
         try {
           await page.click(selector, { timeout: 3000 });
-        } catch (clickErr) {
-          // Continue anyway, fill might still work
-        }
+        } catch (clickErr) {}
       }
     }
 
-    // Use Playwright's native fill method - properly triggers React/Vue change detection
     try {
-      // Clear existing value first
       await page.fill(selector, '');
-      // Add tiny delay after clearing (human-like)
       await this.sleep(100 + Math.random() * 200);
-      // Fill with new value
       await page.fill(selector, String(text));
-      // Longer delay to let any onChange handlers run and simulate "moving to next field"
       await this.sleep(200 + Math.random() * 300);
     } catch (error) {
-      // Fallback to evaluate if fill fails
       logger.warn({ selector, error: error.message }, 'Native fill failed, using fallback');
       await page.evaluate(({sel, val}) => {
         const element = document.querySelector(sel);
@@ -979,24 +1034,60 @@ class AIFormFiller {
       try {
         logger.debug({ attempt, maxRetries }, 'Dropdown fill attempt');
 
+        // Step 0: Close any existing open dropdowns to avoid confusion
+        // This is important because Greenhouse renders dropdowns as portals at body level
+        // If multiple dropdowns are open, we can't distinguish which options belong to which dropdown
+        await page.evaluate(() => {
+          const openDropdowns = document.querySelectorAll('[role="listbox"]:not([hidden]), [role="menu"]:not([hidden]), .select-options, .dropdown-menu');
+          for (const dropdown of openDropdowns) {
+            if (dropdown.offsetParent !== null) {
+              // Try to close by clicking elsewhere
+              document.body.click();
+              // Also try pressing Escape
+              document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+            }
+          }
+        });
+        await this.sleep(150);
+
         // Step 1: Try multiple strategies to open the dropdown
         let dropdownOpened = false;
-        
+
+        // Strategy 0: Handle complex CSS selectors with hash-based class names (remix-css-*, etc.)
+        // These selectors often fail because they match multiple elements.
+        // Use the selectorIndex from field extraction to pick the correct element.
+        let effectiveSelector = selector;
+        let useNthIndex = null;
+        const isComplexHashSelector = /remix-css-|css-[a-z0-9]+|styled-|emotion-/.test(selector);
+
+        // Check if we have a selectorIndex (meaning multiple elements match this selector)
+        if (typeof field.selectorIndex === 'number' && field.selectorIndex >= 0) {
+          useNthIndex = field.selectorIndex;
+          logger.debug({
+            selector,
+            selectorIndex: field.selectorIndex,
+            totalMatches: field.totalMatches
+          }, 'Using selectorIndex to pick specific element from multiple matches');
+        }
+
         // Strategy 1: Use Playwright locator to click (triggers proper events)
         try {
-          const locator = page.locator(selector).first();
+          // Use nth() if we have an index, otherwise use first()
+          const locator = useNthIndex !== null
+            ? page.locator(effectiveSelector).nth(useNthIndex)
+            : page.locator(effectiveSelector).first();
           await locator.scrollIntoViewIfNeeded();
-          
+
           // Try clicking the input directly
           await locator.click({ timeout: 5000, force: false });
           await this.sleep(300);
-          
+
           // Check if dropdown opened
           dropdownOpened = await page.evaluate(() => {
             const menus = document.querySelectorAll('[role="listbox"], [role="menu"], .select-options, .dropdown-menu, ul.options, div.options');
             return Array.from(menus).some(menu => menu.offsetParent !== null);
           });
-          
+
           if (dropdownOpened) {
             logger.debug('Dropdown opened via direct locator click');
           }
@@ -1007,8 +1098,12 @@ class AIFormFiller {
         // Strategy 2: If direct click didn't work, try clicking parent container
         if (!dropdownOpened) {
           try {
-            const parentInfo = await page.evaluate((sel) => {
-              const el = document.querySelector(sel);
+            // Use selectorIndex to pick the correct element when multiple match
+            const parentInfo = await page.evaluate(({ sel, nthIndex }) => {
+              const allMatches = document.querySelectorAll(sel);
+              const el = nthIndex !== null && allMatches.length > nthIndex
+                ? allMatches[nthIndex]
+                : allMatches[0];
               if (!el) return null;
 
               // Find clickable parent container
@@ -1017,7 +1112,7 @@ class AIFormFiller {
               while (parent && parent !== document.body && attempts < 5) {
                 const classes = parent.className || '';
                 const id = parent.id || '';
-                
+
                 // Check if this looks like a clickable dropdown container
                 if (classes.includes('select') ||
                     classes.includes('dropdown') ||
@@ -1026,36 +1121,42 @@ class AIFormFiller {
                     id.includes('dropdown') ||
                     parent.getAttribute('role') === 'combobox') {
                   return {
-                    selector: parent.id ? `#${parent.id}` : 
+                    selector: parent.id ? `#${parent.id}` :
                              parent.className ? `.${parent.className.split(' ')[0]}` : null,
                     tagName: parent.tagName,
-                    className: classes
+                    className: classes,
+                    // Store a unique identifier to find this exact element later
+                    elementIndex: nthIndex
                   };
                 }
                 parent = parent.parentElement;
                 attempts++;
               }
-              
+
               // If no specific container found, return parent element info
               if (el.parentElement) {
                 return {
                   selector: null,
                   tagName: el.parentElement.tagName,
-                  className: el.parentElement.className || ''
+                  className: el.parentElement.className || '',
+                  elementIndex: nthIndex
                 };
               }
-              
+
               return null;
-            }, selector);
+            }, { sel: selector, nthIndex: useNthIndex });
 
             if (parentInfo) {
               logger.debug({ parentInfo }, 'Found parent container, trying to click it');
-              
-              // Try clicking parent using multiple methods
-              const parentClickSuccess = await page.evaluate(({ inputSel }) => {
-                const input = document.querySelector(inputSel);
+
+              // Try clicking parent using multiple methods (use selectorIndex)
+              const parentClickSuccess = await page.evaluate(({ inputSel, nthIndex }) => {
+                const allInputs = document.querySelectorAll(inputSel);
+                const input = nthIndex !== null && allInputs.length > nthIndex
+                  ? allInputs[nthIndex]
+                  : allInputs[0];
                 if (!input) return false;
-                
+
                 // Try clicking parent
                 let parent = input.parentElement;
                 if (parent) {
@@ -1074,7 +1175,7 @@ class AIFormFiller {
                   return true;
                 }
                 return false;
-              }, { inputSel: selector });
+              }, { inputSel: selector, nthIndex: useNthIndex });
               
               if (parentClickSuccess) {
                 await this.sleep(400);
@@ -1099,8 +1200,12 @@ class AIFormFiller {
         if (!dropdownOpened) {
           try {
             logger.debug('Trying to find and click dropdown arrow/chevron');
-            const arrowClicked = await page.evaluate((sel) => {
-              const input = document.querySelector(sel);
+            const arrowClicked = await page.evaluate(({ sel, nthIndex }) => {
+              // Use selectorIndex to pick the correct element
+              const allInputs = document.querySelectorAll(sel);
+              const input = nthIndex !== null && allInputs.length > nthIndex
+                ? allInputs[nthIndex]
+                : allInputs[0];
               if (!input) return false;
               
               // Look for arrow/chevron icon in parent containers
@@ -1143,15 +1248,15 @@ class AIFormFiller {
               }
               
               return false;
-            }, selector);
-            
+            }, { sel: selector, nthIndex: useNthIndex });
+
             if (arrowClicked) {
               await this.sleep(400);
               dropdownOpened = await page.evaluate(() => {
                 const menus = document.querySelectorAll('[role="listbox"], [role="menu"], .select-options, .dropdown-menu');
                 return Array.from(menus).some(menu => menu.offsetParent !== null);
               });
-              
+
               if (dropdownOpened) {
                 logger.debug('Dropdown opened via arrow/chevron click');
               }
@@ -1165,32 +1270,38 @@ class AIFormFiller {
         if (!dropdownOpened) {
           try {
             logger.debug('Trying keyboard approach to open dropdown');
-            const locator = page.locator(selector).first();
+            const locator = useNthIndex !== null
+              ? page.locator(selector).nth(useNthIndex)
+              : page.locator(selector).first();
             await locator.focus();
             await this.sleep(200);
-            
-            // Try Space key (common for opening dropdowns)
-            await page.keyboard.press('Space');
-            await this.sleep(300);
-            
-            dropdownOpened = await page.evaluate(() => {
-              const menus = document.querySelectorAll('[role="listbox"], [role="menu"], .select-options, .dropdown-menu');
-              return Array.from(menus).some(menu => menu.offsetParent !== null);
-            });
-            
-            if (!dropdownOpened) {
-              // Try ArrowDown
-              await page.keyboard.press('ArrowDown');
+
+            // Get keyboard (works for both Page and Frame)
+            const keyboard = this.getKeyboard(page);
+            if (keyboard) {
+              // Try Space key (common for opening dropdowns)
+              await keyboard.press('Space');
               await this.sleep(300);
-              
+
               dropdownOpened = await page.evaluate(() => {
                 const menus = document.querySelectorAll('[role="listbox"], [role="menu"], .select-options, .dropdown-menu');
                 return Array.from(menus).some(menu => menu.offsetParent !== null);
               });
-            }
-            
-            if (dropdownOpened) {
-              logger.debug('Dropdown opened via keyboard');
+
+              if (!dropdownOpened) {
+                // Try ArrowDown
+                await keyboard.press('ArrowDown');
+                await this.sleep(300);
+
+                dropdownOpened = await page.evaluate(() => {
+                  const menus = document.querySelectorAll('[role="listbox"], [role="menu"], .select-options, .dropdown-menu');
+                  return Array.from(menus).some(menu => menu.offsetParent !== null);
+                });
+              }
+
+              if (dropdownOpened) {
+                logger.debug('Dropdown opened via keyboard');
+              }
             }
           } catch (e) {
             logger.debug({ error: e.message }, 'Keyboard approach failed');
@@ -1291,9 +1402,39 @@ class AIFormFiller {
           throw new Error('Dropdown menu did not appear after clicking');
         }
 
+        // Step 2.5: Type search value to filter dropdown (for searchable dropdowns like schools)
+        // This is important for dropdowns with many options that use search/filter
+        // Only type for known searchable fields (school, discipline, degree) to avoid breaking non-searchable dropdowns
+        const isSearchableDropdown = field.name?.includes('school') ||
+                                      field.name?.includes('discipline') ||
+                                      field.label?.toLowerCase().includes('school') ||
+                                      field.label?.toLowerCase().includes('university');
+
+        if (isSearchableDropdown) {
+          try {
+            // Get the effective locator for typing
+            const typeLocator = useNthIndex !== null
+              ? page.locator(effectiveSelector).nth(useNthIndex)
+              : page.locator(effectiveSelector).first();
+
+            // Use type() instead of fill() - it's gentler and won't close the dropdown
+            // Type the first part of the value to trigger search/filter
+            const searchValue = String(value).split(' ')[0].substring(0, 12);
+            await typeLocator.type(searchValue, { delay: 50 }); // Type with small delay to simulate human
+            await this.sleep(800); // Wait longer for search/filter API to respond
+
+            logger.debug({ searchValue, fullValue: value, field: field.name }, 'Typed search value to filter dropdown');
+          } catch (searchError) {
+            logger.debug({ error: searchError.message }, 'Could not type search value (dropdown may not be searchable)');
+            // Continue - dropdown may not support search/typing
+          }
+        }
+
         // Step 3: Get all available options and find best match
+        // NOTE: Use GLOBAL search for dropdown menu because Greenhouse (and many React sites)
+        // render dropdown menus as portals at the body level, NOT inside the input's container
         const result = await page.evaluate(({ selectors, targetValue }) => {
-          // Find the dropdown menu with better visibility checks
+          // Find the visible dropdown menu (there should only be one since we closed others in Step 0)
           let dropdownMenu = null;
           for (const sel of selectors) {
             try {
@@ -1301,8 +1442,8 @@ class AIFormFiller {
               for (const menu of menus) {
                 if (menu && menu.offsetParent !== null) {
                   const style = window.getComputedStyle(menu);
-                  if (style.display !== 'none' && 
-                      style.visibility !== 'hidden' && 
+                  if (style.display !== 'none' &&
+                      style.visibility !== 'hidden' &&
                       style.opacity !== '0') {
                     dropdownMenu = menu;
                     break;
@@ -1382,6 +1523,25 @@ class AIFormFiller {
             // Contains match
             if (haystackLower.includes(needleLower)) return 0.9;
             if (needleLower.includes(haystackLower)) return 0.85;
+
+            // Degree mapping - handle abbreviations and variations
+            const degreeMap = {
+              'bachelor': ["bachelor's", "bachelor's degree", 'bs', 'ba', 'b.s.', 'b.a.', 'bachelor of science', 'bachelor of arts', 'bsc', 'b.sc'],
+              'master': ["master's", "master's degree", 'ms', 'ma', 'm.s.', 'm.a.', 'master of science', 'master of arts', 'msc', 'm.sc', 'mba', 'm.b.a.'],
+              'doctor': ['phd', 'ph.d.', 'doctorate', 'doctoral', 'doctor of philosophy', 'md', 'm.d.', 'jd', 'j.d.'],
+              'associate': ["associate's", "associate's degree", 'aa', 'as', 'a.a.', 'a.s.'],
+              'high school': ['high school', 'hs', 'h.s.', 'secondary', 'diploma', 'ged']
+            };
+
+            // Check if this is a degree-related field
+            for (const [degreeType, variants] of Object.entries(degreeMap)) {
+              const needleMatchesDegree = needleLower.includes(degreeType) || variants.some(v => needleLower.includes(v));
+              const haystackMatchesDegree = haystackLower.includes(degreeType) || variants.some(v => haystackLower.includes(v));
+
+              if (needleMatchesDegree && haystackMatchesDegree) {
+                return 0.95; // High score for same degree type
+              }
+            }
 
             // Word overlap scoring
             const needleWords = needleLower.split(/\s+/).filter(w => w.length > 1);
@@ -1504,17 +1664,29 @@ class AIFormFiller {
       await page.click(selector);
       await this.sleep(300);
 
-      // Step 2: Clear and type the value slowly (character by character for autocomplete to trigger)
+      // Step 2: Clear and type the value
       await page.fill(selector, ''); // Clear first
-      await page.type(selector, String(value), { delay: 50 }); // Type with delay
-      await this.sleep(1200); // Wait longer for autocomplete suggestions to appear
+      if (this.fastMode) {
+        // Fast mode: type slowly to trigger autocomplete API
+        // For school/discipline fields, the API needs time to fetch results
+        await page.type(selector, String(value), { delay: 30 });
+        await this.sleep(1500); // Wait for API to return results
+      } else {
+        // Normal mode: type slowly for autocomplete to trigger
+        await page.type(selector, String(value), { delay: 50 });
+        await this.sleep(1500); // Wait longer for autocomplete suggestions
+      }
 
       logger.debug('Waiting for autocomplete suggestions...');
 
-      // Step 3: Try multiple strategies to select from autocomplete
+      // Step 3: Poll for suggestions with retries (API-loaded options may take time)
+      // This is important for school/discipline fields that fetch from API
+      let suggestionSelected = null;
+      const maxPollAttempts = 5;
+      const pollDelay = 800; // 800ms between polls
 
-      // Strategy 1: Try to find and click autocomplete suggestion
-      const suggestionSelected = await page.evaluate(({ targetValue }) => {
+      for (let pollAttempt = 0; pollAttempt < maxPollAttempts; pollAttempt++) {
+        suggestionSelected = await page.evaluate(({ targetValue }) => {
         const selectors = [
           '[role="option"]',
           '[role="listbox"] > *',
@@ -1535,14 +1707,20 @@ class AIFormFiller {
         const allOptions = [];
 
         // Find visible suggestions and collect them
+        // Filter out loading indicators and other non-option elements
+        const loadingIndicators = ['loading', 'searching', 'please wait', 'no results', 'no options', 'type to search'];
+
         for (const sel of selectors) {
           const options = Array.from(document.querySelectorAll(sel))
             .filter(el => {
               if (el.offsetParent === null) return false; // Not visible
               const text = el.textContent?.trim() || '';
               if (text.length === 0) return false; // No text
+              // Filter out loading indicators
+              const textLower = text.toLowerCase();
+              if (loadingIndicators.some(indicator => textLower.includes(indicator))) return false;
               // Filter out duplicates
-              if (allOptions.some(opt => opt.textContent === text)) return false;
+              if (allOptions.some(opt => opt.textContent?.trim() === text)) return false;
               return true;
             });
 
@@ -1555,21 +1733,51 @@ class AIFormFiller {
         const optionTexts = allOptions.map(el => el.textContent?.trim()).slice(0, 10);
 
         if (allOptions.length > 0) {
-          // Try to find best match
+          // Try to find best match for various autocomplete types:
+          // - City names: "Austin, TX"
+          // - School names: "Stanford University", "University of California, Berkeley"
+          // - Discipline names: "Computer Science", "Electrical Engineering"
           const needle = targetValue.toLowerCase().trim();
           let bestMatch = null;
           let bestScore = -1;
 
           for (const opt of allOptions) {
             const text = opt.textContent?.trim().toLowerCase() || '';
-            // Match city name (handle "Austin, TX" format)
-            const cityPart = text.split(',')[0].trim();
-            if (text.includes(needle) || needle.includes(cityPart) || cityPart.includes(needle.split(',')[0].trim())) {
-              const score = text === needle ? 1.0 : (cityPart === needle.split(',')[0].trim() ? 0.9 : 0.8);
-              if (score > bestScore) {
-                bestScore = score;
-                bestMatch = opt;
+            // Split needle for partial matching (handles "UC Berkeley" vs "University of California, Berkeley")
+            const needleParts = needle.split(/[\s,]+/).filter(p => p.length > 2);
+            const textParts = text.split(/[\s,]+/).filter(p => p.length > 2);
+
+            let score = 0;
+
+            // Exact match
+            if (text === needle) {
+              score = 1.0;
+            }
+            // Text contains full needle
+            else if (text.includes(needle)) {
+              score = 0.95;
+            }
+            // Needle contains text (e.g., searching for longer than result)
+            else if (needle.includes(text)) {
+              score = 0.9;
+            }
+            // First part matches (city name, main school name)
+            else if (text.split(',')[0].trim() === needle.split(',')[0].trim()) {
+              score = 0.85;
+            }
+            // Word matching - how many words from needle appear in text
+            else {
+              const matchingWords = needleParts.filter(np =>
+                textParts.some(tp => tp.includes(np) || np.includes(tp))
+              );
+              if (matchingWords.length > 0) {
+                score = 0.5 + (matchingWords.length / needleParts.length) * 0.3;
               }
+            }
+
+            if (score > bestScore) {
+              bestScore = score;
+              bestMatch = opt;
             }
           }
 
@@ -1603,38 +1811,52 @@ class AIFormFiller {
         return { success: false, reason: 'No autocomplete suggestions found', checkedSelectors: selectors.length };
       }, { targetValue: String(value) });
 
-      logger.debug({ suggestionResult: suggestionSelected }, 'Autocomplete suggestion result');
+        logger.debug({ suggestionResult: suggestionSelected, pollAttempt }, 'Autocomplete poll result');
 
-      if (suggestionSelected.success) {
-        logger.info({
-          matched: suggestionSelected.matched,
-          usedFirst: suggestionSelected.usedFirst,
-          strategy: suggestionSelected.strategy
-        }, '✅ Autocomplete suggestion selected');
-        await this.sleep(500);
-        return;
-      }
+        // If we found and clicked an option, we're done
+        if (suggestionSelected.success) {
+          logger.info({
+            matched: suggestionSelected.matched,
+            usedFirst: suggestionSelected.usedFirst,
+            strategy: suggestionSelected.strategy,
+            pollAttempt
+          }, '✅ Autocomplete suggestion selected');
+          await this.sleep(500);
+          return;
+        }
+
+        // If no options found and we have more attempts, wait and retry
+        if (pollAttempt < maxPollAttempts - 1) {
+          logger.debug({ pollAttempt, maxPollAttempts, reason: suggestionSelected.reason }, 'No options yet, waiting for API...');
+          await this.sleep(pollDelay);
+        }
+      } // End of polling loop
 
       // Strategy 2: Keyboard navigation fallback (ArrowDown + Enter)
       logger.info('Trying keyboard navigation for autocomplete...');
-      await page.keyboard.press('ArrowDown');
-      await this.sleep(200);
-      await page.keyboard.press('Enter');
-      await this.sleep(500);
+      const keyboard = this.getKeyboard(page);
+      if (keyboard) {
+        await keyboard.press('ArrowDown');
+        await this.sleep(200);
+        await keyboard.press('Enter');
+        await this.sleep(500);
 
-      // Verify the field has a value
-      const fieldValue = await page.inputValue(selector);
-      if (fieldValue && fieldValue.trim().length > 0) {
-        logger.info({ value: fieldValue }, '✅ Autocomplete field filled via keyboard');
-        return;
+        // Verify the field has a value
+        const fieldValue = await page.inputValue(selector);
+        if (fieldValue && fieldValue.trim().length > 0) {
+          logger.info({ value: fieldValue }, '✅ Autocomplete field filled via keyboard');
+          return;
+        }
+
+        // Strategy 3: If still empty, try typing again and pressing Tab
+        logger.warn('Autocomplete value not accepted, trying Tab key...');
+        await page.fill(selector, String(value));
+        await this.sleep(300);
+        await keyboard.press('Tab');
+        await this.sleep(500);
+      } else {
+        logger.warn('No keyboard access available for autocomplete');
       }
-
-      // Strategy 3: If still empty, try typing again and pressing Tab
-      logger.warn('Autocomplete value not accepted, trying Tab key...');
-      await page.fill(selector, String(value));
-      await this.sleep(300);
-      await page.keyboard.press('Tab');
-      await this.sleep(500);
 
       // Final check
       const finalValue = await page.inputValue(selector);
@@ -2690,9 +2912,18 @@ class AIFormFiller {
   }
 
   /**
-   * Helper: sleep
+   * Helper: sleep (respects fastMode)
+   * In fast mode, uses 50-150ms between fields (natural but fast)
+   * Based on: https://www.zenrows.com/blog/avoid-playwright-bot-detection
+   * "Filling forms in under a few milliseconds is typical of automation tools"
    */
   sleep(ms) {
+    if (this.fastMode) {
+      // Fast mode: 50-150ms between actions (looks natural, not instant)
+      // Instant filling is a bot detection trigger!
+      const fastDelay = 50 + Math.random() * 100;
+      return new Promise(resolve => setTimeout(resolve, Math.min(ms, fastDelay)));
+    }
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 

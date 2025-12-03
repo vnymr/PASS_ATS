@@ -935,7 +935,8 @@ async function fetchBrowserEndpoints() {
     return [envEndpoint];
   }
 
-  return ['ws://localhost:3000/browser'];
+  // Default to port 8080 (Camoufox server) - NOT 3000 (Node.js server)
+  return ['ws://localhost:8080/browser'];
 }
 
 /**
@@ -1101,53 +1102,36 @@ export async function createStealthContextCamoufox(browser, options = {}) {
 
 /**
  * Launch browser for stealth mode (auto-apply, form filling)
- * Includes comprehensive bot detection evasion
- * Priority: Camoufox → Browserless Cloud → Local Playwright
+ * CAMOUFOX ONLY - No Chromium fallback
+ * Camoufox provides C++ level stealth that cannot be detected
  */
 export async function launchStealthBrowser(options = {}) {
-  // Priority 1: Check if Camoufox is configured
-  const useCamoufox = process.env.USE_CAMOUFOX === 'true';
+  // CAMOUFOX ONLY - No Chromium fallback
+  // Camoufox provides undetectable stealth at the C++ level
+  // See: https://camoufox.com/
 
-  if (useCamoufox) {
-    logger.info('🦊 Using Camoufox for maximum stealth (C++ level detection evasion)');
-    try {
-      const browser = await launchCamoufoxBrowser(options);
-      logger.info('✅ Camoufox browser connected successfully');
-      return browser;
-    } catch (error) {
-      logger.warn({
-        error: error.message
-      }, '⚠️ Camoufox connection failed, falling back to Browserless/local');
-      // Fall through to next option
-    }
+  logger.info('🦊 Using Camoufox for maximum stealth (C++ level detection evasion)');
+
+  try {
+    const browser = await launchCamoufoxBrowser(options);
+    logger.info('✅ Camoufox browser connected successfully');
+    return browser;
+  } catch (error) {
+    logger.error({
+      error: error.message
+    }, '❌ Camoufox connection failed - NO FALLBACK (Chromium removed)');
+
+    // Provide helpful error message
+    throw new Error(
+      `Camoufox browser required but not available: ${error.message}\n\n` +
+      `To fix:\n` +
+      `1. Start the Camoufox Python service:\n` +
+      `   cd python-service && python server.py\n\n` +
+      `2. Or set CAMOUFOX_SERVICE_URL if running remotely:\n` +
+      `   CAMOUFOX_SERVICE_URL=http://host:port\n\n` +
+      `Note: Chromium fallback has been removed for maximum stealth.`
+    );
   }
-
-  // Priority 2: Check if Browserless Cloud is configured
-  const useBrowserless = process.env.USE_BROWSERLESS === 'true' ||
-                         process.env.BROWSERLESS_URL ||
-                         process.env.BROWSERLESS_ENDPOINT;
-
-  if (useBrowserless) {
-    logger.info('Using Browserless Cloud for enhanced stealth');
-    try {
-      const browser = await launchBrowserlessBrowser(options);
-      logger.info('✅ Browserless Cloud browser launched');
-      return browser;
-    } catch (error) {
-      logger.warn({ error: error.message }, 'Browserless Cloud failed, falling back to local browser');
-      // Fall through to local browser
-    }
-  }
-
-  // Priority 3: Use local browser with stealth techniques
-  const browser = await launchBrowser({
-    ...options,
-    stealth: true,
-    headless: options.headless !== undefined ? options.headless : process.env.PLAYWRIGHT_HEADLESS !== 'false'
-  });
-
-  logger.info('✅ Stealth browser launched with bot detection evasion');
-  return browser;
 }
 
 /**

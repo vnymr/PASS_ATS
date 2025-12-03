@@ -1,0 +1,202 @@
+{
+  "metadata": {
+    "url": "https://job-boards.greenhouse.io/lucidsoftware/jobs/5710302004",
+    "domain": "job-boards.greenhouse.io",
+    "timestamp": "2025-12-02T08:33:25.289Z",
+    "success": true
+  },
+  "formStructure": {
+    "totalFields": 32,
+    "fieldTypes": {
+      "text": 27,
+      "tel": 1,
+      "file": 2,
+      "number": 2
+    },
+    "requiredFields": [
+      {
+        "name": "unnamed_5",
+        "type": "text",
+        "label": ""
+      },
+      {
+        "name": "unnamed_18",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_20",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_25",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_27",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_29",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_31",
+        "type": "text",
+        "label": "Select..."
+      }
+    ]
+  },
+  "aiResponses": {
+    "first_name": "John",
+    "last_name": "Doe",
+    "preferred_name": "John",
+    "email": "john@example.com",
+    "country": "United States",
+    "unnamed_5": "I am a Senior Software Engineer with approximately 7 years of professional experience building production web applications and backend services. At Tech Corp I led a team of four engineers to design and launch a React/Node.js customer dashboard that served over 100,000 users; I owned the frontend architecture, implemented server-side rendering to improve first meaningful paint by 35%, and introduced a TypeScript-based component library to reduce UI bugs. At StartupXYZ I helped design and operate microservices on AWS using Docker and PostgreSQL; I implemented CI/CD pipelines that reduced deploy time from hours to under 15 minutes and introduced observability practices that cut mean time to resolution for incidents by over 40%.",
+    "phone": "+1-555-123-4567",
+    "resume": "John_Doe_Resume.pdf",
+    "cover_letter": "John_Doe_Cover_Letter.pdf",
+    "school--0": "Stanford University",
+    "degree--0": "BS",
+    "discipline--0": "Computer Science",
+    "start-month--0": "September",
+    "start-year--0": 2010,
+    "end-month--0": "June",
+    "end-year--0": 2014,
+    "question_14642598004": "linkedin.com/in/johndoe",
+    "question_14642599004": "No",
+    "unnamed_18": "Yes",
+    "question_14642600004": "Yes",
+    "unnamed_20": "Full-time",
+    "question_14642601004": "$140,000",
+    "question_14642602004": "San Francisco, CA",
+    "question_14642603004": "3.7",
+    "gender": "Male",
+    "unnamed_25": "He/Him",
+    "hispanic_ethnicity": "No",
+    "unnamed_27": "White or Caucasian",
+    "veteran_status": "Not a veteran",
+    "unnamed_29": "No",
+    "disability_status": "No",
+    "unnamed_31": "Yes"
+  },
+  "problemsSolved": [
+    {
+      "problem": "Dropdown \"country\" failed: Failed to fill custom dropdown \"country\" after 3 attempts. AI provided: \"United States\". Error: Dropdown menu did not open after multiple attempts",
+      "solution": {
+        "issue": "Failed to analyze screenshot",
+        "solution": "Manual intervention required",
+        "needsManualIntervention": true
+      },
+      "timestamp": "2025-12-02T08:33:25.289Z"
+    },
+    {
+      "problem": "Dropdown \"unnamed_5\" failed: Failed to fill custom dropdown \"unnamed_5\" after 3 attempts. AI provided: \"I am a Senior Software Engineer with approximately 7 years of professional experience building production web applications and backend services. At Tech Corp I led a team of four engineers to design and launch a React/Node.js customer dashboard that served over 100,000 users; I owned the frontend architecture, implemented server-side rendering to improve first meaningful paint by 35%, and introduced a TypeScript-based component library to reduce UI bugs. At StartupXYZ I helped design and operate microservices on AWS using Docker and PostgreSQL; I implemented CI/CD pipelines that reduced deploy time from hours to under 15 minutes and introduced observability practices that cut mean time to resolution for incidents by over 40%.\". Error: Dropdown menu did not open after multiple attempts",
+      "timestamp": "2025-12-02T08:33:25.289Z"
+    },
+    {
+      "problem": "Dropdown \"school--0\" failed: Failed to fill custom dropdown \"school--0\" after 3 attempts. AI provided: \"Stanford University\". Error: Dropdown menu did not open after multiple attempts",
+      "timestamp": "2025-12-02T08:33:25.289Z"
+    },
+    {
+      "problem": "Dropdown \"degree--0\" failed: Failed to fill custom dropdown \"degree--0\" after 3 attempts. AI provided: \"BS\". Error: Dropdown menu did not open after multiple attempts",
+      "timestamp": "2025-12-02T08:33:25.289Z"
+    },
+    {
+      "problem": "Dropdown \"discipline--0\" failed: Failed to fill custom dropdown \"discipline--0\" after 3 attempts. AI provided: \"Computer Science\". Error: Dropdown menu did not open after multiple attempts",
+      "timestamp": "2025-12-02T08:33:25.289Z"
+    },
+    {
+      "problem": "Dropdown \"start-month--0\" failed: Failed to fill custom dropdown \"start-month--0\" after 3 attempts. AI provided: \"September\". Error: Dropdown menu did not open after multiple attempts",
+      "timestamp": "2025-12-02T08:33:25.289Z"
+    },
+    {
+      "problem": "Dropdown \"end-month--0\" failed: Failed to fill custom dropdown \"end-month--0\" after 3 attempts. AI provided: \"June\". Error: Dropdown menu did not open after multiple attempts",
+      "timestamp": "2025-12-02T08:33:25.289Z"
+    },
+    {
+      "problem": "Dropdown \"question_14642599004\" failed: Failed to fill custom dropdown \"question_14642599004\" after 3 attempts. AI provided: \"No\". Error: Dropdown menu did not open after multiple attempts",
+      "timestamp": "2025-12-02T08:33:25.289Z"
+    },
+    {
+      "problem": "Dropdown \"unnamed_18\" failed: Failed to fill custom dropdown \"unnamed_18\" after 3 attempts. AI provided: \"Yes\". Error: Dropdown menu did not open after multiple attempts",
+      "timestamp": "2025-12-02T08:33:25.289Z"
+    },
+    {
+      "problem": "Dropdown \"question_14642600004\" failed: Failed to fill custom dropdown \"question_14642600004\" after 3 attempts. AI provided: \"Yes\". Error: Dropdown menu did not open after multiple attempts",
+      "timestamp": "2025-12-02T08:33:25.289Z"
+    },
+    {
+      "problem": "Dropdown \"unnamed_20\" failed: Failed to fill custom dropdown \"unnamed_20\" after 3 attempts. AI provided: \"Full-time\". Error: Dropdown menu did not open after multiple attempts",
+      "timestamp": "2025-12-02T08:33:25.289Z"
+    },
+    {
+      "problem": "Dropdown \"gender\" failed: Failed to fill custom dropdown \"gender\" after 3 attempts. AI provided: \"Male\". Error: Dropdown menu did not open after multiple attempts",
+      "timestamp": "2025-12-02T08:33:25.289Z"
+    },
+    {
+      "problem": "Dropdown \"unnamed_25\" failed: Failed to fill custom dropdown \"unnamed_25\" after 3 attempts. AI provided: \"He/Him\". Error: Dropdown menu did not open after multiple attempts",
+      "timestamp": "2025-12-02T08:33:25.289Z"
+    },
+    {
+      "problem": "Dropdown \"hispanic_ethnicity\" failed: Failed to fill custom dropdown \"hispanic_ethnicity\" after 3 attempts. AI provided: \"No\". Error: Dropdown menu did not open after multiple attempts",
+      "timestamp": "2025-12-02T08:33:25.289Z"
+    },
+    {
+      "problem": "Dropdown \"unnamed_27\" failed: Failed to fill custom dropdown \"unnamed_27\" after 3 attempts. AI provided: \"White or Caucasian\". Error: Dropdown menu did not open after multiple attempts",
+      "timestamp": "2025-12-02T08:33:25.289Z"
+    },
+    {
+      "problem": "Dropdown \"veteran_status\" failed: Failed to fill custom dropdown \"veteran_status\" after 3 attempts. AI provided: \"Not a veteran\". Error: Dropdown menu did not open after multiple attempts",
+      "timestamp": "2025-12-02T08:33:25.289Z"
+    },
+    {
+      "problem": "Dropdown \"unnamed_29\" failed: Failed to fill custom dropdown \"unnamed_29\" after 3 attempts. AI provided: \"No\". Error: Dropdown menu did not open after multiple attempts",
+      "timestamp": "2025-12-02T08:33:25.289Z"
+    },
+    {
+      "problem": "Dropdown \"disability_status\" failed: Failed to fill custom dropdown \"disability_status\" after 3 attempts. AI provided: \"No\". Error: Dropdown menu did not open after multiple attempts",
+      "timestamp": "2025-12-02T08:33:25.289Z"
+    },
+    {
+      "problem": "Dropdown \"unnamed_31\" failed: Failed to fill custom dropdown \"unnamed_31\" after 3 attempts. AI provided: \"Yes\". Error: Dropdown menu did not open after multiple attempts",
+      "timestamp": "2025-12-02T08:33:25.289Z"
+    }
+  ],
+  "patterns": {
+    "commonQuestions": [
+      {
+        "label": "What is your desired annual compensation?*",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What is your current location (city, state)?*",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What is your most recent cumulative GPA? *",
+        "type": "text",
+        "category": "other"
+      }
+    ],
+    "fieldNamingConventions": {
+      "camelCase": 0,
+      "snake_case": 20,
+      "kebabCase": 7,
+      "standard": 5
+    },
+    "formLayout": {
+      "totalFields": 32,
+      "visibleFields": 32,
+      "requiredFields": 7,
+      "optionalFields": 25
+    }
+  }
+}

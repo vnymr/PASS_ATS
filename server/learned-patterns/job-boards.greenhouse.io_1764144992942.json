@@ -1,0 +1,115 @@
+{
+  "metadata": {
+    "url": "https://job-boards.greenhouse.io/angi/jobs/8065358002",
+    "domain": "job-boards.greenhouse.io",
+    "timestamp": "2025-11-26T08:16:32.942Z",
+    "success": true
+  },
+  "formStructure": {
+    "totalFields": 21,
+    "fieldTypes": {
+      "text": 17,
+      "tel": 1,
+      "file": 2,
+      "textarea": 1
+    },
+    "requiredFields": [
+      {
+        "name": "unnamed_4",
+        "type": "text",
+        "label": ""
+      },
+      {
+        "name": "unnamed_13",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_15",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_18",
+        "type": "text",
+        "label": "Select..."
+      }
+    ]
+  },
+  "aiResponses": {
+    "4000602002": [
+      "White"
+    ],
+    "4000603002": "Male",
+    "first_name": "John",
+    "last_name": "Doe",
+    "email": "john@example.com",
+    "country": "United States",
+    "unnamed_4": "Software Engineer",
+    "phone": "+1-555-123-4567",
+    "resume": "John_Doe_Resume.pdf",
+    "cover_letter": "John_Doe_Cover_Letter.pdf",
+    "question_32351236002": "https://linkedin.com/in/johndoe",
+    "question_32351237002": "Not provided",
+    "question_32351238002": "LinkedIn job posting",
+    "question_32351239002": "Yes",
+    "unnamed_13": "Yes",
+    "question_32351240002": "No",
+    "unnamed_15": "Yes",
+    "question_32351241002": "$120,000 - $150,000",
+    "question_32351242002": "I acknowledge receipt of the California Consumer Privacy Act notice and consent to the collection and processing of my personal information as described for recruitment and employment purposes. I understand this information will be used for employment consideration, HR functions, and compliance with applicable laws.",
+    "unnamed_18": "I agree",
+    "question_32351243002": "123 Market St, Apt 400\nSan Francisco, CA 94103\nUnited States\n\nI currently reside in San Francisco and maintain a stable home base which allows me to reliably attend in-person meetings in the Bay Area or work remotely as needed. My background includes engineering roles at Tech Corp and StartupXYZ where on-site collaboration and cross-functional communication were essential to delivering product features on schedule.\n\nI bring strong experience with JavaScript, React, Node.js, Python, AWS, Docker, and PostgreSQL, and I am ready to support timely onboarding and any required background or verifications. I am also open to relocation if the role requires it and can provide updated address details promptly upon request."
+  },
+  "problemsSolved": [
+    {
+      "problem": "Failed to fill unnamed_4: Field not found with any selector strategy: unnamed_4",
+      "solution": {
+        "issue": "Failed to analyze screenshot",
+        "solution": "Manual intervention required",
+        "needsManualIntervention": true
+      },
+      "timestamp": "2025-11-26T08:16:32.942Z"
+    },
+    {
+      "problem": "Failed to fill unnamed_18: Field not found with any selector strategy: unnamed_18",
+      "timestamp": "2025-11-26T08:16:32.942Z"
+    }
+  ],
+  "patterns": {
+    "commonQuestions": [
+      {
+        "label": "How did you hear about this job?",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What is your target salary range for a new role?*",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "Which categories describe you? Select all that apply to you:",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What is your current gender identity?",
+        "type": "text",
+        "category": "other"
+      }
+    ],
+    "fieldNamingConventions": {
+      "camelCase": 0,
+      "snake_case": 15,
+      "kebabCase": 0,
+      "standard": 6
+    },
+    "formLayout": {
+      "totalFields": 21,
+      "visibleFields": 21,
+      "requiredFields": 4,
+      "optionalFields": 17
+    }
+  }
+}

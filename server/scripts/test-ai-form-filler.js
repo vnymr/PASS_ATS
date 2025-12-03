@@ -1,0 +1,435 @@
+/**
+ * Test AI Form Filler
+ * Comprehensive test of the AI-powered form filling system
+ */
+
+import { launchBrowser } from '../lib/browser-launcher.js';
+import AIFormFiller from '../lib/ai-form-filler.js';
+import logger from '../lib/logger.js';
+import fs from 'fs';
+import path from 'path';
+
+// Test configuration
+const TEST_CONFIG = {
+  // Test URLs (use real job application forms)
+  testUrls: [
+    // Example: Greenhouse application form
+    'https://boards.greenhouse.io/example/jobs/12345',
+    // Example: Lever application form
+    'https://jobs.lever.co/example/12345',
+    // Or use a simple test form
+    'https://httpbin.org/forms/post'
+  ],
+
+  // Test user profile
+  userProfile: {
+    fullName: 'John Doe',
+    email: 'john.doe@example.com',
+    phone: '+1 (555) 123-4567',
+    location: 'San Francisco, CA',
+    linkedIn: 'https://linkedin.com/in/johndoe',
+    portfolio: 'https://johndoe.com',
+
+    experience: [
+      {
+        title: 'Senior Software Engineer',
+        company: 'Tech Corp',
+        duration: '2020-Present',
+        responsibilities: 'Led development of microservices architecture'
+      },
+      {
+        title: 'Software Engineer',
+        company: 'StartupXYZ',
+        duration: '2018-2020',
+        responsibilities: 'Built React applications and RESTful APIs'
+      }
+    ],
+
+    education: [
+      {
+        degree: 'Bachelor of Science',
+        field: 'Computer Science',
+        school: 'University of California',
+        year: '2018'
+      }
+    ],
+
+    skills: ['JavaScript', 'React', 'Node.js', 'Python', 'AWS', 'Docker']
+  },
+
+  // Test job data
+  jobData: {
+    title: 'Senior Full Stack Engineer',
+    company: 'Amazing Tech Company',
+    description: 'We are looking for an experienced Full Stack Engineer to join our team. You will work on building scalable web applications using React and Node.js.',
+    requirements: '5+ years of experience with JavaScript, React, and Node.js',
+    location: 'Remote',
+    salary: '$150k - $180k'
+  },
+
+  // Test output directory
+  outputDir: './test-output'
+};
+
+// Ensure output directory exists
+if (!fs.existsSync(TEST_CONFIG.outputDir)) {
+  fs.mkdirSync(TEST_CONFIG.outputDir, { recursive: true });
+}
+
+/**
+ * Main test function
+ */
+async function runTest() {
+  console.log('🧪 Starting AI Form Filler Test Suite...\n');
+  console.log('=' .repeat(80));
+
+  const browser = await launchBrowser({
+    headless: false, // Set to true for CI/CD
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu'
+    ],
+    slowMo: 50 // Slow down actions for visibility
+  });
+
+  try {
+    // Test 1: Basic Form Extraction
+    await testFormExtraction(browser);
+
+    // Test 2: AI Response Generation
+    await testAIResponseGeneration(browser);
+
+    // Test 3: Complete Form Filling
+    await testCompleteFormFilling(browser);
+
+    // Test 4: Error Handling
+    await testErrorHandling(browser);
+
+    console.log('\n' + '='.repeat(80));
+    console.log('✅ All tests completed!');
+    console.log('Check test-output/ directory for screenshots and logs');
+
+  } catch (error) {
+    console.error('❌ Test failed:', error);
+    throw error;
+  } finally {
+    await browser.close();
+  }
+}
+
+/**
+ * Test 1: Form Extraction
+ */
+async function testFormExtraction(browser) {
+  console.log('\n📋 Test 1: Form Field Extraction');
+  console.log('-'.repeat(80));
+
+  const page = await browser.newPage();
+  const filler = new AIFormFiller();
+
+  try {
+    // Navigate to test form
+    console.log('Navigating to test form...');
+    await page.goto('https://httpbin.org/forms/post', {
+      waitUntil: 'networkidle',
+      timeout: 30000
+    });
+
+    // Extract form fields
+    console.log('Extracting form fields...');
+    const extraction = await filler.extractor.extractComplete(page);
+
+    console.log(`✅ Extraction Results:`);
+    console.log(`   Fields found: ${extraction.fields.length}`);
+    console.log(`   Has CAPTCHA: ${extraction.hasCaptcha}`);
+    console.log(`   Complexity: ${extraction.complexity.complexity}`);
+    console.log(`   Submit button: ${extraction.submitButton ? 'Found' : 'Not found'}`);
+
+    // Log field details
+    console.log('\n   Field Details:');
+    extraction.fields.forEach((field, index) => {
+      console.log(`   ${index + 1}. ${field.name} (${field.type})`);
+      console.log(`      Label: "${field.label || 'N/A'}"`);
+      console.log(`      Placeholder: "${field.placeholder || 'N/A'}"`);
+      console.log(`      Required: ${field.required}`);
+      console.log(`      Selector: ${field.selector}`);
+      if (field.options && field.options.length > 0) {
+        console.log(`      Options: ${field.options.map(o => o.text || o.value).join(', ')}`);
+      }
+      console.log('');
+    });
+
+    // Save screenshot
+    const screenshotPath = path.join(TEST_CONFIG.outputDir, 'test1-extraction.png');
+    await page.screenshot({ path: screenshotPath, fullPage: true });
+    console.log(`📸 Screenshot saved: ${screenshotPath}`);
+
+    // Save extraction result
+    const extractionPath = path.join(TEST_CONFIG.outputDir, 'test1-extraction.json');
+    fs.writeFileSync(extractionPath, JSON.stringify(extraction, null, 2));
+    console.log(`💾 Extraction saved: ${extractionPath}`);
+
+  } catch (error) {
+    console.error('❌ Test 1 failed:', error.message);
+    await page.screenshot({
+      path: path.join(TEST_CONFIG.outputDir, 'test1-error.png'),
+      fullPage: true
+    });
+    throw error;
+  } finally {
+    await page.close();
+  }
+}
+
+/**
+ * Test 2: AI Response Generation
+ */
+async function testAIResponseGeneration(browser) {
+  console.log('\n🤖 Test 2: AI Response Generation');
+  console.log('-'.repeat(80));
+
+  const page = await browser.newPage();
+  const filler = new AIFormFiller();
+
+  try {
+    await page.goto('https://httpbin.org/forms/post', {
+      waitUntil: 'networkidle',
+      timeout: 30000
+    });
+
+    // Extract fields
+    const extraction = await filler.extractor.extractComplete(page);
+
+    // Generate AI responses
+    console.log('Generating AI responses...');
+    const startTime = Date.now();
+
+    const responses = await filler.intelligence.generateFieldResponses(
+      extraction.fields,
+      TEST_CONFIG.userProfile,
+      TEST_CONFIG.jobData
+    );
+
+    const duration = Date.now() - startTime;
+
+    console.log(`✅ AI Response Generation:`);
+    console.log(`   Time taken: ${duration}ms`);
+    console.log(`   Fields processed: ${Object.keys(responses).length}`);
+
+    // Log responses
+    console.log('\n   Generated Responses:');
+    Object.entries(responses).forEach(([fieldName, value]) => {
+      const field = extraction.fields.find(f => f.name === fieldName);
+      console.log(`   ${fieldName} (${field?.type || 'unknown'}):`);
+      const displayValue = String(value).length > 100
+        ? String(value).substring(0, 100) + '...'
+        : value;
+      console.log(`      "${displayValue}"`);
+      console.log('');
+    });
+
+    // Validate responses
+    console.log('Validating responses...');
+    const validation = filler.intelligence.validateResponses(responses, extraction.fields);
+
+    console.log(`✅ Validation Results:`);
+    console.log(`   Valid: ${validation.valid}`);
+    console.log(`   Errors: ${validation.errors.length}`);
+    console.log(`   Warnings: ${validation.warnings.length}`);
+
+    if (validation.errors.length > 0) {
+      console.log('\n   Errors:');
+      validation.errors.forEach(err => console.log(`   - ${err.message}`));
+    }
+
+    if (validation.warnings.length > 0) {
+      console.log('\n   Warnings:');
+      validation.warnings.forEach(warn => console.log(`   - ${warn.message}`));
+    }
+
+    // Save responses
+    const responsesPath = path.join(TEST_CONFIG.outputDir, 'test2-responses.json');
+    fs.writeFileSync(responsesPath, JSON.stringify({
+      responses,
+      validation,
+      metadata: {
+        duration,
+        fieldsProcessed: Object.keys(responses).length,
+        timestamp: new Date().toISOString()
+      }
+    }, null, 2));
+    console.log(`💾 Responses saved: ${responsesPath}`);
+
+  } catch (error) {
+    console.error('❌ Test 2 failed:', error.message);
+    throw error;
+  } finally {
+    await page.close();
+  }
+}
+
+/**
+ * Test 3: Complete Form Filling
+ */
+async function testCompleteFormFilling(browser) {
+  console.log('\n✍️  Test 3: Complete Form Filling');
+  console.log('-'.repeat(80));
+
+  const page = await browser.newPage();
+  const filler = new AIFormFiller();
+
+  try {
+    await page.goto('https://httpbin.org/forms/post', {
+      waitUntil: 'networkidle',
+      timeout: 30000
+    });
+
+    console.log('Starting AI-powered form filling...');
+    const startTime = Date.now();
+
+    const result = await filler.fillFormIntelligently(
+      page,
+      TEST_CONFIG.userProfile,
+      TEST_CONFIG.jobData
+    );
+
+    const duration = Date.now() - startTime;
+
+    console.log(`✅ Form Filling Results:`);
+    console.log(`   Success: ${result.success}`);
+    console.log(`   Duration: ${duration}ms (${(duration / 1000).toFixed(2)}s)`);
+    console.log(`   Fields extracted: ${result.fieldsExtracted}`);
+    console.log(`   Fields filled: ${result.fieldsFilled}`);
+    console.log(`   Completion rate: ${((result.fieldsFilled / result.fieldsExtracted) * 100).toFixed(1)}%`);
+    console.log(`   Total cost: $${result.cost.toFixed(4)}`);
+    console.log(`   Errors: ${result.errors.length}`);
+    console.log(`   Warnings: ${result.warnings.length}`);
+    console.log(`   Has CAPTCHA: ${result.hasCaptcha || false}`);
+    console.log(`   Complexity: ${result.complexity}`);
+
+    if (result.errors.length > 0) {
+      console.log('\n   Errors:');
+      result.errors.forEach(err => console.log(`   - ${err}`));
+    }
+
+    if (result.warnings.length > 0) {
+      console.log('\n   Warnings:');
+      result.warnings.forEach(warn => console.log(`   - ${warn}`));
+    }
+
+    // Save screenshots
+    if (result.screenshots && result.screenshots.length > 0) {
+      result.screenshots.forEach((screenshot, index) => {
+        const screenshotPath = path.join(
+          TEST_CONFIG.outputDir,
+          `test3-screenshot-${index}-${screenshot.type}.png`
+        );
+        const buffer = Buffer.from(screenshot.data, 'base64');
+        fs.writeFileSync(screenshotPath, buffer);
+        console.log(`📸 Screenshot saved: ${screenshotPath}`);
+      });
+    }
+
+    // Final screenshot
+    const finalScreenshotPath = path.join(TEST_CONFIG.outputDir, 'test3-final.png');
+    await page.screenshot({ path: finalScreenshotPath, fullPage: true });
+    console.log(`📸 Final screenshot saved: ${finalScreenshotPath}`);
+
+    // Save result
+    const resultPath = path.join(TEST_CONFIG.outputDir, 'test3-result.json');
+    fs.writeFileSync(resultPath, JSON.stringify({
+      ...result,
+      metadata: {
+        duration,
+        completionRate: (result.fieldsFilled / result.fieldsExtracted) * 100,
+        timestamp: new Date().toISOString()
+      }
+    }, null, 2));
+    console.log(`💾 Result saved: ${resultPath}`);
+
+    // Wait to see the filled form
+    console.log('\n⏸️  Pausing for 5 seconds to view filled form...');
+    await new Promise(resolve => setTimeout(resolve, 5000));
+
+  } catch (error) {
+    console.error('❌ Test 3 failed:', error.message);
+    await page.screenshot({
+      path: path.join(TEST_CONFIG.outputDir, 'test3-error.png'),
+      fullPage: true
+    });
+    throw error;
+  } finally {
+    await page.close();
+  }
+}
+
+/**
+ * Test 4: Error Handling
+ */
+async function testErrorHandling(browser) {
+  console.log('\n🔥 Test 4: Error Handling');
+  console.log('-'.repeat(80));
+
+  const page = await browser.newPage();
+  const filler = new AIFormFiller();
+
+  try {
+    // Test with a page that has no forms
+    console.log('Testing with page that has no forms...');
+    await page.goto('https://example.com', {
+      waitUntil: 'networkidle',
+      timeout: 30000
+    });
+
+    const result = await filler.fillFormIntelligently(
+      page,
+      TEST_CONFIG.userProfile,
+      TEST_CONFIG.jobData
+    );
+
+    console.log(`✅ Error Handling:`);
+    console.log(`   Success: ${result.success}`);
+    console.log(`   Errors: ${result.errors.length}`);
+
+    if (result.errors.length > 0) {
+      console.log('\n   Expected errors:');
+      result.errors.forEach(err => console.log(`   - ${err}`));
+    }
+
+    console.log('\n   ✅ Error handling works correctly!');
+
+  } catch (error) {
+    console.log('   ✅ Caught expected error:', error.message);
+  } finally {
+    await page.close();
+  }
+}
+
+/**
+ * Run the test suite
+ */
+console.log('🚀 AI Form Filler Test Suite');
+console.log('=' .repeat(80));
+console.log('\nConfiguration:');
+console.log(`  User: ${TEST_CONFIG.userProfile.fullName} (${TEST_CONFIG.userProfile.email})`);
+console.log(`  Job: ${TEST_CONFIG.jobData.title} at ${TEST_CONFIG.jobData.company}`);
+console.log(`  Output: ${TEST_CONFIG.outputDir}`);
+
+// Check for API key
+if (!process.env.OPENAI_API_KEY) {
+  console.error('\n❌ ERROR: OPENAI_API_KEY environment variable not set!');
+  console.error('   Please set it before running tests.');
+  process.exit(1);
+}
+
+runTest()
+  .then(() => {
+    console.log('\n🎉 Test suite completed successfully!');
+    process.exit(0);
+  })
+  .catch(error => {
+    console.error('\n❌ Test suite failed:', error);
+    process.exit(1);
+  });

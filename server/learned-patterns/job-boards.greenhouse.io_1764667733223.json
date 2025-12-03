@@ -1,0 +1,138 @@
+{
+  "metadata": {
+    "url": "https://job-boards.greenhouse.io/lucidsoftware/jobs/5710302004",
+    "domain": "job-boards.greenhouse.io",
+    "timestamp": "2025-12-02T09:28:53.223Z",
+    "success": true
+  },
+  "formStructure": {
+    "totalFields": 32,
+    "fieldTypes": {
+      "text": 27,
+      "tel": 1,
+      "file": 2,
+      "number": 2
+    },
+    "requiredFields": [
+      {
+        "name": "unnamed_5",
+        "type": "text",
+        "label": ""
+      },
+      {
+        "name": "unnamed_19",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_21",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_26",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_28",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_30",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_32",
+        "type": "text",
+        "label": "Select..."
+      }
+    ]
+  },
+  "aiResponses": {
+    "first_name": "John",
+    "last_name": "Doe",
+    "preferred_name": "John",
+    "email": "john@example.com",
+    "country": "United States",
+    "unnamed_5": "Yes - I am authorized to work in the United States without sponsorship.",
+    "phone": "+1-555-123-4567",
+    "resume": "John_Doe_Resume.pdf",
+    "cover_letter": "John_Doe_Cover_Letter.pdf",
+    "school--0": "Stanford University",
+    "degree--0": "BS",
+    "discipline--0": "Computer Science",
+    "start-month--0": "September",
+    "start-year--0": 2010,
+    "end-month--0": "June",
+    "end-year--0": 2014,
+    "question_14642598004": "linkedin.com/in/johndoe",
+    "question_14642599004": "No",
+    "unnamed_19": "Prefer not to answer",
+    "question_14642600004": "I understand that if I am not currently located in Raleigh, NC, advance relocation will be required for consideration, and I confirm that I am prepared to relocate as needed.\n\nI am enthusiastic about the opportunity to join a Raleigh-based team and have successfully relocated for roles in the past. At Tech Corp I coordinated a cross-country move to join a distributed engineering team, ensuring a seamless transition while maintaining full productivity. At StartupXYZ I again relocated for a role where I quickly integrated into the local engineering organization and led projects to migrate critical services to AWS and Docker-based deployments.\n\nMy technical background—building production React front-ends and Node.js/Python backends, running services on AWS with Docker and PostgreSQL—means I can hit the ground running post-relocation. I’m organized, experienced with remote/on-site transitions, and comfortable handling logistics and timelines to make relocation efficient for both myself and the hiring team. I acknowledge the relocation requirement and am prepared to move to Raleigh with advance planning.",
+    "unnamed_21": "Prefer not to answer",
+    "question_14642601004": "$140,000",
+    "question_14642602004": "San Francisco, CA",
+    "question_14642603004": "3.7",
+    "gender": "Male",
+    "unnamed_26": "Prefer not to answer",
+    "hispanic_ethnicity": "No",
+    "unnamed_28": "Prefer not to answer",
+    "veteran_status": "Not a veteran",
+    "unnamed_30": "Prefer not to answer",
+    "disability_status": "No",
+    "unnamed_32": "Prefer not to answer"
+  },
+  "problemsSolved": [
+    {
+      "problem": "Failed to fill unnamed_5: Field not found with any selector strategy: unnamed_5",
+      "solution": {
+        "issue": "Failed to analyze screenshot",
+        "solution": "Manual intervention required",
+        "needsManualIntervention": true
+      },
+      "timestamp": "2025-12-02T09:28:53.223Z"
+    },
+    {
+      "problem": "Failed to fill unnamed_21: Field not found with any selector strategy: unnamed_21",
+      "timestamp": "2025-12-02T09:28:53.223Z"
+    },
+    {
+      "problem": "Failed to fill unnamed_32: Field not found with any selector strategy: unnamed_32",
+      "timestamp": "2025-12-02T09:28:53.223Z"
+    }
+  ],
+  "patterns": {
+    "commonQuestions": [
+      {
+        "label": "What is your desired annual compensation?*",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What is your current location (city, state)?*",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What is your most recent cumulative GPA? *",
+        "type": "text",
+        "category": "other"
+      }
+    ],
+    "fieldNamingConventions": {
+      "camelCase": 0,
+      "snake_case": 20,
+      "kebabCase": 7,
+      "standard": 5
+    },
+    "formLayout": {
+      "totalFields": 32,
+      "visibleFields": 32,
+      "requiredFields": 7,
+      "optionalFields": 25
+    }
+  }
+}

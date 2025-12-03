@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Auth Debug - HappyResumes Extension</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      height: 100%;
+      width: 100%;
+      overflow-x: hidden;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f5f5f5;
+      padding: 20px;
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: white;
+      padding: 40px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      min-height: calc(100vh - 40px);
+    }
+    h1 {
+      color: #333;
+      margin-bottom: 10px;
+    }
+    .subtitle {
+      color: #666;
+      margin-bottom: 30px;
+    }
+    .section {
+      margin-bottom: 30px;
+      padding: 20px;
+      background: #f9f9f9;
+      border-radius: 8px;
+      border-left: 4px solid #3498db;
+    }
+    .section h2 {
+      margin-top: 0;
+      color: #333;
+      font-size: 18px;
+    }
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      margin: 10px 0;
+      padding: 10px;
+      background: white;
+      border-radius: 4px;
+    }
+    .label {
+      font-weight: 600;
+      color: #555;
+    }
+    .value {
+      color: #333;
+      font-family: monospace;
+      max-width: 400px;
+      word-break: break-all;
+    }
+    .status {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .status.success {
+      background: #d4edda;
+      color: #155724;
+    }
+    .status.error {
+      background: #f8d7da;
+      color: #721c24;
+    }
+    .status.warning {
+      background: #fff3cd;
+      color: #856404;
+    }
+    button {
+      background: #3498db;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-right: 10px;
+      margin-top: 10px;
+    }
+    button:hover {
+      background: #2980b9;
+    }
+    button.danger {
+      background: #e74c3c;
+    }
+    button.danger:hover {
+      background: #c0392b;
+    }
+    .token-preview {
+      background: white;
+      padding: 15px;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 12px;
+      word-break: break-all;
+      max-height: 150px;
+      overflow-y: auto;
+      margin-top: 10px;
+    }
+    .loading {
+      color: #666;
+      font-style: italic;
+    }
+    pre {
+      background: white;
+      padding: 15px;
+      border-radius: 4px;
+      overflow-x: auto;
+      font-size: 12px;
+    }
+
+    /* Responsive design */
+    @media (max-width: 768px) {
+      body {
+        padding: 10px;
+      }
+      .container {
+        padding: 20px;
+        min-height: calc(100vh - 20px);
+      }
+      h1 {
+        font-size: 24px;
+      }
+      .section {
+        padding: 15px;
+      }
+      .info-row {
+        flex-direction: column;
+        gap: 5px;
+      }
+      button {
+        width: 100%;
+        margin-right: 0;
+      }
+    }
+
+    /* Ensure scrolling works */
+    .section {
+      overflow: visible;
+    }
+
+    /* Better spacing for sections */
+    .section:last-of-type {
+      margin-bottom: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔐 HappyResumes Extension - Auth Debug</h1>
+    <p class="subtitle">Diagnose authentication issues with your extension</p>
+
+    <div class="section">
+      <h2>📦 Chrome Storage Status</h2>
+      <div id="storage-info" class="loading">Loading...</div>
+    </div>
+
+    <div class="section">
+      <h2>🔍 Token Analysis</h2>
+      <div id="token-analysis" class="loading">Analyzing...</div>
+    </div>
+
+    <div class="section">
+      <h2>🌐 API Connection Test</h2>
+      <div id="api-test" class="loading">Testing...</div>
+      <button onclick="testAPIConnection()">Retest API Connection</button>
+    </div>
+
+    <div class="section">
+      <h2>🛠️ Actions</h2>
+      <button onclick="refreshToken()">Refresh Token from Dashboard</button>
+      <button onclick="clearToken()" class="danger">Clear Token</button>
+      <button onclick="exportDebugInfo()">Export Debug Info</button>
+    </div>
+  </div>
+
+  <script>
+    async function loadStorageInfo() {
+      try {
+        const data = await chrome.storage.local.get([
+          'clerk_session_token',
+          'clerk_token_updated_at',
+          'clerk_token_expires_at',
+          'user_email',
+          'apiBaseURL'
+        ]);
+
+        const html = [];
+
+        if (data.clerk_session_token) {
+          const expiresAt = data.clerk_token_expires_at;
+          const now = Date.now();
+          const isExpired = expiresAt && now >= expiresAt;
+
+          html.push(`
+            <div class="info-row">
+              <span class="label">Token Status:</span>
+              <span class="status ${isExpired ? 'error' : 'success'}">
+                ${isExpired ? '❌ Expired' : '✅ Valid'}
+              </span>
+            </div>
+          `);
+
+          html.push(`
+            <div class="info-row">
+              <span class="label">User Email:</span>
+              <span class="value">${data.user_email || 'Not set'}</span>
+            </div>
+          `);
+
+          if (data.clerk_token_updated_at) {
+            const updatedDate = new Date(data.clerk_token_updated_at);
+            html.push(`
+              <div class="info-row">
+                <span class="label">Token Updated:</span>
+                <span class="value">${updatedDate.toLocaleString()}</span>
+              </div>
+            `);
+          }
+
+          if (expiresAt) {
+            const expiresDate = new Date(expiresAt);
+            const timeLeft = expiresAt - now;
+            const hoursLeft = Math.floor(timeLeft / (1000 * 60 * 60));
+            html.push(`
+              <div class="info-row">
+                <span class="label">Token Expires:</span>
+                <span class="value">${expiresDate.toLocaleString()} (${hoursLeft}h left)</span>
+              </div>
+            `);
+          }
+
+          html.push(`
+            <div class="info-row">
+              <span class="label">API Base URL:</span>
+              <span class="value">${data.apiBaseURL || 'Default'}</span>
+            </div>
+          `);
+        } else {
+          html.push(`
+            <div class="status error">❌ No token found in storage</div>
+            <p style="margin-top: 15px;">Please visit <a href="https://happyresumes.com/dashboard" target="_blank">happyresumes.com/dashboard</a> while logged in to sync your token.</p>
+          `);
+        }
+
+        document.getElementById('storage-info').innerHTML = html.join('');
+
+        return data;
+      } catch (error) {
+        document.getElementById('storage-info').innerHTML = `
+          <div class="status error">❌ Error: ${error.message}</div>
+        `;
+        return null;
+      }
+    }
+
+    async function analyzeToken() {
+      try {
+        const data = await chrome.storage.local.get(['clerk_session_token']);
+
+        if (!data.clerk_session_token) {
+          document.getElementById('token-analysis').innerHTML = `
+            <div class="status warning">⚠️ No token to analyze</div>
+          `;
+          return;
+        }
+
+        const token = data.clerk_session_token;
+
+        // Decode JWT without verification
+        try {
+          const parts = token.split('.');
+          if (parts.length !== 3) {
+            throw new Error('Invalid JWT format');
+          }
+
+          const payload = JSON.parse(atob(parts[1]));
+
+          const html = [];
+          html.push(`<div class="info-row">
+            <span class="label">Token Format:</span>
+            <span class="status success">✅ Valid JWT</span>
+          </div>`);
+
+          html.push(`<div class="info-row">
+            <span class="label">Subject (sub):</span>
+            <span class="value">${payload.sub || 'N/A'}</span>
+          </div>`);
+
+          if (payload.email) {
+            html.push(`<div class="info-row">
+              <span class="label">Email:</span>
+              <span class="value">${payload.email}</span>
+            </div>`);
+          }
+
+          if (payload.iat) {
+            const issuedAt = new Date(payload.iat * 1000);
+            html.push(`<div class="info-row">
+              <span class="label">Issued At:</span>
+              <span class="value">${issuedAt.toLocaleString()}</span>
+            </div>`);
+          }
+
+          if (payload.exp) {
+            const expiresAt = new Date(payload.exp * 1000);
+            const now = Date.now();
+            const isExpired = now >= payload.exp * 1000;
+            html.push(`<div class="info-row">
+              <span class="label">JWT Expires:</span>
+              <span class="value">${expiresAt.toLocaleString()} ${isExpired ? '⚠️ EXPIRED' : '✅'}</span>
+            </div>`);
+          }
+
+          html.push(`<details style="margin-top: 15px;">
+            <summary style="cursor: pointer; font-weight: 600;">Full Token Payload</summary>
+            <pre>${JSON.stringify(payload, null, 2)}</pre>
+          </details>`);
+
+          html.push(`<details style="margin-top: 10px;">
+            <summary style="cursor: pointer; font-weight: 600;">Raw Token</summary>
+            <div class="token-preview">${token}</div>
+          </details>`);
+
+          document.getElementById('token-analysis').innerHTML = html.join('');
+        } catch (error) {
+          document.getElementById('token-analysis').innerHTML = `
+            <div class="status error">❌ Failed to decode token: ${error.message}</div>
+            <details style="margin-top: 10px;">
+              <summary style="cursor: pointer;">View Raw Token</summary>
+              <div class="token-preview">${token}</div>
+            </details>
+          `;
+        }
+      } catch (error) {
+        document.getElementById('token-analysis').innerHTML = `
+          <div class="status error">❌ Error: ${error.message}</div>
+        `;
+      }
+    }
+
+    async function testAPIConnection() {
+      const testDiv = document.getElementById('api-test');
+      testDiv.innerHTML = '<div class="loading">Testing API connection...</div>';
+
+      try {
+        const data = await chrome.storage.local.get(['clerk_session_token', 'apiBaseURL']);
+        const baseURL = data.apiBaseURL || 'https://api.happyresumes.com';
+
+        if (!data.clerk_session_token) {
+          testDiv.innerHTML = `
+            <div class="status error">❌ Cannot test: No token available</div>
+          `;
+          return;
+        }
+
+        const html = [];
+
+        // Test 1: Profile endpoint
+        html.push('<h3>Test 1: GET /api/profile</h3>');
+        try {
+          const response = await fetch(`${baseURL}/api/profile`, {
+            headers: {
+              'Authorization': `Bearer ${data.clerk_session_token}`,
+              'Content-Type': 'application/json'
+            }
+          });
+
+          const responseData = await response.json();
+
+          if (response.ok) {
+            html.push(`<div class="status success">✅ Success (${response.status})</div>`);
+            html.push(`<pre>${JSON.stringify(responseData, null, 2)}</pre>`);
+          } else {
+            html.push(`<div class="status error">❌ Failed (${response.status})</div>`);
+            html.push(`<pre>${JSON.stringify(responseData, null, 2)}</pre>`);
+          }
+        } catch (error) {
+          html.push(`<div class="status error">❌ Error: ${error.message}</div>`);
+        }
+
+        // Test 2: Quota endpoint
+        html.push('<h3 style="margin-top: 20px;">Test 2: GET /api/quota</h3>');
+        try {
+          const response = await fetch(`${baseURL}/api/quota`, {
+            headers: {
+              'Authorization': `Bearer ${data.clerk_session_token}`,
+              'Content-Type': 'application/json'
+            }
+          });
+
+          const responseData = await response.json();
+
+          if (response.ok) {
+            html.push(`<div class="status success">✅ Success (${response.status})</div>`);
+            html.push(`<pre>${JSON.stringify(responseData, null, 2)}</pre>`);
+          } else {
+            html.push(`<div class="status error">❌ Failed (${response.status})</div>`);
+            html.push(`<pre>${JSON.stringify(responseData, null, 2)}</pre>`);
+          }
+        } catch (error) {
+          html.push(`<div class="status error">❌ Error: ${error.message}</div>`);
+        }
+
+        testDiv.innerHTML = html.join('');
+      } catch (error) {
+        testDiv.innerHTML = `
+          <div class="status error">❌ Test failed: ${error.message}</div>
+        `;
+      }
+    }
+
+    async function refreshToken() {
+      try {
+        // Open dashboard in new tab
+        window.open('https://happyresumes.com/dashboard', '_blank');
+        alert('Please log in to the dashboard if needed. The extension will automatically sync your token.');
+      } catch (error) {
+        alert('Error: ' + error.message);
+      }
+    }
+
+    async function clearToken() {
+      if (!confirm('Are you sure you want to clear the stored token? You will need to visit the dashboard again to re-sync.')) {
+        return;
+      }
+
+      try {
+        await chrome.storage.local.remove([
+          'clerk_session_token',
+          'clerk_token_updated_at',
+          'clerk_token_expires_at',
+          'user_email'
+        ]);
+        alert('Token cleared successfully!');
+        location.reload();
+      } catch (error) {
+        alert('Error clearing token: ' + error.message);
+      }
+    }
+
+    async function exportDebugInfo() {
+      try {
+        const storage = await chrome.storage.local.get(null);
+        const debugInfo = {
+          timestamp: new Date().toISOString(),
+          storage: {
+            hasToken: !!storage.clerk_session_token,
+            tokenLength: storage.clerk_session_token?.length,
+            email: storage.user_email,
+            apiBaseURL: storage.apiBaseURL,
+            tokenUpdated: storage.clerk_token_updated_at ? new Date(storage.clerk_token_updated_at).toISOString() : null,
+            tokenExpires: storage.clerk_token_expires_at ? new Date(storage.clerk_token_expires_at).toISOString() : null
+          },
+          extension: {
+            version: chrome.runtime.getManifest().version,
+            id: chrome.runtime.id
+          }
+        };
+
+        // Decode token if available
+        if (storage.clerk_session_token) {
+          try {
+            const parts = storage.clerk_session_token.split('.');
+            const payload = JSON.parse(atob(parts[1]));
+            debugInfo.tokenPayload = payload;
+          } catch (e) {
+            debugInfo.tokenPayload = { error: 'Failed to decode' };
+          }
+        }
+
+        const blob = new Blob([JSON.stringify(debugInfo, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `happyresumes-debug-${Date.now()}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } catch (error) {
+        alert('Error exporting debug info: ' + error.message);
+      }
+    }
+
+    // Initialize
+    (async () => {
+      await loadStorageInfo();
+      await analyzeToken();
+      await testAPIConnection();
+    })();
+  </script>
+</body>
+</html>

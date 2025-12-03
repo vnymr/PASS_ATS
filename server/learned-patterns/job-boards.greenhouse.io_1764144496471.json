@@ -1,0 +1,113 @@
+{
+  "metadata": {
+    "url": "https://job-boards.greenhouse.io/angi/jobs/8065358002",
+    "domain": "job-boards.greenhouse.io",
+    "timestamp": "2025-11-26T08:08:16.471Z",
+    "success": true
+  },
+  "formStructure": {
+    "totalFields": 21,
+    "fieldTypes": {
+      "text": 17,
+      "tel": 1,
+      "file": 2,
+      "textarea": 1
+    },
+    "requiredFields": [
+      {
+        "name": "unnamed_4",
+        "type": "text",
+        "label": ""
+      },
+      {
+        "name": "unnamed_13",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_15",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_18",
+        "type": "text",
+        "label": "Select..."
+      }
+    ]
+  },
+  "aiResponses": {
+    "4000602002": "Prefer not to answer",
+    "4000603002": "Male",
+    "first_name": "John",
+    "last_name": "Doe",
+    "email": "john@example.com",
+    "country": "United States",
+    "unnamed_4": "Senior Software Engineer",
+    "phone": "+1-555-123-4567",
+    "resume": "John_Doe_Resume.pdf",
+    "cover_letter": "John_Doe_Cover_Letter.pdf",
+    "question_32351236002": "linkedin.com/in/johndoe",
+    "question_32351237002": "Not provided",
+    "question_32351238002": "LinkedIn",
+    "question_32351239002": "Yes",
+    "unnamed_13": "Yes",
+    "question_32351240002": "No",
+    "unnamed_15": "Yes",
+    "question_32351241002": "$150,000 - $170,000",
+    "question_32351242002": "I acknowledge receipt of the California Consumer Privacy Act Notice and understand that Angi may collect and process the categories of personal information described. I consent to the processing of my information for the purposes described (employment consideration, HR functions, benefits, payroll, security, compliance), and I understand my rights under the CCPA as applicable.",
+    "unnamed_18": "Yes",
+    "question_32351243002": "123 Market St, Apt 400\nSan Francisco, CA 94103\nUnited States"
+  },
+  "problemsSolved": [
+    {
+      "problem": "Failed to fill unnamed_4: Field not found with any selector strategy: unnamed_4",
+      "solution": {
+        "issue": "Failed to analyze screenshot",
+        "solution": "Manual intervention required",
+        "needsManualIntervention": true
+      },
+      "timestamp": "2025-11-26T08:08:16.472Z"
+    },
+    {
+      "problem": "Failed to fill unnamed_18: Field not found with any selector strategy: unnamed_18",
+      "timestamp": "2025-11-26T08:08:16.472Z"
+    }
+  ],
+  "patterns": {
+    "commonQuestions": [
+      {
+        "label": "How did you hear about this job?",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What is your target salary range for a new role?*",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "Which categories describe you? Select all that apply to you:",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What is your current gender identity?",
+        "type": "text",
+        "category": "other"
+      }
+    ],
+    "fieldNamingConventions": {
+      "camelCase": 0,
+      "snake_case": 15,
+      "kebabCase": 0,
+      "standard": 6
+    },
+    "formLayout": {
+      "totalFields": 21,
+      "visibleFields": 21,
+      "requiredFields": 4,
+      "optionalFields": 17
+    }
+  }
+}

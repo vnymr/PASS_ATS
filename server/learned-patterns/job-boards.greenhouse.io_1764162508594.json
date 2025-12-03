@@ -1,0 +1,177 @@
+{
+  "metadata": {
+    "url": "https://job-boards.greenhouse.io/angi/jobs/8065358002",
+    "domain": "job-boards.greenhouse.io",
+    "timestamp": "2025-11-26T13:08:28.594Z",
+    "success": true
+  },
+  "formStructure": {
+    "totalFields": 21,
+    "fieldTypes": {
+      "text": 17,
+      "tel": 1,
+      "file": 2,
+      "textarea": 1
+    },
+    "requiredFields": [
+      {
+        "name": "unnamed_4",
+        "type": "text",
+        "label": ""
+      },
+      {
+        "name": "unnamed_12",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_14",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_17",
+        "type": "text",
+        "label": "Select..."
+      }
+    ]
+  },
+  "aiResponses": {
+    "4000602002": "Prefer not to answer",
+    "4000603002": "Male",
+    "first_name": "John",
+    "last_name": "Doe",
+    "email": "john@example.com",
+    "country": "United States",
+    "unnamed_4": "San Francisco, CA",
+    "phone": "+1-555-123-4567",
+    "resume": "John_Doe_Resume.pdf",
+    "cover_letter": "John_Doe_Cover_Letter.pdf",
+    "question_32351236002": "linkedin.com/in/johndoe",
+    "question_32351237002": "Not provided",
+    "question_32351238002": "LinkedIn",
+    "question_32351239002": "Yes",
+    "unnamed_12": "U.S. citizen",
+    "question_32351240002": "No",
+    "unnamed_14": "No",
+    "question_32351241002": "$140,000 - $160,000 per year",
+    "question_32351242002": "I acknowledge and consent to the California Consumer Privacy Act notice and the collection and use of my personal information as described.",
+    "unnamed_17": "I agree",
+    "question_32351243002": "John Doe\n123 Market St, Apt 400\nSan Francisco, CA 94105\nUnited States"
+  },
+  "problemsSolved": [
+    {
+      "problem": "Dropdown \"country\" failed: Failed to fill custom dropdown \"country\" after 3 attempts. AI provided: \"United States\". Error: Dropdown menu did not open after multiple attempts",
+      "solution": {
+        "issue": "Failed to analyze screenshot",
+        "solution": "Manual intervention required",
+        "needsManualIntervention": true
+      },
+      "timestamp": "2025-11-26T13:08:28.594Z"
+    },
+    {
+      "problem": "Dropdown \"unnamed_4\" failed: Failed to fill custom dropdown \"unnamed_4\" after 3 attempts. AI provided: \"San Francisco, CA\". Error: Dropdown menu did not open after multiple attempts",
+      "timestamp": "2025-11-26T13:08:28.594Z"
+    },
+    {
+      "problem": "Failed to fill phone: page.evaluate: Target page, context or browser has been closed",
+      "timestamp": "2025-11-26T13:08:28.594Z"
+    },
+    {
+      "problem": "Failed to fill resume: page.evaluate: Target page, context or browser has been closed",
+      "timestamp": "2025-11-26T13:08:28.594Z"
+    },
+    {
+      "problem": "Failed to fill cover_letter: page.evaluate: Target page, context or browser has been closed",
+      "timestamp": "2025-11-26T13:08:28.594Z"
+    },
+    {
+      "problem": "Failed to fill question_32351236002: page.evaluate: Target page, context or browser has been closed",
+      "timestamp": "2025-11-26T13:08:28.594Z"
+    },
+    {
+      "problem": "Failed to fill question_32351237002: page.evaluate: Target page, context or browser has been closed",
+      "timestamp": "2025-11-26T13:08:28.594Z"
+    },
+    {
+      "problem": "Failed to fill question_32351238002: page.evaluate: Target page, context or browser has been closed",
+      "timestamp": "2025-11-26T13:08:28.594Z"
+    },
+    {
+      "problem": "Failed to fill question_32351239002: page.evaluate: Target page, context or browser has been closed",
+      "timestamp": "2025-11-26T13:08:28.594Z"
+    },
+    {
+      "problem": "Failed to fill unnamed_12: page.evaluate: Target page, context or browser has been closed",
+      "timestamp": "2025-11-26T13:08:28.594Z"
+    },
+    {
+      "problem": "Failed to fill question_32351240002: page.evaluate: Target page, context or browser has been closed",
+      "timestamp": "2025-11-26T13:08:28.594Z"
+    },
+    {
+      "problem": "Failed to fill unnamed_14: page.evaluate: Target page, context or browser has been closed",
+      "timestamp": "2025-11-26T13:08:28.594Z"
+    },
+    {
+      "problem": "Failed to fill question_32351241002: page.evaluate: Target page, context or browser has been closed",
+      "timestamp": "2025-11-26T13:08:28.594Z"
+    },
+    {
+      "problem": "Failed to fill question_32351242002: page.evaluate: Target page, context or browser has been closed",
+      "timestamp": "2025-11-26T13:08:28.594Z"
+    },
+    {
+      "problem": "Failed to fill unnamed_17: page.evaluate: Target page, context or browser has been closed",
+      "timestamp": "2025-11-26T13:08:28.594Z"
+    },
+    {
+      "problem": "Failed to fill question_32351243002: page.evaluate: Target page, context or browser has been closed",
+      "timestamp": "2025-11-26T13:08:28.594Z"
+    },
+    {
+      "problem": "Failed to fill 4000602002: page.evaluate: Target page, context or browser has been closed",
+      "timestamp": "2025-11-26T13:08:28.594Z"
+    },
+    {
+      "problem": "Failed to fill 4000603002: page.evaluate: Target page, context or browser has been closed",
+      "timestamp": "2025-11-26T13:08:28.594Z"
+    }
+  ],
+  "patterns": {
+    "commonQuestions": [
+      {
+        "label": "How did you hear about this job?",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What is your target salary range for a new role?*",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "Which categories describe you? Select all that apply to you:",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What is your current gender identity?",
+        "type": "text",
+        "category": "other"
+      }
+    ],
+    "fieldNamingConventions": {
+      "camelCase": 0,
+      "snake_case": 15,
+      "kebabCase": 0,
+      "standard": 6
+    },
+    "formLayout": {
+      "totalFields": 21,
+      "visibleFields": 21,
+      "requiredFields": 4,
+      "optionalFields": 17
+    }
+  }
+}

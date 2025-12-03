@@ -1,0 +1,138 @@
+{
+  "metadata": {
+    "url": "https://job-boards.greenhouse.io/lucidsoftware/jobs/5710302004",
+    "domain": "job-boards.greenhouse.io",
+    "timestamp": "2025-12-02T19:52:23.790Z",
+    "success": true
+  },
+  "formStructure": {
+    "totalFields": 32,
+    "fieldTypes": {
+      "text": 27,
+      "tel": 1,
+      "file": 2,
+      "number": 2
+    },
+    "requiredFields": [
+      {
+        "name": "unnamed_5",
+        "type": "text",
+        "label": ""
+      },
+      {
+        "name": "unnamed_19",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_21",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_26",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_28",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_30",
+        "type": "text",
+        "label": "Select..."
+      },
+      {
+        "name": "unnamed_32",
+        "type": "text",
+        "label": "Select..."
+      }
+    ]
+  },
+  "aiResponses": {
+    "first_name": "John",
+    "last_name": "Doe",
+    "preferred_name": "John",
+    "email": "john@example.com",
+    "country": "United States",
+    "unnamed_5": "Experienced Full-Stack Software Engineer with 8+ years building scalable web applications using JavaScript, React, Node.js, Python, AWS, Docker, and PostgreSQL. Proven track record at Tech Corp and StartupXYZ driving feature development, performance improvements, and cloud infrastructure automation.",
+    "phone": "+1-555-123-4567",
+    "resume": "John_Doe_Resume.pdf",
+    "cover_letter": "John_Doe_Cover_Letter.pdf",
+    "school--0": "Stanford University",
+    "degree--0": "Bachelor of Science (BS)",
+    "discipline--0": "Computer Science",
+    "start-month--0": "September",
+    "start-year--0": 2012,
+    "end-month--0": "June",
+    "end-year--0": 2016,
+    "question_14642598004": "linkedin.com/in/johndoe",
+    "question_14642599004": "No",
+    "unnamed_19": "Full-time",
+    "question_14642600004": "Yes, I understand that if I am not currently located in Raleigh, NC, advance relocation will be required. I am prepared to coordinate and plan relocation logistics in advance to ensure a smooth transition and immediate availability for the role.",
+    "unnamed_21": "Yes",
+    "question_14642601004": "$160,000",
+    "question_14642602004": "San Francisco, CA",
+    "question_14642603004": "3.7",
+    "gender": "Male",
+    "unnamed_26": "He/Him",
+    "hispanic_ethnicity": "No",
+    "unnamed_28": "No",
+    "veteran_status": "Not a veteran",
+    "unnamed_30": "Not a veteran",
+    "disability_status": "No",
+    "unnamed_32": "No"
+  },
+  "problemsSolved": [
+    {
+      "problem": "Failed to fill unnamed_5: Field not found with any selector strategy: unnamed_5",
+      "solution": {
+        "issue": "Failed to analyze screenshot",
+        "solution": "Manual intervention required",
+        "needsManualIntervention": true
+      },
+      "timestamp": "2025-12-02T19:52:23.790Z"
+    },
+    {
+      "problem": "Failed to fill unnamed_21: Field not found with any selector strategy: unnamed_21",
+      "timestamp": "2025-12-02T19:52:23.790Z"
+    },
+    {
+      "problem": "Failed to fill unnamed_32: Field not found with any selector strategy: unnamed_32",
+      "timestamp": "2025-12-02T19:52:23.790Z"
+    }
+  ],
+  "patterns": {
+    "commonQuestions": [
+      {
+        "label": "What is your desired annual compensation?*",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What is your current location (city, state)?*",
+        "type": "text",
+        "category": "other"
+      },
+      {
+        "label": "What is your most recent cumulative GPA? *",
+        "type": "text",
+        "category": "other"
+      }
+    ],
+    "fieldNamingConventions": {
+      "camelCase": 0,
+      "snake_case": 20,
+      "kebabCase": 7,
+      "standard": 5
+    },
+    "formLayout": {
+      "totalFields": 32,
+      "visibleFields": 32,
+      "requiredFields": 7,
+      "optionalFields": 25
+    }
+  }
+}

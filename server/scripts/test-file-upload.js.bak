@@ -1,0 +1,531 @@
+/**
+ * Test File Upload Functionality
+ * Tests the complete flow with file uploads (resume, cover letter, etc.)
+ */
+
+import 'dotenv/config';
+import { launchBrowser } from '../lib/browser-launcher.js';
+import AIFormFiller from '../lib/ai-form-filler.js';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Test configuration
+const TEST_CONFIG = {
+  userProfile: {
+    fullName: 'Jane Smith',
+    email: 'jane.smith@example.com',
+    phone: '+1 (555) 987-6543',
+    location: 'New York, NY',
+    linkedIn: 'https://linkedin.com/in/janesmith',
+    portfolio: 'https://janesmith.dev',
+
+    experience: [{
+      title: 'Full Stack Developer',
+      company: 'Tech Innovations Inc',
+      duration: '2021-Present',
+      responsibilities: 'Built scalable web applications using React and Node.js'
+    }],
+
+    education: [{
+      degree: 'Master of Science',
+      field: 'Computer Science',
+      school: 'MIT',
+      year: '2021'
+    }],
+
+    skills: ['React', 'Node.js', 'TypeScript', 'AWS', 'Docker', 'Kubernetes']
+  },
+
+  jobData: {
+    title: 'Senior Full Stack Developer',
+    company: 'Innovation Labs',
+    description: 'Looking for experienced developers to build cutting-edge applications',
+    requirements: '5+ years experience with modern web technologies',
+    location: 'Remote',
+    salary: '$160k - $200k'
+  },
+
+  outputDir: path.resolve(process.cwd(), 'test-output')
+};
+
+/**
+ * Create a sample PDF resume file for testing
+ */
+async function createSampleResume() {
+  const resumePath = path.join(TEST_CONFIG.outputDir, 'sample-resume.pdf');
+
+  // Check if we already have a PDF file
+  if (fs.existsSync(resumePath)) {
+    console.log(`✅ Using existing resume: ${resumePath}`);
+    return resumePath;
+  }
+
+  // Create a simple PDF using a library or copy from node_modules for testing
+  const samplePdfPath = path.resolve(
+    process.cwd(),
+    'node_modules/pdf-parse/test/data/01-valid.pdf'
+  );
+
+  if (fs.existsSync(samplePdfPath)) {
+    fs.copyFileSync(samplePdfPath, resumePath);
+    console.log(`✅ Created sample resume: ${resumePath}`);
+    return resumePath;
+  }
+
+  throw new Error('Could not create sample resume PDF');
+}
+
+/**
+ * Create a test HTML form with file upload
+ */
+async function createTestFormPage() {
+  const htmlContent = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Job Application Form - Test</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .form-container {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #333;
+      margin-bottom: 10px;
+    }
+    .company-info {
+      color: #666;
+      margin-bottom: 30px;
+    }
+    .form-group {
+      margin-bottom: 20px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+      color: #333;
+    }
+    .required {
+      color: red;
+    }
+    input[type="text"],
+    input[type="email"],
+    input[type="tel"],
+    input[type="url"],
+    input[type="file"],
+    textarea,
+    select {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
+    textarea {
+      min-height: 100px;
+      resize: vertical;
+    }
+    input[type="file"] {
+      padding: 8px;
+    }
+    .file-hint {
+      font-size: 12px;
+      color: #666;
+      margin-top: 5px;
+    }
+    button {
+      background: #007bff;
+      color: white;
+      padding: 12px 30px;
+      border: none;
+      border-radius: 4px;
+      font-size: 16px;
+      cursor: pointer;
+      margin-top: 20px;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+    .checkbox-group {
+      margin-top: 10px;
+    }
+    .checkbox-group label {
+      font-weight: normal;
+      display: inline;
+      margin-left: 5px;
+    }
+    #submitConfirmation {
+      display: none;
+      background: #d4edda;
+      border: 1px solid #c3e6cb;
+      color: #155724;
+      padding: 20px;
+      border-radius: 4px;
+      margin-top: 20px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="form-container">
+    <h1>Senior Full Stack Developer</h1>
+    <div class="company-info">
+      <strong>Innovation Labs</strong> • Remote • $160k - $200k
+    </div>
+
+    <form id="applicationForm" onsubmit="handleSubmit(event)">
+      <!-- Personal Information -->
+      <div class="form-group">
+        <label for="fullName">Full Name <span class="required">*</span></label>
+        <input type="text" id="fullName" name="fullName" required>
+      </div>
+
+      <div class="form-group">
+        <label for="email">Email <span class="required">*</span></label>
+        <input type="email" id="email" name="email" required>
+      </div>
+
+      <div class="form-group">
+        <label for="phone">Phone <span class="required">*</span></label>
+        <input type="tel" id="phone" name="phone" required>
+      </div>
+
+      <div class="form-group">
+        <label for="location">Location</label>
+        <input type="text" id="location" name="location" placeholder="City, State">
+      </div>
+
+      <!-- Professional Information -->
+      <div class="form-group">
+        <label for="linkedIn">LinkedIn Profile</label>
+        <input type="url" id="linkedIn" name="linkedIn" placeholder="https://linkedin.com/in/yourprofile">
+      </div>
+
+      <div class="form-group">
+        <label for="portfolio">Portfolio/Website</label>
+        <input type="url" id="portfolio" name="portfolio" placeholder="https://yourwebsite.com">
+      </div>
+
+      <div class="form-group">
+        <label for="experience">Years of Experience <span class="required">*</span></label>
+        <select id="experience" name="experience" required>
+          <option value="">Select...</option>
+          <option value="0-2">0-2 years</option>
+          <option value="3-5">3-5 years</option>
+          <option value="6-10">6-10 years</option>
+          <option value="10+">10+ years</option>
+        </select>
+      </div>
+
+      <!-- File Uploads -->
+      <div class="form-group">
+        <label for="resume">Resume <span class="required">*</span></label>
+        <input type="file" id="resume" name="resume" accept=".pdf,.doc,.docx" required>
+        <div class="file-hint">Accepted formats: PDF, DOC, DOCX (Max 5MB)</div>
+      </div>
+
+      <div class="form-group">
+        <label for="coverLetter">Cover Letter</label>
+        <input type="file" id="coverLetter" name="coverLetter" accept=".pdf,.doc,.docx">
+        <div class="file-hint">Optional - Accepted formats: PDF, DOC, DOCX (Max 5MB)</div>
+      </div>
+
+      <!-- Additional Questions -->
+      <div class="form-group">
+        <label for="whyJoin">Why do you want to join our team? <span class="required">*</span></label>
+        <textarea id="whyJoin" name="whyJoin" required placeholder="Tell us what excites you about this opportunity..."></textarea>
+      </div>
+
+      <div class="form-group">
+        <label for="availability">When can you start?</label>
+        <select id="availability" name="availability">
+          <option value="">Select...</option>
+          <option value="immediately">Immediately</option>
+          <option value="2-weeks">2 weeks notice</option>
+          <option value="1-month">1 month notice</option>
+          <option value="flexible">Flexible</option>
+        </select>
+      </div>
+
+      <!-- Checkboxes -->
+      <div class="form-group">
+        <label>Work Authorization <span class="required">*</span></label>
+        <div class="checkbox-group">
+          <input type="checkbox" id="authorized" name="authorized" value="yes" required>
+          <label for="authorized">I am authorized to work in the United States</label>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <div class="checkbox-group">
+          <input type="checkbox" id="newsletter" name="newsletter" value="yes">
+          <label for="newsletter">Send me updates about similar positions</label>
+        </div>
+      </div>
+
+      <!-- Submit Button -->
+      <button type="submit" id="submitBtn">Submit Application</button>
+    </form>
+
+    <div id="submitConfirmation">
+      <h2>✅ Application Submitted Successfully!</h2>
+      <p>Thank you for applying. We'll review your application and get back to you soon.</p>
+    </div>
+  </div>
+
+  <script>
+    function handleSubmit(event) {
+      event.preventDefault();
+
+      // Hide form and show confirmation
+      document.getElementById('applicationForm').style.display = 'none';
+      document.getElementById('submitConfirmation').style.display = 'block';
+
+      // Log form data for testing
+      const formData = new FormData(event.target);
+      console.log('Form submitted with data:');
+      for (let [key, value] of formData.entries()) {
+        if (value instanceof File) {
+          console.log(key + ':', value.name, '(' + value.size + ' bytes)');
+        } else {
+          console.log(key + ':', value);
+        }
+      }
+
+      return false;
+    }
+  </script>
+</body>
+</html>
+  `;
+
+  const htmlPath = path.join(TEST_CONFIG.outputDir, 'test-application-form.html');
+  fs.writeFileSync(htmlPath, htmlContent);
+  console.log(`✅ Created test form: ${htmlPath}`);
+
+  return htmlPath;
+}
+
+/**
+ * Main test function
+ */
+async function runTest() {
+  console.log('🧪 Testing File Upload Functionality\n');
+  console.log('='.repeat(80));
+
+  // Ensure output directory exists
+  if (!fs.existsSync(TEST_CONFIG.outputDir)) {
+    fs.mkdirSync(TEST_CONFIG.outputDir, { recursive: true });
+  }
+
+  // Step 1: Create sample resume
+  console.log('\n📄 Step 1: Creating sample resume...');
+  const resumePath = await createSampleResume();
+
+  // Step 2: Create test form
+  console.log('\n📝 Step 2: Creating test application form...');
+  const formPath = await createTestFormPage();
+
+  // Step 3: Launch browser and test
+  console.log('\n🌐 Step 3: Launching browser and testing...');
+
+  const browser = await launchBrowser({
+    headless: false,
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage'
+    ],
+    slowMo: 100 // Slow down for visibility
+  });
+
+  try {
+    const page = await browser.newPage();
+    const filler = new AIFormFiller();
+
+    // Navigate to test form
+    console.log('📋 Loading test form...');
+    await page.goto(`file://${formPath}`, {
+      waitUntil: 'networkidle2'
+    });
+
+    // Take initial screenshot
+    await page.screenshot({
+      path: path.join(TEST_CONFIG.outputDir, 'step1-initial-form.png'),
+      fullPage: true
+    });
+    console.log('📸 Initial screenshot saved');
+
+    // Fill form with AI
+    console.log('\n🤖 Step 4: AI filling form with file uploads...');
+    console.log('   This will test:');
+    console.log('   - Text input fields');
+    console.log('   - Email validation');
+    console.log('   - Select dropdowns');
+    console.log('   - File upload (resume)');
+    console.log('   - File upload (cover letter - optional)');
+    console.log('   - Textarea');
+    console.log('   - Checkboxes');
+
+    const startTime = Date.now();
+
+    const result = await filler.fillFormIntelligently(
+      page,
+      TEST_CONFIG.userProfile,
+      TEST_CONFIG.jobData
+    );
+
+    const duration = Date.now() - startTime;
+
+    // Take filled form screenshot
+    await page.screenshot({
+      path: path.join(TEST_CONFIG.outputDir, 'step2-filled-form.png'),
+      fullPage: true
+    });
+    console.log('📸 Filled form screenshot saved');
+
+    // Display results
+    console.log('\n📊 Results:');
+    console.log('='.repeat(80));
+    console.log(`✅ Success: ${result.success}`);
+    console.log(`⏱️  Duration: ${(duration / 1000).toFixed(2)}s`);
+    console.log(`📋 Fields extracted: ${result.fieldsExtracted}`);
+    console.log(`✍️  Fields filled: ${result.fieldsFilled}`);
+    console.log(`📈 Completion rate: ${((result.fieldsFilled / result.fieldsExtracted) * 100).toFixed(1)}%`);
+    console.log(`💰 AI cost: $${result.cost.toFixed(4)}`);
+
+    if (result.errors.length > 0) {
+      console.log(`\n❌ Errors (${result.errors.length}):`);
+      result.errors.forEach((err, i) => {
+        console.log(`   ${i + 1}. ${err}`);
+      });
+    }
+
+    if (result.warnings.length > 0) {
+      console.log(`\n⚠️  Warnings (${result.warnings.length}):`);
+      result.warnings.forEach((warn, i) => {
+        console.log(`   ${i + 1}. ${warn}`);
+      });
+    }
+
+    // Check if file upload worked
+    console.log('\n📎 File Upload Check:');
+    const resumeUploaded = await page.evaluate(() => {
+      const resumeInput = document.getElementById('resume');
+      return resumeInput && resumeInput.files.length > 0;
+    });
+
+    if (resumeUploaded) {
+      const fileName = await page.evaluate(() => {
+        return document.getElementById('resume').files[0].name;
+      });
+      console.log(`   ✅ Resume uploaded: ${fileName}`);
+    } else {
+      console.log('   ❌ Resume NOT uploaded');
+    }
+
+    // Submit button check
+    if (result.submitButton) {
+      console.log(`\n📤 Submit button found: "${result.submitButton.text}"`);
+      console.log('   Would you like to test submission? (y/n)');
+      console.log('   NOTE: Skipping auto-submit for manual verification');
+
+      // Wait for manual inspection
+      console.log('\n⏸️  Pausing for 10 seconds for manual inspection...');
+      await new Promise(resolve => setTimeout(resolve, 10000));
+
+      // Optionally test submit
+      // console.log('   Testing submit...');
+      // await filler.submitForm(page, result.submitButton);
+      // await page.screenshot({
+      //   path: path.join(TEST_CONFIG.outputDir, 'step3-submitted.png'),
+      //   fullPage: true
+      // });
+    }
+
+    // Save detailed results
+    const resultPath = path.join(TEST_CONFIG.outputDir, 'file-upload-test-results.json');
+    fs.writeFileSync(resultPath, JSON.stringify({
+      success: result.success,
+      duration,
+      fieldsExtracted: result.fieldsExtracted,
+      fieldsFilled: result.fieldsFilled,
+      completionRate: (result.fieldsFilled / result.fieldsExtracted) * 100,
+      cost: result.cost,
+      errors: result.errors,
+      warnings: result.warnings,
+      resumeUploaded,
+      timestamp: new Date().toISOString()
+    }, null, 2));
+
+    console.log(`\n💾 Results saved to: ${resultPath}`);
+    console.log(`📸 Screenshots saved to: ${TEST_CONFIG.outputDir}/`);
+
+    console.log('\n' + '='.repeat(80));
+    if (result.success && resumeUploaded) {
+      console.log('✅ FILE UPLOAD TEST PASSED!');
+      console.log('   - Form filled successfully');
+      console.log('   - Resume uploaded correctly');
+      console.log('   - All fields populated');
+    } else {
+      console.log('⚠️  FILE UPLOAD TEST NEEDS REVIEW');
+      if (!resumeUploaded) {
+        console.log('   ❌ Resume upload failed');
+      }
+      if (!result.success) {
+        console.log('   ⚠️  Form filling had issues');
+      }
+    }
+    console.log('='.repeat(80));
+
+  } catch (error) {
+    console.error('\n❌ Test failed:', error);
+    throw error;
+  } finally {
+    await browser.close();
+  }
+}
+
+// Check prerequisites
+console.log('🔍 Checking prerequisites...\n');
+
+if (!process.env.OPENAI_API_KEY) {
+  console.error('❌ OPENAI_API_KEY not set!');
+  console.error('   Please set it in your .env file or environment');
+  process.exit(1);
+}
+
+console.log('✅ OPENAI_API_KEY configured');
+console.log('✅ Output directory: ' + TEST_CONFIG.outputDir);
+
+console.log('\n🚀 Starting test in 3 seconds...');
+console.log('   Press Ctrl+C to cancel\n');
+
+setTimeout(() => {
+  runTest()
+    .then(() => {
+      console.log('\n✅ Test completed successfully!');
+      process.exit(0);
+    })
+    .catch(error => {
+      console.error('\n❌ Test failed:', error);
+      process.exit(1);
+    });
+}, 3000);
