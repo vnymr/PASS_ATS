@@ -40,7 +40,7 @@ async function generateResumeEndpoint(req, res) {
 
     // Generate resume
     const options = {
-      model: process.env.AI_MODEL || 'gpt-4'
+      model: process.env.AI_MODEL || 'gemini-2.5-flash'
     };
 
     if (outputFormat === 'latex') {
