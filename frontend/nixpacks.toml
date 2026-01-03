@@ -1,5 +1,6 @@
+# Nixpacks configuration for frontend
 [phases.setup]
-nixPkgs = ["nodejs-18_x"]
+nixPkgs = ["nodejs_18"]
 
 [phases.install]
 cmds = ["npm ci"]
@@ -7,5 +8,9 @@ cmds = ["npm ci"]
 [phases.build]
 cmds = ["npm run build"]
 
+[variables]
+NODE_ENV = "production"
+VITE_API_URL = "/api"
+
 [start]
-cmd = "npm start"
+cmd = "npx serve -s dist -l 8080 --single --no-clipboard"
