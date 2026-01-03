@@ -36,7 +36,7 @@ export default function MinimalNav() {
       initial={{ opacity: 0, x: -24 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.5, ease: 'easeOut' }}
-      className="sticky top-0 h-screen flex"
+      className="hidden lg:flex sticky top-0 h-screen"
     >
       <motion.aside
         animate={{ width: collapsed ? 64 : 220 }}

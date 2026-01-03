@@ -195,10 +195,10 @@ async function generateResumePreview(args, ctx = {}) {
       throw new Error('Job description is required. Please provide jobDescription or jobId.');
     }
 
-    // Generate resume using AI
-    const generator = new AIResumeGenerator(process.env.OPENAI_API_KEY);
+    // Generate resume using AI (uses Gemini API)
+    const generator = new AIResumeGenerator(process.env.GEMINI_API_KEY);
     const result = await generator.generateAndCompile(profile, targetJobDescription, {
-      model: 'gpt-4o-mini'  // 128k context window, no token limit issues
+      model: 'gemini-2.5-flash'  // Fast and capable model
     });
 
     // Store the generated resume (create a job entry for it)
@@ -343,10 +343,10 @@ async function prepareApplicationPreview(args, ctx = {}) {
     const jobDescription = `${job.title} at ${job.company}\n\n${job.description}${job.requirements ? '\n\nRequirements:\n' + job.requirements : ''}`;
 
     const { default: AIResumeGenerator } = await import('../ai-resume-generator.js');
-    const generator = new AIResumeGenerator(process.env.OPENAI_API_KEY);
+    const generator = new AIResumeGenerator(process.env.GEMINI_API_KEY);
 
     const result = await generator.generateAndCompile(profile, jobDescription, {
-      model: 'gpt-4'
+      model: 'gemini-2.5-flash'
     });
 
     // Store the resume

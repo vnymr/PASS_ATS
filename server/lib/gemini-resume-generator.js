@@ -184,7 +184,7 @@ async function generateResume(profileData, jobDescription, options = {}) {
  */
 async function generateAndCompile(userData, jobDescription, options = {}) {
   // Generate the LaTeX
-  const { latex, metadata } = await generateResume(userData, jobDescription, options);
+  let { latex, metadata } = await generateResume(userData, jobDescription, options);
 
   // Compile to PDF using existing compiler
   let pdf = null;
@@ -210,9 +210,10 @@ async function generateAndCompile(userData, jobDescription, options = {}) {
       // Try to fix LaTeX errors with Gemini
       try {
         const fixedLatex = await fixLatexErrors(latex, compileError.message);
-        // Replace latex for next attempt (note: we can't reassign const)
+        // Update latex to use the fixed version for return
+        latex = fixedLatex;
         Object.assign(metadata, { latexFixed: true });
-        pdf = await compileLatex(fixedLatex);
+        pdf = await compileLatex(latex);
         logger.info('PDF compilation successful after fix');
         break;
       } catch (fixError) {
