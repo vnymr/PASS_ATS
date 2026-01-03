@@ -47,10 +47,10 @@ const worker = new Worker('resume-generation', async (job) => {
     // Process the job with timeout protection
     const jobPromise = processResumeJob(
       { jobId, profileData, jobDescription },
-      (progress) => {
+      async (progress) => {
         // Update job progress (0-100)
         if (typeof progress === 'number') {
-          job.updateProgress(progress);
+          await job.updateProgress(progress);
         }
       }
     );

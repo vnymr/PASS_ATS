@@ -35,8 +35,8 @@ async function generateResumeEndpoint(req, res) {
       return res.status(400).json({ error: 'User data is required' });
     }
 
-    // Initialize generator
-    const generator = new AIResumeGenerator(process.env.OPENAI_API_KEY);
+    // Initialize generator (uses Gemini API)
+    const generator = new AIResumeGenerator(process.env.GEMINI_API_KEY);
 
     // Generate resume
     const options = {
