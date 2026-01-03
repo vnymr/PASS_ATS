@@ -14,10 +14,9 @@ cmds = [
   "cd server && npx prisma generate"
 ]
 
-[start]
-cmd = "cd server && npx prisma migrate deploy && node server.js"
-
 [variables]
 NODE_ENV = "production"
 PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = "1"
-PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH = "/nix/store/chromium/bin/chromium"
+
+[start]
+cmd = "export PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=$(which chromium) && cd server && npx prisma migrate deploy && node server.js"
