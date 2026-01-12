@@ -54,6 +54,8 @@ CRITICAL RULES:
 13. AT ANY COST, provide ALL information needed to fill the form completely`;
 
     try {
+      // Note: Don't use Google Search grounding here - it breaks JSON output
+      // Form filling uses user profile data, not web search
       const model = this.genAI.getGenerativeModel({
         model: 'gemini-3-flash-preview',
         systemInstruction: systemPrompt,
@@ -61,8 +63,7 @@ CRITICAL RULES:
           temperature: 0.3,
           maxOutputTokens: 8000,
           responseMimeType: 'application/json'
-        },
-        tools: [{ googleSearch: {} }]  // Enable Google Search grounding
+        }
       });
 
       const result = await model.generateContent(prompt);
