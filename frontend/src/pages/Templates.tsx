@@ -3,6 +3,7 @@ import { useAuth } from '@clerk/clerk-react';
 import { api } from '../api-clerk';
 import { ArrowLeft, Check, Eye, Lock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import HtmlPreview, { isHtmlContent } from '../components/HtmlPreview';
 import LatexPreview from '../components/LatexPreview';
 
 const A4_WIDTH = 595;
@@ -83,8 +84,16 @@ const SAMPLE_CONTENT = {
 };
 
 // Fill a template with sample content for preview
-function fillTemplateForPreview(latex: string): string {
-  let filled = latex;
+// For HTML content (new system), returns as-is since it's already complete
+// For LaTeX content (legacy), fills in placeholders
+function fillTemplateForPreview(content: string): string {
+  // If it's HTML content (new system), return as-is - it's already filled with sample data
+  if (isHtmlContent(content)) {
+    return content;
+  }
+
+  // Legacy LaTeX filling logic
+  let filled = content;
 
   // Fill header
   const headerHtml = `\\begin{center}
@@ -148,6 +157,7 @@ export default function Templates() {
   const [scale, setScale] = useState(0.8);
   const [templateLatexCache, setTemplateLatexCache] = useState<Record<string, string>>({});
   const [showComingSoon, setShowComingSoon] = useState(false);
+  const [templateLoadErrors, setTemplateLoadErrors] = useState<Record<string, string>>({});
 
   const calculateScale = useCallback(() => {
     const availableHeight = window.innerHeight - 160;
@@ -195,20 +205,48 @@ export default function Templates() {
 
         // Pre-load latex for all templates and fill with sample content for preview
         const latexCache: Record<string, string> = {};
+        const loadErrors: Record<string, string> = {};
+        
+        console.log('Loading templates for preview:', allTemplates.map(t => t.id));
+        
         await Promise.all(
           allTemplates.map(async (t) => {
             try {
+              console.log(`Fetching template ${t.id}...`);
               const tRes = await api.getTemplate(t.id, token || undefined);
+              console.log(`Template ${t.id} response:`, { success: tRes.success, hasLatex: !!tRes.template?.latex, latexLength: tRes.template?.latex?.length });
+              
               if (tRes.success && tRes.template?.latex) {
-                // Fill with sample content for preview
-                latexCache[t.id] = fillTemplateForPreview(tRes.template.latex);
+                // Backend already returns filled HTML, so just use it directly
+                const content = tRes.template.latex;
+                // fillTemplateForPreview will return HTML as-is if it's already HTML
+                const filledContent = fillTemplateForPreview(content);
+                
+                if (filledContent && filledContent.trim()) {
+                  latexCache[t.id] = filledContent;
+                  console.log(`✓ Template ${t.id} loaded successfully (${filledContent.length} chars, isHTML: ${isHtmlContent(filledContent)})`);
+                } else {
+                  loadErrors[t.id] = 'Template content is empty after processing';
+                  console.warn(`Template ${t.id} has empty content after filling`);
+                }
+              } else {
+                const errorMsg = tRes.error || 'Missing template content';
+                loadErrors[t.id] = errorMsg;
+                console.warn(`Template ${t.id} missing latex content:`, errorMsg, tRes);
               }
-            } catch (e) {
-              console.warn(`Failed to load latex for template ${t.id}`);
+            } catch (e: any) {
+              const errorMsg = e.message || 'Failed to load template';
+              loadErrors[t.id] = errorMsg;
+              console.error(`Failed to load template ${t.id}:`, e);
             }
           })
         );
+        
+        console.log('Template cache populated:', Object.keys(latexCache), 'Errors:', Object.keys(loadErrors));
         setTemplateLatexCache(latexCache);
+        setTemplateLoadErrors(loadErrors);
+      } else {
+        console.error('Failed to get templates list:', res);
       }
     } catch (e) {
       console.error('Failed to load templates:', e);
@@ -261,11 +299,36 @@ export default function Templates() {
     setChoosing(false);
   };
 
-  // Mini preview for gallery cards - use HTML preview directly (faster, works without LaTeX compiler)
+  // Mini preview for gallery cards - use HTML or LaTeX preview based on content type
   const renderMiniPreview = (templateId: string) => {
-    const templateLatex = templateLatexCache[templateId];
+    const templateContent = templateLatexCache[templateId];
+    const error = templateLoadErrors[templateId];
 
-    if (!templateLatex) {
+    // Debug: log cache state
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`Rendering preview for ${templateId}:`, {
+        hasContent: !!templateContent,
+        contentLength: templateContent?.length,
+        hasError: !!error,
+        error,
+        cacheKeys: Object.keys(templateLatexCache)
+      });
+    }
+
+    // Show error if template failed to load
+    if (error) {
+      return (
+        <div className="w-full h-full bg-white flex items-center justify-center p-4">
+          <div className="text-center">
+            <p className="text-xs text-neutral-400 mb-1">Preview unavailable</p>
+            <p className="text-xs text-neutral-300">{error}</p>
+          </div>
+        </div>
+      );
+    }
+
+    // Show loading spinner if content not yet loaded
+    if (!templateContent) {
       return (
         <div className="w-full h-full bg-white flex items-center justify-center">
           <div className="w-4 h-4 border-2 border-neutral-200 border-t-neutral-400 rounded-full animate-spin" />
@@ -273,19 +336,69 @@ export default function Templates() {
       );
     }
 
-    // Use HTML preview for gallery (faster, no server compilation needed)
-    return (
-      <div className="w-full h-full bg-white overflow-hidden" style={{ transform: 'scale(0.35)', transformOrigin: 'top left', width: '286%', height: '286%' }}>
-        <LatexPreview latex={templateLatex} className="w-full h-full" />
-      </div>
-    );
+    // For mini previews, use direct HTML rendering for better scaling compatibility
+    const scale = 0.35;
+    const containerWidth = A4_WIDTH;
+    const containerHeight = A4_HEIGHT;
+    
+    if (isHtmlContent(templateContent)) {
+      // For HTML content, use iframe with proper scaling - iframe handles full HTML documents correctly
+      return (
+        <div className="w-full h-full bg-white overflow-hidden relative">
+          <div
+            style={{
+              width: `${containerWidth}px`,
+              height: `${containerHeight}px`,
+              transform: `scale(${scale})`,
+              transformOrigin: 'top left',
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              pointerEvents: 'none'
+            }}
+          >
+            <iframe
+              srcDoc={templateContent}
+              className="w-full h-full border-0 bg-white"
+              title={`Preview ${templateId}`}
+              sandbox="allow-same-origin"
+              style={{
+                width: '100%',
+                height: '100%',
+                border: 'none',
+                display: 'block'
+              }}
+            />
+          </div>
+        </div>
+      );
+    } else {
+      // For LaTeX content, use LatexPreview component
+      return (
+        <div className="w-full h-full bg-white overflow-hidden relative">
+          <div
+            style={{
+              width: `${containerWidth}px`,
+              height: `${containerHeight}px`,
+              transform: `scale(${scale})`,
+              transformOrigin: 'top left',
+              position: 'absolute',
+              top: 0,
+              left: 0
+            }}
+          >
+            <LatexPreview latex={templateContent} className="w-full h-full" />
+          </div>
+        </div>
+      );
+    }
   };
 
-  // Full preview - render using LatexPreview (HTML)
+  // Full preview - render using HtmlPreview or LatexPreview based on content type
   const renderFullPreview = () => {
-    const latexToRender = latex || (selectedTemplate ? templateLatexCache[selectedTemplate.id] : '');
+    const contentToRender = latex || (selectedTemplate ? templateLatexCache[selectedTemplate.id] : '');
 
-    if (!latexToRender) {
+    if (!contentToRender) {
       return (
         <div className="w-full h-full flex items-center justify-center bg-white">
           <div className="w-6 h-6 border-2 border-neutral-300 border-t-neutral-600 rounded-full animate-spin" />
@@ -293,7 +406,11 @@ export default function Templates() {
       );
     }
 
-    return <LatexPreview latex={latexToRender} className="w-full h-full" />;
+    // Use HtmlPreview for HTML content, LatexPreview for legacy LaTeX
+    if (isHtmlContent(contentToRender)) {
+      return <HtmlPreview html={contentToRender} className="w-full h-full" />;
+    }
+    return <LatexPreview latex={contentToRender} className="w-full h-full" />;
   };
 
   if (loading) {

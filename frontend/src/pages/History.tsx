@@ -186,10 +186,10 @@ export default function History() {
                         variant="ghost"
                         size="sm"
                         onClick={() => window.open(resume.texUrl!, '_blank')}
-                        aria-label="View LaTeX source"
+                        aria-label="View source code"
                       >
                         <Icons.code size={16} />
-                        LaTeX
+                        Source
                       </Button>
                     )}
                   </div>

@@ -1,62 +1,56 @@
 /**
- * AI Resume Generator - Gemini 2.5 Flash Implementation
+ * AI Resume Generator - HTML-Based Implementation
  *
- * Migrated from OpenAI to Google Gemini for improved speed and cost efficiency.
+ * Uses Google Gemini for content generation and Playwright for PDF rendering.
+ * NO LATEX DEPENDENCIES - Pure HTML/CSS output.
+ *
  * Includes "Spotlight Strategy" for handling large profiles (10-20+ experiences).
  * Supports Google Search grounding for company-specific optimization.
- *
- * BACKWARD COMPATIBLE: Class name and method signatures remain unchanged.
  */
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { compileLatex } from './latex-compiler.js';
+import { generatePDFWithRetry } from './html-pdf-generator.js';
+import { generateHTML, TEMPLATES, getTemplateRecommendation } from './html-templates.js';
+import { jsonToHtml } from './json-to-html.js';
 import {
-  RESUME_SYSTEM_PROMPT,
-  buildUserPrompt,
-  buildCompanyResearchPrompt,
   extractCompanyName,
   extractJobTitle
 } from './resume-prompts.js';
-import { TEMPLATES } from './resume-templates.js';
 import logger from './logger.js';
 
 class AIResumeGenerator {
   /**
-   * Constructor - maintains backward compatibility
-   * @param {string} apiKey - Originally OpenAI key, now accepts Gemini key or uses env
+   * Constructor
+   * @param {string} apiKey - Gemini API key (or uses env)
    */
   constructor(apiKey) {
-    // Prefer GEMINI_API_KEY from environment, fall back to passed key
     const key = process.env.GEMINI_API_KEY || apiKey;
 
     if (!key) {
       throw new Error('GEMINI_API_KEY is required. Set it in environment variables.');
     }
 
-    // Log if OpenAI key was passed (for migration awareness)
-    if (apiKey && apiKey.startsWith('sk-')) {
-      logger.warn('OpenAI API key detected. This generator now uses Gemini. Please update to GEMINI_API_KEY.');
-    }
-
     this.genAI = new GoogleGenerativeAI(key);
-    this.model = 'gemini-3-flash-preview';
-    logger.info('AIResumeGenerator initialized with Gemini 3 Flash');
+    this.model = 'gemini-2.0-flash';
+    logger.info('AIResumeGenerator initialized with Gemini (HTML mode)');
   }
 
   /**
-   * Main generation method - BACKWARD COMPATIBLE SIGNATURE
+   * Main generation method
    * @param {Object} userData - User profile data
    * @param {string} jobDescription - Target job description
    * @param {Object} options - Generation options
-   * @returns {Promise<{latex: string, pdf: Buffer, metadata: Object}>}
+   * @returns {Promise<{html: string, pdf: Buffer, metadata: Object}>}
    */
   async generateAndCompile(userData, jobDescription, options = {}) {
     const startTime = Date.now();
+    const templateId = options.templateId || 'modern_dense';
 
     logger.info({
       profileSize: JSON.stringify(userData).length,
+      templateId,
       enableSearch: options.enableSearch !== false
-    }, '🚀 Starting Gemini Resume Generation');
+    }, 'Starting HTML Resume Generation');
 
     try {
       // Phase 1: Company Research (optional but recommended)
@@ -68,23 +62,21 @@ class AIResumeGenerator {
         companyInsights = await this.researchCompany(companyName, jobTitle);
       }
 
-      // Phase 2: Generate LaTeX
-      const latex = await this.generateLatex(userData, jobDescription, companyInsights);
+      // Phase 2: Generate optimized resume content
+      const resumeData = await this.generateResumeContent(userData, jobDescription, companyInsights);
 
-      // Phase 3: Compile to PDF
-      logger.info('⚙️ Compiling PDF...');
-      let pdf;
-      try {
-        pdf = await compileLatex(latex);
-        logger.info('✅ PDF compiled successfully');
-      } catch (compileError) {
-        logger.warn({ error: compileError.message }, 'First compilation failed, attempting fix...');
+      // Phase 3: Generate HTML
+      logger.info('Generating HTML...');
+      const html = generateHTML(resumeData, templateId);
+      logger.info({ htmlLength: html.length }, 'HTML generated');
 
-        // Try to fix LaTeX errors
-        const fixedLatex = await this.fixLatexErrors(latex, compileError.message);
-        pdf = await compileLatex(fixedLatex);
-        logger.info('✅ PDF compiled after fix');
-      }
+      // Phase 4: Generate PDF
+      logger.info('Generating PDF...');
+      const pdf = await generatePDFWithRetry(html, {
+        format: 'Letter',
+        margin: { top: '0.5in', right: '0.5in', bottom: '0.5in', left: '0.5in' }
+      });
+      logger.info('PDF generated successfully');
 
       const totalTime = Date.now() - startTime;
 
@@ -92,24 +84,27 @@ class AIResumeGenerator {
         totalTime,
         company: companyName,
         usedResearch: !!companyInsights
-      }, `✅ Resume generated in ${(totalTime / 1000).toFixed(2)}s`);
+      }, `Resume generated in ${(totalTime / 1000).toFixed(2)}s`);
 
       return {
-        latex,
+        html,
         pdf,
+        // Keep 'latex' key for backward compatibility (contains HTML now)
+        latex: html,
         metadata: {
           generatedAt: new Date().toISOString(),
           model: this.model,
           generationTime: totalTime,
           company: companyName,
           jobTitle,
+          templateId,
           usedCompanyResearch: !!companyInsights,
-          approach: 'gemini-spotlight-strategy'
+          approach: 'html-gemini'
         }
       };
 
     } catch (error) {
-      logger.error({ error: error.message }, '❌ Resume generation failed');
+      logger.error({ error: error.message }, 'Resume generation failed');
       throw new Error(`Resume generation failed: ${error.message}`);
     }
   }
@@ -119,7 +114,7 @@ class AIResumeGenerator {
    */
   async researchCompany(companyName, jobTitle) {
     try {
-      logger.info({ company: companyName }, '🔍 Researching company...');
+      logger.info({ company: companyName }, 'Researching company...');
 
       const model = this.genAI.getGenerativeModel({
         model: this.model,
@@ -127,16 +122,21 @@ class AIResumeGenerator {
           temperature: 0.3,
           maxOutputTokens: 1024,
         }
-      }, {
-        tools: [{ googleSearch: {} }]
       });
 
-      const result = await model.generateContent(
-        buildCompanyResearchPrompt(companyName, jobTitle)
-      );
+      const prompt = `Research ${companyName} for a ${jobTitle || 'job'} application.
+Provide brief insights on:
+1. Company culture and values
+2. Key products/services
+3. Recent news or achievements
+4. What they look for in candidates
+
+Keep response concise (under 300 words).`;
+
+      const result = await model.generateContent(prompt);
       const insights = result.response.text();
 
-      logger.info({ company: companyName }, '✅ Company research completed');
+      logger.info({ company: companyName }, 'Company research completed');
       return insights;
 
     } catch (error) {
@@ -147,141 +147,153 @@ class AIResumeGenerator {
   }
 
   /**
-   * Generate LaTeX resume using Gemini
+   * Generate optimized resume content using Gemini
+   * Returns structured JSON data for HTML generation
    */
-  async generateLatex(userData, jobDescription, companyInsights) {
-    logger.info('✍️ Generating LaTeX...');
+  async generateResumeContent(userData, jobDescription, companyInsights) {
+    logger.info('Generating optimized resume content...');
 
     const model = this.genAI.getGenerativeModel({
       model: this.model,
-      systemInstruction: RESUME_SYSTEM_PROMPT,
       generationConfig: {
         temperature: 0.3,
         maxOutputTokens: 8000,
-        topP: 0.9,
+        responseMimeType: 'application/json'
       }
     });
 
-    const userPrompt = buildUserPrompt(userData, jobDescription, companyInsights);
-    const result = await model.generateContent(userPrompt);
-    let latex = result.response.text();
+    const prompt = `You are an expert resume writer. Create an ATS-optimized resume.
 
-    // Clean the output
-    latex = this.cleanLatex(latex);
+CANDIDATE PROFILE:
+${JSON.stringify(userData, null, 2)}
 
-    // Validate structure
-    this.validateLatex(latex);
+TARGET JOB:
+${jobDescription}
 
-    logger.info({ latexLength: latex.length }, '✅ LaTeX generated');
-    return latex;
-  }
+${companyInsights ? `COMPANY INSIGHTS:\n${companyInsights}` : ''}
 
-  /**
-   * Clean LaTeX output
-   */
-  cleanLatex(latex) {
-    // Remove markdown code blocks
-    let cleaned = latex
-      .replace(/^```latex?\n?/gm, '')
-      .replace(/\n?```$/gm, '')
-      .replace(/^```.*$/gm, '');
+INSTRUCTIONS:
+1. Select the most relevant 3-5 experiences for this job
+2. Rewrite bullet points with quantified achievements where possible
+3. Match keywords from the job description naturally
+4. Create a compelling professional summary
+5. Organize skills by relevance to the job
 
-    // Replace unicode characters
-    cleaned = cleaned
-      .replace(/•/g, '')
-      .replace(/→/g, ' to ')
-      .replace(/—/g, '--')
-      .replace(/–/g, '--')
-      .replace(/"/g, "''")
-      .replace(/"/g, "``")
-      .replace(/'/g, "'")
-      .replace(/'/g, "'");
-
-    // Fix common LLM typos in LaTeX commands
-    cleaned = cleaned
-      .replace(/\\titrule/g, '\\titlerule')           // Missing 'le'
-      .replace(/\\titerule/g, '\\titlerule')          // Typo variant
-      .replace(/\\titlerul(?![e])/g, '\\titlerule')   // Missing 'e'
-      .replace(/\\textbf\s*{/g, '\\textbf{')          // Remove space before brace
-      .replace(/\\textit\s*{/g, '\\textit{')
-      .replace(/\\href\s*{/g, '\\href{')
-      .replace(/\\section\s*{/g, '\\section{')
-      .replace(/\\subsection\s*{/g, '\\subsection{');
-
-    // Remove tectonic-incompatible commands
-    cleaned = cleaned
-      .replace(/\\input{glyphtounicode}/g, '% glyphtounicode removed')
-      .replace(/\\pdfglyphtounicode[^\n]*/g, '% pdfglyphtounicode removed');
-
-    // Escape unescaped special characters (safety net)
-    cleaned = cleaned.replace(/(?<!\\)&/g, '\\&');
-
-    // Escape unescaped % (but not in comments)
-    cleaned = cleaned.split('\n').map(line => {
-      if (line.trim().startsWith('%')) return line;
-      return line.replace(/(?<!\\)%/g, '\\%');
-    }).join('\n');
-
-    // Escape unescaped #
-    cleaned = cleaned.replace(/(?<!\\)#(?!\d)/g, '\\#');
-
-    return cleaned.trim();
-  }
-
-  /**
-   * Validate LaTeX structure
-   */
-  validateLatex(latex) {
-    if (!latex.includes('\\documentclass')) {
-      throw new Error('Invalid LaTeX: missing \\documentclass');
+OUTPUT FORMAT (JSON):
+{
+  "name": "Full Name",
+  "email": "email@example.com",
+  "phone": "phone number",
+  "location": "City, State",
+  "linkedin": "linkedin url or empty",
+  "github": "github url or empty",
+  "portfolio": "portfolio url or empty",
+  "summary": "2-3 sentence professional summary tailored to the job",
+  "experience": [
+    {
+      "title": "Job Title",
+      "company": "Company Name",
+      "location": "City, State",
+      "startDate": "Mon YYYY",
+      "endDate": "Mon YYYY or Present",
+      "highlights": [
+        "Achievement bullet with metrics",
+        "Another achievement"
+      ]
     }
-    if (!latex.includes('\\begin{document}')) {
-      throw new Error('Invalid LaTeX: missing \\begin{document}');
+  ],
+  "education": [
+    {
+      "institution": "University Name",
+      "degree": "Degree Type",
+      "field": "Field of Study",
+      "location": "City, State",
+      "endDate": "YYYY",
+      "gpa": "GPA if above 3.5",
+      "highlights": ["Relevant coursework or honors"]
     }
-    if (!latex.includes('\\end{document}')) {
-      throw new Error('Invalid LaTeX: missing \\end{document}');
+  ],
+  "skills": [
+    {
+      "category": "Languages",
+      "items": ["Python", "JavaScript"]
+    },
+    {
+      "category": "Frameworks",
+      "items": ["React", "Node.js"]
     }
-    return true;
+  ],
+  "projects": [
+    {
+      "name": "Project Name",
+      "technologies": ["Tech1", "Tech2"],
+      "highlights": ["What it does", "Impact or metrics"],
+      "link": "optional url"
+    }
+  ],
+  "certifications": [
+    {
+      "name": "Certification Name",
+      "issuer": "Issuing Organization",
+      "date": "YYYY"
+    }
+  ]
+}
+
+Return ONLY valid JSON. Include only sections with content.`;
+
+    const result = await model.generateContent(prompt);
+    let responseText = result.response.text();
+
+    // Parse JSON response
+    try {
+      // Clean up potential markdown formatting
+      responseText = responseText
+        .replace(/^```json\n?/gm, '')
+        .replace(/\n?```$/gm, '')
+        .trim();
+
+      const resumeData = JSON.parse(responseText);
+      logger.info('Resume content generated successfully');
+      return resumeData;
+
+    } catch (parseError) {
+      logger.warn({ error: parseError.message }, 'Failed to parse AI response, using fallback');
+      // Fallback: use original user data with basic normalization
+      return this.normalizeUserData(userData);
+    }
   }
 
   /**
-   * Fix LaTeX errors using Gemini
+   * Normalize user data to expected format (fallback)
    */
-  async fixLatexErrors(brokenLatex, errorMessage) {
-    logger.info('🔧 Attempting to fix LaTeX errors...');
+  normalizeUserData(userData) {
+    const personalInfo = userData.personalInfo || userData.personal || userData.contact || {};
 
-    const model = this.genAI.getGenerativeModel({
-      model: this.model,
-      generationConfig: {
-        temperature: 0.2,
-        maxOutputTokens: 8000,
-      }
-    });
-
-    const fixPrompt = `Fix this LaTeX error. Output ONLY the corrected LaTeX code.
-
-ERROR: ${errorMessage.substring(0, 300)}
-
-BROKEN LATEX:
-${brokenLatex}
-
-Fix and return complete LaTeX:`;
-
-    const result = await model.generateContent(fixPrompt);
-    let fixedLatex = result.response.text();
-
-    fixedLatex = this.cleanLatex(fixedLatex);
-    this.validateLatex(fixedLatex);
-
-    return fixedLatex;
+    return {
+      name: personalInfo.name || userData.name || userData.fullName || '',
+      email: personalInfo.email || userData.email || '',
+      phone: personalInfo.phone || userData.phone || '',
+      location: personalInfo.location || userData.location || '',
+      linkedin: personalInfo.linkedin || userData.linkedin || '',
+      github: personalInfo.github || userData.github || '',
+      portfolio: personalInfo.portfolio || userData.website || '',
+      summary: userData.summary || userData.objective || '',
+      experience: userData.experience || userData.workExperience || [],
+      education: userData.education || [],
+      skills: userData.skills || {},
+      projects: userData.projects || [],
+      certifications: userData.certifications || []
+    };
   }
 
   /**
-   * Generate resume without compilation (LaTeX only)
-   * BACKWARD COMPATIBLE
+   * Generate resume without PDF compilation
+   * Returns HTML and structured data
    */
   async generateResume(userData, jobDescription, options = {}) {
     const startTime = Date.now();
+    const templateId = options.templateId || 'modern_dense';
 
     let companyInsights = null;
     const companyName = extractCompanyName(jobDescription);
@@ -291,15 +303,19 @@ Fix and return complete LaTeX:`;
       companyInsights = await this.researchCompany(companyName, jobTitle);
     }
 
-    const latex = await this.generateLatex(userData, jobDescription, companyInsights);
+    const resumeData = await this.generateResumeContent(userData, jobDescription, companyInsights);
+    const html = generateHTML(resumeData, templateId);
 
     return {
-      latex,
+      html,
+      latex: html, // Backward compatibility
+      data: resumeData,
       metadata: {
         generatedAt: new Date().toISOString(),
         model: this.model,
         generationTime: Date.now() - startTime,
         company: companyName,
+        templateId,
         usedCompanyResearch: !!companyInsights
       }
     };
@@ -313,26 +329,35 @@ Fix and return complete LaTeX:`;
   }
 
   /**
-   * Compile LaTeX to PDF
-   * BACKWARD COMPATIBLE
+   * Compile HTML to PDF
+   * Backward compatible method name
    */
-  async compileResume(latexCode) {
-    return await compileLatex(latexCode);
+  async compileResume(htmlCode) {
+    return await generatePDFWithRetry(htmlCode);
+  }
+
+  /**
+   * Generate resume with specific template
+   */
+  async generateWithTemplate(templateId, userData, jobDescription, options = {}) {
+    const mergedOptions = { ...options, templateId };
+    return this.generateAndCompile(userData, jobDescription, mergedOptions);
   }
 
   /**
    * Regenerate a specific section
    */
-  async regenerateSection(currentLatex, sectionName, userData, jobDescription) {
+  async regenerateSection(currentHtml, sectionName, userData, jobDescription) {
     const model = this.genAI.getGenerativeModel({
       model: this.model,
       generationConfig: {
         temperature: 0.3,
         maxOutputTokens: 2000,
+        responseMimeType: 'application/json'
       }
     });
 
-    const prompt = `Regenerate ONLY the ${sectionName} section of this LaTeX resume to better match the job.
+    const prompt = `Regenerate ONLY the ${sectionName} section to better match the job.
 
 JOB DESCRIPTION:
 ${jobDescription}
@@ -340,144 +365,50 @@ ${jobDescription}
 USER DATA FOR ${sectionName.toUpperCase()}:
 ${JSON.stringify(userData, null, 2)}
 
-CURRENT LATEX:
-${currentLatex}
-
-Return ONLY the LaTeX code for the ${sectionName} section.`;
+Return as JSON array with the improved section content.`;
 
     const result = await model.generateContent(prompt);
-    return this.cleanLatex(result.response.text());
-  }
-
-  /**
-   * Template rewrite method - SIMPLE AND RELIABLE
-   *
-   * The LLM directly rewrites the content in the user's template.
-   * No JSON intermediary, no template filling, no escaping issues.
-   *
-   * Flow:
-   * 1. Take user's existing template (valid LaTeX)
-   * 2. LLM rewrites the content to match the job
-   * 3. Compile to PDF
-   *
-   * @param {string} templateLatex - User's existing LaTeX template
-   * @param {Object} userData - User profile data
-   * @param {string} jobDescription - Target job description
-   * @param {Object} options - Generation options
-   * @returns {Promise<{latex: string, pdf: Buffer, metadata: Object}>}
-   */
-  async generateWithTemplate(templateLatex, userData, jobDescription, options = {}) {
-    const startTime = Date.now();
-
-    logger.info({
-      profileSize: JSON.stringify(userData).length,
-      hasTemplate: !!templateLatex,
-      enableSearch: options.enableSearch !== false
-    }, '🚀 Starting template rewrite');
+    let responseText = result.response.text()
+      .replace(/^```json\n?/gm, '')
+      .replace(/\n?```$/gm, '')
+      .trim();
 
     try {
-      // Resolve template if ID was passed (for default templates)
-      let template = templateLatex;
-      if (typeof templateLatex === 'string' && TEMPLATES[templateLatex]) {
-        template = TEMPLATES[templateLatex].latexTemplate;
-        logger.info({ templateId: templateLatex }, 'Using built-in template');
-      } else if (typeof templateLatex === 'string' && templateLatex.startsWith('default_')) {
-        const templateKey = templateLatex.replace('default_', '');
-        if (TEMPLATES[templateKey]) {
-          template = TEMPLATES[templateKey].latexTemplate;
-        }
-      }
-
-      // Company research (optional)
-      let companyInsights = null;
-      const companyName = extractCompanyName(jobDescription);
-      const jobTitle = extractJobTitle(jobDescription);
-
-      if (companyName && options.enableSearch !== false) {
-        companyInsights = await this.researchCompany(companyName, jobTitle);
-      }
-
-      // SIMPLE: LLM directly rewrites the template content
-      logger.info('✍️ Rewriting template content...');
-      const latex = await this.rewriteTemplateContent(template, userData, jobDescription, companyInsights);
-      logger.info({ latexLength: latex.length }, '✅ Template rewritten');
-
-      // Compile to PDF
-      logger.info('⚙️ Compiling PDF...');
-      let pdf;
-      try {
-        pdf = await compileLatex(latex);
-        logger.info('✅ PDF compiled successfully');
-      } catch (compileError) {
-        logger.warn({ error: compileError.message }, 'First compilation failed, attempting fix...');
-        const fixedLatex = await this.fixLatexErrors(latex, compileError.message);
-        pdf = await compileLatex(fixedLatex);
-        logger.info('✅ PDF compiled after fix');
-      }
-
-      const totalTime = Date.now() - startTime;
-      logger.info({ totalTime }, `✅ Resume generated in ${(totalTime / 1000).toFixed(2)}s`);
-
-      return {
-        latex,
-        pdf,
-        metadata: {
-          generatedAt: new Date().toISOString(),
-          model: this.model,
-          generationTime: totalTime,
-          company: companyName,
-          jobTitle,
-          usedCompanyResearch: !!companyInsights,
-          approach: 'template-rewrite'
-        }
-      };
-
-    } catch (error) {
-      logger.error({ error: error.message }, '❌ Resume generation failed');
-      throw new Error(`Resume generation failed: ${error.message}`);
+      return JSON.parse(responseText);
+    } catch {
+      return userData;
     }
   }
 
   /**
-   * Rewrite template content using LLM
-   *
-   * LLM has full flexibility to optimize the resume for the job
+   * Get available templates
    */
-  async rewriteTemplateContent(template, userData, jobDescription, companyInsights) {
-    const model = this.genAI.getGenerativeModel({
-      model: this.model,
-      generationConfig: {
-        temperature: 0.4,  // Slightly higher for creativity
-        maxOutputTokens: 12000,
-      }
-    });
-
-    const prompt = `Generate a one-page LaTeX resume optimized for ATS.
-
-RULES:
-- Basic LaTeX only: article, geometry, enumitem, hyperref
-- Use section*, textbf, itemize - no custom commands
-- Escape: & -> \\&, % -> \\%, $ -> \\$, # -> \\#, _ -> \\_
-- Output raw LaTeX only, no markdown
-
-PROFILE:
-${JSON.stringify(userData, null, 2)}
-
-JOB:
-${jobDescription}
-${companyInsights ? `\nCOMPANY INFO:\n${companyInsights}` : ''}
-Generate:`;
-
-    const result = await model.generateContent(prompt);
-    let latex = result.response.text();
-
-    // Clean up the output
-    latex = this.cleanLatex(latex);
-    this.validateLatex(latex);
-
-    return latex;
+  getAvailableTemplates() {
+    return Object.values(TEMPLATES).map(t => ({
+      id: t.id,
+      name: t.name,
+      description: t.description,
+      bestFor: t.bestFor
+    }));
   }
 
+  /**
+   * Get template recommendation based on job/profile
+   */
+  recommendTemplate(context) {
+    return getTemplateRecommendation(context);
+  }
+
+  /**
+   * Quick generate from profile data
+   * Simplified method for common use case
+   */
+  async quickGenerate(profileData, jobDescription, templateId = 'modern_dense') {
+    return this.generateAndCompile(profileData, jobDescription, {
+      templateId,
+      enableSearch: true
+    });
+  }
 }
 
 export default AIResumeGenerator;

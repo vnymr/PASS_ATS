@@ -1,24 +1,29 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import HtmlPreview, { isHtmlContent } from './HtmlPreview';
 import LatexPreview from './LatexPreview';
 
 interface PdfPreviewProps {
   templateId?: string;
   latex?: string;
+  html?: string; // HTML content for preview
   className?: string;
   scale?: 'thumbnail' | 'medium' | 'full';
   onError?: (error: string) => void;
   debounceMs?: number;
   fallbackLatex?: string; // LaTeX to render if PDF fails
+  fallbackHtml?: string; // HTML to render if PDF fails
 }
 
 export default function PdfPreview({
   templateId,
   latex,
+  html,
   className = '',
   scale = 'medium',
   onError,
   debounceMs = 2000,
-  fallbackLatex
+  fallbackLatex,
+  fallbackHtml
 }: PdfPreviewProps) {
   const [pdfData, setPdfData] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -34,7 +39,7 @@ export default function PdfPreview({
     full: { width: '100%', height: '800px' }
   };
 
-  const fetchPreview = useCallback(async (latexContent?: string) => {
+  const fetchPreview = useCallback(async (content?: string) => {
     setLoading(true);
     setError(null);
     setUseFallback(false);
@@ -42,15 +47,15 @@ export default function PdfPreview({
     try {
       let response;
 
-      if (latexContent) {
-        // Compile custom latex (for customize mode)
+      if (content) {
+        // Compile custom content (HTML or legacy LaTeX)
         response = await fetch('/api/templates/preview', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           credentials: 'include',
-          body: JSON.stringify({ latex: latexContent })
+          body: JSON.stringify({ html: content })
         });
       } else if (templateId) {
         // Get cached preview for template
@@ -58,7 +63,7 @@ export default function PdfPreview({
           credentials: 'include'
         });
       } else {
-        throw new Error('Either templateId or latex must be provided');
+        throw new Error('Either templateId, html, or latex must be provided');
       }
 
       const data = await response.json();
@@ -71,30 +76,31 @@ export default function PdfPreview({
     } catch (err: any) {
       const errorMessage = err.message || 'Failed to load preview';
       setError(errorMessage);
-      // If we have fallback latex, use the HTML renderer instead
-      if (fallbackLatex || latex) {
+      // If we have fallback content, use the HTML renderer instead
+      if (fallbackHtml || fallbackLatex || html || latex) {
         setUseFallback(true);
       }
       onError?.(errorMessage);
     } finally {
       setLoading(false);
     }
-  }, [templateId, onError, fallbackLatex, latex]);
+  }, [templateId, onError, fallbackLatex, fallbackHtml, latex, html]);
 
   // Effect for templateId changes (immediate fetch)
   useEffect(() => {
-    if (templateId && !latex) {
+    if (templateId && !latex && !html) {
       fetchPreview();
     }
-  }, [templateId, latex, fetchPreview]);
+  }, [templateId, latex, html, fetchPreview]);
 
-  // Effect for latex changes (debounced fetch)
+  // Effect for content changes (debounced fetch)
+  const content = html || latex;
   useEffect(() => {
-    if (!latex) return;
+    if (!content) return;
 
-    // Skip if latex hasn't changed
-    if (latex === lastLatexRef.current) return;
-    lastLatexRef.current = latex;
+    // Skip if content hasn't changed
+    if (content === lastLatexRef.current) return;
+    lastLatexRef.current = content;
 
     // Clear previous debounce
     if (debounceRef.current) {
@@ -106,7 +112,7 @@ export default function PdfPreview({
 
     // Debounce the actual fetch
     debounceRef.current = setTimeout(() => {
-      fetchPreview(latex);
+      fetchPreview(content);
     }, debounceMs);
 
     return () => {
@@ -114,36 +120,41 @@ export default function PdfPreview({
         clearTimeout(debounceRef.current);
       }
     };
-  }, [latex, debounceMs, fetchPreview]);
+  }, [content, debounceMs, fetchPreview]);
 
   // Manual refresh function
   const refresh = useCallback(() => {
-    if (latex) {
-      fetchPreview(latex);
+    if (content) {
+      fetchPreview(content);
     } else if (templateId) {
       fetchPreview();
     }
-  }, [latex, templateId, fetchPreview]);
+  }, [content, templateId, fetchPreview]);
 
   if (loading) {
     return (
       <div className={`flex items-center justify-center bg-neutral-100 ${className}`} style={scaleConfig[scale]}>
         <div className="text-center">
           <div className="w-8 h-8 border-3 border-neutral-300 border-t-orange-500 rounded-full animate-spin mx-auto mb-2" />
-          <p className="text-sm text-neutral-500">Compiling PDF...</p>
+          <p className="text-sm text-neutral-500">Generating PDF...</p>
         </div>
       </div>
     );
   }
 
-  // Fallback to HTML rendering if PDF compilation fails
-  if (useFallback && (fallbackLatex || latex)) {
-    const latexToRender = fallbackLatex || latex || '';
+  // Fallback to HTML/LaTeX rendering if PDF compilation fails
+  if (useFallback && (fallbackHtml || fallbackLatex || html || latex)) {
+    const contentToRender = fallbackHtml || html || fallbackLatex || latex || '';
+    const isHtml = isHtmlContent(contentToRender);
     return (
       <div className={`relative bg-white ${className}`} style={scaleConfig[scale]}>
-        <LatexPreview latex={latexToRender} className="w-full h-full" />
+        {isHtml ? (
+          <HtmlPreview html={contentToRender} className="w-full h-full" />
+        ) : (
+          <LatexPreview latex={contentToRender} className="w-full h-full" />
+        )}
         <div className="absolute bottom-2 left-2 right-2 text-xs text-amber-600 bg-amber-50/90 px-2 py-1 rounded text-center">
-          HTML preview (PDF compiler not available)
+          HTML preview (PDF generation pending)
         </div>
       </div>
     );
@@ -199,7 +210,7 @@ export function usePdfPreview() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const generatePreview = useCallback(async (latex: string) => {
+  const generatePreview = useCallback(async (content: string) => {
     setLoading(true);
     setError(null);
 
@@ -208,7 +219,7 @@ export function usePdfPreview() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ latex })
+        body: JSON.stringify({ html: content })
       });
 
       const data = await response.json();

@@ -102,8 +102,9 @@ import ResumeParser from './lib/resume-parser.js';
 // Import job sync services for automated job discovery
 import jobSyncService from './lib/job-sync-service.js';
 import smartJobSync from './lib/smart-job-sync.js';
-// Import LaTeX compiler
-import { compileLatex } from './lib/latex-compiler.js';
+// Import HTML PDF generator (replaces LaTeX compiler)
+import { generatePDFWithRetry as compileHtml } from './lib/html-pdf-generator.js';
+import { generateHTML } from './lib/html-templates.js';
 // Import production logger
 import logger, { authLogger, jobLogger, requestLogger, compileLogger, aiLogger } from './lib/logger.js';
 // Import input validator
@@ -361,8 +362,8 @@ app.get('/api/templates/:id/preview-image', async (req, res) => {
       });
     }
 
-    // Get template from resume-templates
-    const { TEMPLATES } = await import('./lib/resume-templates.js');
+    // Get template from html-templates
+    const { TEMPLATES } = await import('./lib/html-templates.js');
     const templateKey = id.replace('default_', '');
     const template = TEMPLATES[templateKey];
 
@@ -370,60 +371,62 @@ app.get('/api/templates/:id/preview-image', async (req, res) => {
       return res.status(404).json({ success: false, error: 'Template not found' });
     }
 
-    // Fill template with sample data
+    // Sample data for preview (HTML format)
     const SAMPLE_DATA = {
-      header: `\\begin{center}
-    \\textbf{\\Huge John Smith} \\\\[3pt]
-    \\small San Francisco, CA $|$ john.smith@email.com $|$ (555) 123-4567 $|$ linkedin.com/in/johnsmith
-\\end{center}`,
-      summary: `Results-driven software engineer with 5+ years of experience building scalable web applications.`,
-      experience: `\\resumeSubheading
-  {Senior Software Engineer}{Jan 2022 -- Present}
-  {Tech Company Inc.}{San Francisco, CA}
-  \\resumeItemListStart
-    \\resumeItem{Led development of microservices architecture serving 1M+ daily active users}
-    \\resumeItem{Reduced API response times by 40\\% through optimization and caching strategies}
-  \\resumeItemListEnd
-
-\\resumeSubheading
-  {Software Engineer}{Jun 2019 -- Dec 2021}
-  {Startup Co.}{New York, NY}
-  \\resumeItemListStart
-    \\resumeItem{Built real-time collaboration features using WebSocket and Redis}
-  \\resumeItemListEnd`,
-      projects: `\\resumeProjectHeading
-  {\\textbf{Open Source Project} $|$ \\emph{TypeScript, React}}{2023}
-  \\resumeItemListStart
-    \\resumeItem{Created developer tool with 500+ GitHub stars}
-  \\resumeItemListEnd`,
-      skills: `\\begin{itemize}[leftmargin=0.15in, label={}]
-  \\small{\\item{
-   \\textbf{Languages}{: JavaScript, TypeScript, Python, Go} \\\\
-   \\textbf{Frameworks}{: React, Node.js, Next.js, Express}
-  }}
-\\end{itemize}`,
-      education: `\\resumeSubheading
-  {University of California, Berkeley}{2015 -- 2019}
-  {Bachelor of Science in Computer Science}{Berkeley, CA}`
+      name: 'John Smith',
+      email: 'john.smith@email.com',
+      phone: '(555) 123-4567',
+      location: 'San Francisco, CA',
+      linkedin: 'https://linkedin.com/in/johnsmith',
+      summary: 'Results-driven software engineer with 5+ years of experience building scalable web applications.',
+      experience: [
+        {
+          title: 'Senior Software Engineer',
+          company: 'Tech Company Inc.',
+          location: 'San Francisco, CA',
+          startDate: 'Jan 2022',
+          endDate: 'Present',
+          highlights: [
+            'Led development of microservices architecture serving 1M+ daily active users',
+            'Reduced API response times by 40% through optimization and caching strategies'
+          ]
+        },
+        {
+          title: 'Software Engineer',
+          company: 'Startup Co.',
+          location: 'New York, NY',
+          startDate: 'Jun 2019',
+          endDate: 'Dec 2021',
+          highlights: [
+            'Built real-time collaboration features using WebSocket and Redis'
+          ]
+        }
+      ],
+      education: [
+        {
+          institution: 'University of California, Berkeley',
+          degree: 'Bachelor of Science',
+          field: 'Computer Science',
+          location: 'Berkeley, CA',
+          endDate: '2019'
+        }
+      ],
+      skills: [
+        { category: 'Languages', items: ['JavaScript', 'TypeScript', 'Python', 'Go'] },
+        { category: 'Frameworks', items: ['React', 'Node.js', 'Next.js', 'Express'] }
+      ],
+      projects: [
+        {
+          name: 'Open Source Project',
+          technologies: ['TypeScript', 'React'],
+          highlights: ['Created developer tool with 500+ GitHub stars']
+        }
+      ]
     };
 
-    let filledLatex = template.latexTemplate;
-    filledLatex = filledLatex.replace(/\{\{HEADER\}\}/g, SAMPLE_DATA.header);
-    filledLatex = filledLatex.replace(/\{\{EXPERIENCE\}\}/g, SAMPLE_DATA.experience);
-    filledLatex = filledLatex.replace(/\{\{SKILLS\}\}/g, SAMPLE_DATA.skills);
-    filledLatex = filledLatex.replace(/\{\{EDUCATION\}\}/g, SAMPLE_DATA.education);
-    filledLatex = filledLatex.replace(/\{\{#SUMMARY\}\}([\s\S]*?)\{\{\/SUMMARY\}\}/g, (match, content) => {
-      return content.replace(/\{\{SUMMARY\}\}/g, SAMPLE_DATA.summary);
-    });
-    filledLatex = filledLatex.replace(/\{\{#PROJECTS\}\}([\s\S]*?)\{\{\/PROJECTS\}\}/g, (match, content) => {
-      return content.replace(/\{\{PROJECTS\}\}/g, SAMPLE_DATA.projects);
-    });
-    filledLatex = filledLatex.replace(/\{\{#\w+\}\}[\s\S]*?\{\{\/\w+\}\}/g, '');
-    filledLatex = filledLatex.replace(/\{\{\w+\}\}/g, '');
-
-    // Compile to PDF
-    const { compileLatex } = await import('./lib/latex-compiler.js');
-    const pdfBuffer = await compileLatex(filledLatex);
+    // Generate HTML and compile to PDF
+    const html = generateHTML(SAMPLE_DATA, templateKey);
+    const pdfBuffer = await compileHtml(html);
     const pdfBase64 = pdfBuffer.toString('base64');
 
     // Cache the result
@@ -2099,455 +2102,11 @@ app.post('/api/process-job', authenticateToken, jobProcessingLimiter, async (req
   }
 });
 
-/**
- * Production-ready async job processing - LLM-driven with error feedback loop
- */
-async function processJobAsyncSimplified(jobId, profileData, jobDescription) {
-  const MAX_RETRIES = 3;
-  let attempt = 0;
-  const startTime = Date.now();
+// NOTE: processJobAsyncSimplified removed - was using deprecated LaTeX system
+// Resume generation now uses HTML/CSS via AIResumeGenerator and GeminiResumeGenerator
 
-  // Detailed timing object
-  const timings = {
-    statusUpdate: 0,
-    dataPreparation: 0,
-    cacheCheck: 0,
-    latexGeneration: 0,
-    latexFixes: 0,
-    compilation: 0,
-    artifactSaving: 0,
-    jobUpdate: 0
-  };
-
-  try {
-    // Update job status
-    const t1 = Date.now();
-    await prisma.job.update({
-      where: { id: jobId },
-      data: { status: 'PROCESSING', startedAt: new Date() }
-    });
-    timings.statusUpdate = Date.now() - t1;
-
-    // Prepare data for LLM - pass everything as structured JSON
-    const t2 = Date.now();
-    const userDataForLLM = JSON.stringify(profileData, null, 2);
-    timings.dataPreparation = Date.now() - t2;
-
-    logger.debug({
-      jobId,
-      profileDataSize: userDataForLLM.length,
-      jobDescriptionSize: jobDescription.length,
-      hasName: !!profileData.name,
-      experienceCount: (profileData.experience || []).length,
-      skillsCount: (profileData.skills || []).length
-    }, 'Preparing LLM request');
-
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-    // Check cache first
-    const t3 = Date.now();
-    const { latexCache } = await import('./lib/latex-cache.js');
-    let latexCode = latexCache.get(jobDescription, profileData);
-    timings.cacheCheck = Date.now() - t3;
-
-    if (latexCode) {
-      logger.info({ jobId, cached: true }, 'Using cached LaTeX');
-    } else {
-      // Initial generation
-      aiLogger.request('gpt-5-mini', 'resume_generation');
-      const genStart = Date.now();
-      latexCode = await generateLatexWithLLM(openai, userDataForLLM, jobDescription);
-      timings.latexGeneration = Date.now() - genStart;
-      logger.info({ jobId, genTimeMs: timings.latexGeneration, latexSize: latexCode.length }, 'LaTeX generation completed');
-
-      // Cache the result
-      latexCache.set(jobDescription, profileData, latexCode);
-    }
-
-    // Verify the LaTeX contains the user's actual name (if provided)
-    if (profileData.name && profileData.name !== 'Candidate' && profileData.name.trim()) {
-      if (!latexCode.includes(profileData.name)) {
-        logger.warn({ jobId, expectedName: profileData.name }, 'User name not found in generated LaTeX');
-      }
-    }
-
-    // Try to compile with error feedback loop
-    let pdfBuffer = null;
-    let totalCompileTime = 0;
-    let totalFixTime = 0;
-
-    while (attempt < MAX_RETRIES && !pdfBuffer) {
-      attempt++;
-      compileLogger.start(jobId, attempt);
-
-      const compileStart = Date.now();
-      try {
-        pdfBuffer = await compileLatex(latexCode);
-        const compileTime = Date.now() - compileStart;
-        totalCompileTime += compileTime;
-
-        compileLogger.success(jobId, {
-          attempt,
-          compileTimeMs: compileTime,
-          pdfSizeKB: (pdfBuffer.length / 1024).toFixed(2)
-        });
-      } catch (compileError) {
-        const compileTime = Date.now() - compileStart;
-        totalCompileTime += compileTime;
-        compileLogger.failed(jobId, compileError.message, attempt);
-
-        // Check if this is a LaTeX error (fixable) or a code/system error (not fixable)
-        const isLatexError = compileError.message.includes('LaTeX') ||
-                            compileError.message.includes('Undefined control sequence') ||
-                            compileError.message.includes('Missing') ||
-                            compileError.message.includes('!') ||
-                            compileError.message.includes('error:');
-
-        const isSystemError = compileError.message.includes('not defined') ||
-                             compileError.message.includes('ENOENT') ||
-                             compileError.message.includes('command not found') ||
-                             compileError.message.includes('Permission denied');
-
-        if (isSystemError) {
-          // System error - cannot be fixed by LLM, fail immediately
-          throw new Error(`System error during compilation: ${compileError.message}`);
-        }
-
-        if (attempt < MAX_RETRIES && isLatexError) {
-          compileLogger.retry(jobId, attempt + 1);
-          const fixStart = Date.now();
-
-          try {
-            latexCode = await fixLatexWithLLM(openai, latexCode, compileError.message);
-            const fixTime = Date.now() - fixStart;
-            totalFixTime += fixTime;
-            logger.info({ jobId, fixTimeMs: fixTime }, 'LLM returned fixed LaTeX');
-          } catch (fixError) {
-            logger.error({ jobId, error: fixError.message }, 'LLM fix attempt failed');
-            throw new Error(`Failed to fix LaTeX: ${fixError.message}. Original error: ${compileError.message}`);
-          }
-        } else {
-          throw new Error(`Failed to compile after ${MAX_RETRIES} attempts. Last error: ${compileError.message}`);
-        }
-      }
-    }
-
-    timings.compilation = totalCompileTime;
-    timings.latexFixes = totalFixTime;
-
-    // Save artifacts
-    const t4 = Date.now();
-    logger.debug({ jobId }, 'Saving artifacts to database');
-    await prisma.artifact.create({
-      data: {
-        jobId,
-        type: 'PDF_OUTPUT',
-        content: pdfBuffer,
-        metadata: {
-          attempts: attempt,
-          model: 'gpt-5-mini',
-          pdfSizeKB: (pdfBuffer.length / 1024).toFixed(2)
-        }
-      }
-    });
-
-    await prisma.artifact.create({
-      data: {
-        jobId,
-        type: 'LATEX_SOURCE',
-        content: Buffer.from(latexCode, 'utf-8'),
-        metadata: {
-          attempts: attempt,
-          latexSizeChars: latexCode.length
-        }
-      }
-    });
-    timings.artifactSaving = Date.now() - t4;
-
-    // Mark job as completed
-    const t5 = Date.now();
-    const totalTime = Date.now() - startTime;
-    await prisma.job.update({
-      where: { id: jobId },
-      data: {
-        status: 'COMPLETED',
-        completedAt: new Date(),
-        diagnostics: {
-          completedAt: new Date().toISOString(),
-          attempts: attempt,
-          model: 'gpt-5-mini',
-          totalTimeSeconds: (totalTime / 1000).toFixed(2),
-          totalTimeMs: totalTime,
-          pdfSizeKB: (pdfBuffer.length / 1024).toFixed(2),
-          success: true,
-          timings: timings
-        }
-      }
-    });
-    timings.jobUpdate = Date.now() - t5;
-
-    logger.info({
-      jobId,
-      totalTimeMs: totalTime,
-      timings
-    }, 'Job processing complete with detailed timings');
-
-    jobLogger.complete(jobId, {
-      totalTimeMs: totalTime,
-      attempts: attempt,
-      pdfSizeKB: (pdfBuffer.length / 1024).toFixed(2)
-    });
-
-  } catch (error) {
-    const totalTime = Date.now() - startTime;
-    jobLogger.failed(jobId, error);
-
-    await prisma.job.update({
-      where: { id: jobId },
-      data: {
-        status: 'FAILED',
-        error: error.message,
-        completedAt: new Date(),
-        diagnostics: {
-          failedAt: new Date().toISOString(),
-          error: error.message,
-          attempts: attempt,
-          totalTimeSeconds: (totalTime / 1000).toFixed(2),
-          totalTimeMs: totalTime,
-          success: false,
-          timings: timings
-        }
-      }
-    });
-  }
-}
-
-/**
- * Generate LaTeX using gpt-5-mini (fastest model)
- * Uses prompts from simple-prompt-builder.js (which now delegates to enhanced-prompt-builder.js)
- */
-async function generateLatexWithLLM(openai, userDataJSON, jobDescription, onProgress = null) {
-  // Import prompt builders and Gemini client
-  const { buildFastSystemPrompt, buildFastUserPrompt } = await import('./lib/fast-prompt-builder.js');
-  const { generateLatexWithGemini, isGeminiAvailable } = await import('./lib/gemini-client.js');
-
-  // Use fast prompts for speed (reduced from 11,328 to ~2,000 chars)
-  const systemPrompt = buildFastSystemPrompt();
-  const userPrompt = buildFastUserPrompt(userDataJSON, jobDescription);
-
-  // Try Gemini first if available (33% faster, 37% cheaper)
-  if (isGeminiAvailable()) {
-    try {
-      logger.info('Using Gemini 2.5 Flash for LaTeX generation');
-
-      const result = await generateLatexWithGemini(systemPrompt, userPrompt, onProgress);
-
-      // Log usage for monitoring
-      if (result.usage) {
-        aiLogger.response('gemini-2.5-flash', {
-          prompt_tokens: result.usage.prompt_tokens,
-          completion_tokens: result.usage.completion_tokens,
-          total_tokens: result.usage.total_tokens,
-          generation_time_ms: result.generationTime
-        });
-      }
-
-      return result.latex;
-    } catch (error) {
-      logger.warn({ error: error.message }, 'Gemini generation failed, falling back to OpenAI');
-      // Fall through to OpenAI
-    }
-  }
-
-  // Fallback to OpenAI (gpt-5-mini)
-  logger.info('Using OpenAI gpt-5-mini for LaTeX generation');
-
-  // Use streaming if progress callback provided
-  if (onProgress) {
-    const stream = await openai.chat.completions.create({
-      model: 'gpt-5-mini',
-      messages: [
-        {
-          role: 'system',
-          content: systemPrompt
-        },
-        {
-          role: 'user',
-          content: userPrompt
-        }
-      ],
-      stream: true
-    });
-
-    let latex = '';
-    let chunkCount = 0;
-
-    for await (const chunk of stream) {
-      const content = chunk.choices[0]?.delta?.content || '';
-      latex += content;
-      chunkCount++;
-
-      // Report progress every 10 chunks
-      if (chunkCount % 10 === 0 && onProgress) {
-        onProgress({ type: 'generating', progress: Math.min(90, chunkCount * 2) });
-      }
-    }
-
-    logger.info(`📝 Streamed LaTeX (${latex.length} chars)`);
-
-    // Clean markdown code blocks
-    latex = latex.replace(/^```latex?\n?/gm, '').replace(/\n?```$/gm, '').replace(/^```.*$/gm, '');
-    return latex;
-  }
-
-  // Non-streaming fallback
-  const response = await openai.chat.completions.create({
-    model: 'gpt-5-mini',
-    messages: [
-      {
-        role: 'system',
-        content: systemPrompt
-      },
-      {
-        role: 'user',
-        content: userPrompt
-      }
-    ]
-    // Note: gpt-5-mini doesn't support temperature parameter
-  });
-
-  // Log cache usage for monitoring
-  if (response.usage) {
-    const cached_tokens = response.usage.prompt_tokens_details?.cached_tokens || 0;
-    aiLogger.response('gpt-5-mini', {
-      prompt_tokens: response.usage.prompt_tokens,
-      completion_tokens: response.usage.completion_tokens,
-      total_tokens: response.usage.total_tokens,
-      cached_tokens
-    });
-  }
-
-  let latex = response.choices[0].message.content.trim();
-
-  // Clean markdown code blocks if present
-  latex = latex.replace(/^```latex?\n?/gm, '').replace(/\n?```$/gm, '').replace(/^```.*$/gm, '');
-
-  return latex;
-}
-
-/**
- * Fix LaTeX errors using LLM
- */
-async function fixLatexWithLLM(openai, brokenLatex, errorMessage) {
-  logger.debug({ error: errorMessage.substring(0, 200) }, 'Requesting LaTeX fix from LLM');
-
-  // Try Gemini first if available
-  const { fixLatexWithGemini, isGeminiAvailable } = await import('./lib/gemini-client.js');
-
-  if (isGeminiAvailable()) {
-    try {
-      logger.info('Using Gemini 2.5 Flash for LaTeX error fixing');
-      const fixedLatex = await fixLatexWithGemini(brokenLatex, errorMessage);
-      return fixedLatex;
-    } catch (error) {
-      logger.warn({ error: error.message }, 'Gemini fix failed, falling back to OpenAI');
-      // Fall through to OpenAI
-    }
-  }
-
-  // Fallback to OpenAI
-  logger.info('Using OpenAI gpt-5-mini for LaTeX error fixing');
-  const response = await openai.chat.completions.create({
-    model: 'gpt-5-mini',
-    messages: [
-      {
-        role: 'system',
-        content: `You are a LaTeX debugging expert. Fix the compilation error by escaping special characters.
-
-CRITICAL: LaTeX has special characters that MUST be escaped in regular text:
-  & → \\&  (VERY common mistake in "A & B", "R&D", "marketing & sales")
-  % → \\%  (in percentages like "30%")
-  $ → \\$  (in dollar amounts)
-  # → \\#  (in numbers or tags)
-  _ → \\_  (EXTREMELY common in emails, URLs, technical terms)
-  { → \\{
-  } → \\}
-  ~ → \\textasciitilde{} or \\,\\,
-  ^ → \\textasciicircum{}
-  + → Use + directly, NEVER \\+ (correct: "200+ clients", wrong: "200\\+ clients")
-
-ERROR TYPES AND FIXES:
-1. "Misplaced alignment tab character &" → Find the raw & and change to \\&
-   Example: "marketing & sales" should be "marketing \\& sales"
-
-2. "Missing $ inserted" → Usually means unescaped _ or other special char
-   Example: "john_smith" should be "john\\_smith"
-
-3. "Undefined control sequence" with \\+ → Remove the backslash before +
-   Example: "200\\+ clients" should be "200+ clients"
-
-4. "Something's wrong--perhaps a missing \\item" → Empty itemize/enumerate environment
-   MUST have at least one \\resumeItem{} between \\resumeItemListStart and \\resumeItemListEnd
-   Example fix:
-   \\resumeItemListStart
-     \\resumeItem{Add content here}  ← MUST HAVE THIS
-   \\resumeItemListEnd
-
-5. "\\begin{itemize} on input line X ended by \\end{document}" → Unclosed itemize block
-   Find ALL \\resumeItemListStart and ensure EACH has a matching \\resumeItemListEnd
-   Count opening and closing: must be equal
-   Example: If you see \\resumeItemListStart without \\resumeItemListEnd, add it before \\end{document}
-
-YOUR TASK:
-1. If "ended by \\end{document}" error: Find unclosed \\resumeItemListStart or \\resumeSubHeadingListStart
-   - Add the missing \\resumeItemListEnd or \\resumeSubHeadingListEnd before \\end{document}
-   - Verify ALL opened blocks are properly closed
-2. If "missing \\item" error: Find empty \\resumeItemListStart...\\resumeItemListEnd blocks and either:
-   - Add a \\resumeItem{} with content OR
-   - Remove the entire empty itemize block
-2. If error mentions \\+: Find and remove backslash before + signs (e.g., "\\+" → "+")
-3. Scan the ENTIRE document for unescaped &, %, $, #, _, {, }, ~, ^
-4. Replace EVERY occurrence with the escaped version
-5. Pay special attention to bullet points and descriptions (most common location)
-6. Keep all other content exactly the same
-7. Return ONLY the corrected LaTeX code (no markdown fences, no explanations)`
-      },
-      {
-        role: 'user',
-        content: `This LaTeX code failed to compile with this error:
-
-ERROR:
-${errorMessage}
-
-LATEX CODE:
-${brokenLatex}
-
-SPECIFIC INSTRUCTIONS:
-- Look for line ${errorMessage.match(/line (\d+)/)?.[1] || errorMessage.match(/resume\.tex:(\d+)/)?.[1] || '?'} mentioned in the error
-- If "Missing $" error: Find and escape ALL special characters (_ & % $ #) in that area
-- Common issue: underscore in text like "skill_name" should be "skill\\_name"
-
-Fix the error and return the corrected LaTeX code.`
-      }
-    ]
-  });
-
-  // Log cache usage for monitoring
-  if (response.usage) {
-    const cached_tokens = response.usage.prompt_tokens_details?.cached_tokens || 0;
-    aiLogger.response('gpt-5-mini', {
-      prompt_tokens: response.usage.prompt_tokens,
-      completion_tokens: response.usage.completion_tokens,
-      total_tokens: response.usage.total_tokens,
-      cached_tokens
-    });
-  }
-
-  let fixedLatex = response.choices[0].message.content.trim();
-  fixedLatex = fixedLatex.replace(/^```latex?\n?/gm, '').replace(/\n?```$/gm, '').replace(/^```.*$/gm, '');
-
-  return fixedLatex;
-}
+// NOTE: generateLatexWithLLM and fixLatexWithLLM removed - LaTeX system deprecated
+// Resume generation now uses HTML/CSS via AIResumeGenerator and GeminiResumeGenerator
 
 /**
  * OLD Async job processing function (keeping for backward compatibility)

@@ -6,48 +6,110 @@
  * - Automatic retries with exponential backoff
  * - Job timeout protection (2 minutes)
  * - Automatic cleanup of completed jobs
+ *
+ * Uses lazy initialization to ensure env vars are loaded first
  */
 
 import { Queue } from 'bullmq';
 import { createRedisConnection } from './redis-connection.js';
 import logger from './logger.js';
 
-// Create Redis connection for queue
-const connection = createRedisConnection();
+// Lazy initialization - queue created on first access
+let _resumeQueue = null;
+let _connection = null;
 
-// Create resume generation queue
-export const resumeQueue = new Queue('resume-generation', {
-  connection,
-  defaultJobOptions: {
-    // Retry failed jobs up to 3 times
-    attempts: 3,
+/**
+ * Get the resume queue (creates it lazily on first access)
+ * This ensures env vars are loaded before Redis connection is created
+ */
+function getResumeQueue() {
+  if (!_resumeQueue) {
+    _connection = createRedisConnection();
 
-    // Exponential backoff: 10s, 30s, 90s
-    backoff: {
-      type: 'exponential',
-      delay: 10000 // 10 seconds initial delay
-    },
+    if (!_connection) {
+      logger.warn('Redis not available - queue operations will fail');
+      return null;
+    }
 
-    // Job timeout: 2 minutes
-    timeout: 120000,
+    _resumeQueue = new Queue('resume-generation', {
+      connection: _connection,
+      defaultJobOptions: {
+        // Retry failed jobs up to 3 times
+        attempts: 3,
 
-    // Remove completed jobs after 100 to prevent memory bloat
-    removeOnComplete: {
-      count: 100,
-      age: 3600 // 1 hour
-    },
+        // Exponential backoff: 10s, 30s, 90s
+        backoff: {
+          type: 'exponential',
+          delay: 10000 // 10 seconds initial delay
+        },
 
-    // Keep failed jobs for debugging
-    removeOnFail: false
+        // Job timeout: 2 minutes
+        timeout: 120000,
+
+        // Remove completed jobs after 100 to prevent memory bloat
+        removeOnComplete: {
+          count: 100,
+          age: 3600 // 1 hour
+        },
+
+        // Keep failed jobs for debugging
+        removeOnFail: false
+      }
+    });
+
+    // Queue event handlers for monitoring
+    _resumeQueue.on('error', (error) => {
+      logger.error({ error: error.message }, 'Resume queue error');
+    });
+
+    logger.info('Resume generation queue initialized');
   }
-});
+  return _resumeQueue;
+}
 
-// Queue event handlers for monitoring
-resumeQueue.on('error', (error) => {
-  logger.error({ error: error.message }, 'Resume queue error');
-});
-
-logger.info('Resume generation queue initialized');
+// Export getter for the queue (for backward compatibility)
+export const resumeQueue = {
+  add: async (...args) => {
+    const queue = getResumeQueue();
+    if (!queue) throw new Error('Redis queue not available');
+    return queue.add(...args);
+  },
+  getJob: async (...args) => {
+    const queue = getResumeQueue();
+    if (!queue) throw new Error('Redis queue not available');
+    return queue.getJob(...args);
+  },
+  getWaiting: async () => {
+    const queue = getResumeQueue();
+    if (!queue) return [];
+    return queue.getWaiting();
+  },
+  getActive: async () => {
+    const queue = getResumeQueue();
+    if (!queue) return [];
+    return queue.getActive();
+  },
+  getCompleted: async () => {
+    const queue = getResumeQueue();
+    if (!queue) return [];
+    return queue.getCompleted();
+  },
+  getFailed: async () => {
+    const queue = getResumeQueue();
+    if (!queue) return [];
+    return queue.getFailed();
+  },
+  close: async () => {
+    if (_resumeQueue) {
+      await _resumeQueue.close();
+      _resumeQueue = null;
+    }
+  },
+  on: (...args) => {
+    const queue = getResumeQueue();
+    if (queue) queue.on(...args);
+  }
+};
 
 /**
  * Add a resume generation job to the queue
@@ -147,7 +209,10 @@ export async function getQueueMetrics() {
 export async function closeQueue() {
   logger.info('Closing resume queue...');
   await resumeQueue.close();
-  await connection.quit();
+  if (_connection) {
+    await _connection.quit();
+    _connection = null;
+  }
   logger.info('Resume queue closed');
 }
 

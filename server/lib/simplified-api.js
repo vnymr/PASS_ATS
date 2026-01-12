@@ -1,5 +1,6 @@
 /**
  * Simplified API endpoints using the AI Resume Generator
+ * HTML-based PDF generation - NO LATEX
  */
 
 import logger from './logger.js';
@@ -10,7 +11,7 @@ import AIResumeGenerator from './ai-resume-generator.js';
  */
 async function generateResumeEndpoint(req, res) {
   try {
-    const { jobDescription, userData, outputFormat = 'pdf' } = req.body;
+    const { jobDescription, userData, outputFormat = 'pdf', templateId } = req.body;
 
     if (!jobDescription) {
       return res.status(400).json({ error: 'Job description is required' });
@@ -40,22 +41,23 @@ async function generateResumeEndpoint(req, res) {
 
     // Generate resume
     const options = {
-      model: process.env.AI_MODEL || 'gemini-2.5-flash'
+      templateId: templateId || 'modern_dense',
+      enableSearch: true
     };
 
-    if (outputFormat === 'latex') {
-      const { latex, metadata } = await generator.generateResume(resumeData, jobDescription, options);
-      res.json({ success: true, latex, metadata });
+    if (outputFormat === 'html') {
+      const { html, metadata } = await generator.generateResume(resumeData, jobDescription, options);
+      res.json({ success: true, html, metadata });
     } else if (outputFormat === 'pdf') {
-      const { latex, pdf } = await generator.generateAndCompile(resumeData, jobDescription, options);
+      const { html, pdf } = await generator.generateAndCompile(resumeData, jobDescription, options);
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', 'attachment; filename="resume.pdf"');
       res.send(pdf);
     } else {
-      const { latex, pdf } = await generator.generateAndCompile(resumeData, jobDescription, options);
+      const { html, pdf } = await generator.generateAndCompile(resumeData, jobDescription, options);
       res.json({
         success: true,
-        latex,
+        html,
         pdf: pdf.toString('base64'),
         metadata: { generatedAt: new Date().toISOString() }
       });
@@ -67,19 +69,16 @@ async function generateResumeEndpoint(req, res) {
 }
 
 /**
- * Check available LaTeX compilers
+ * Check system status (replaces compiler check)
  */
 async function checkCompilersEndpoint(req, res) {
   try {
-    const { getAvailableCompilers } = await import('./latex-compiler.js');
-    const compilers = await getAvailableCompilers();
-
+    // Since we use Playwright for PDF generation, no external compiler needed
     res.json({
       success: true,
-      compilers,
-      recommended: compilers.includes('tectonic') ? 'tectonic' :
-                   compilers.includes('pdflatex') ? 'pdflatex' :
-                   compilers[0] || 'none'
+      compilers: ['playwright'],
+      recommended: 'playwright',
+      message: 'Using HTML/CSS to PDF generation (no LaTeX required)'
     });
   } catch (error) {
     res.status(500).json({

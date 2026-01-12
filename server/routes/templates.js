@@ -1,12 +1,13 @@
 /**
  * Resume Template Management API
  * Endpoints for managing user resume templates
+ * HTML-based - NO LATEX
  */
 
 import express from 'express';
 import { prisma } from '../lib/prisma-client.js';
-import { TEMPLATES, getAllTemplates } from '../lib/resume-templates.js';
-import { compileLatex, validateLatex } from '../lib/latex-compiler.js';
+import { TEMPLATES, getAllTemplates, generateHTML } from '../lib/html-templates.js';
+import { generatePDFWithRetry, generatePreviewImage } from '../lib/html-pdf-generator.js';
 import logger from '../lib/logger.js';
 
 const router = express.Router();
@@ -15,74 +16,63 @@ const router = express.Router();
  * Sample data for template preview
  */
 const SAMPLE_DATA = {
-  header: `\\begin{center}
-    \\textbf{\\Huge John Smith} \\\\[3pt]
-    \\small San Francisco, CA $|$ john.smith@email.com $|$ (555) 123-4567 $|$ linkedin.com/in/johnsmith
-\\end{center}`,
-  summary: `Results-driven software engineer with 5+ years of experience building scalable web applications. Expert in React, Node.js, and cloud infrastructure. Passionate about clean code and user experience.`,
-  experience: `\\resumeSubheading
-  {Senior Software Engineer}{Jan 2022 -- Present}
-  {Tech Company Inc.}{San Francisco, CA}
-  \\resumeItemListStart
-    \\resumeItem{Led development of microservices architecture serving 1M+ daily active users}
-    \\resumeItem{Reduced API response times by 40\\% through optimization and caching strategies}
-    \\resumeItem{Mentored 3 junior engineers and conducted 50+ technical interviews}
-  \\resumeItemListEnd
-
-\\resumeSubheading
-  {Software Engineer}{Jun 2019 -- Dec 2021}
-  {Startup Co.}{New York, NY}
-  \\resumeItemListStart
-    \\resumeItem{Built real-time collaboration features using WebSocket and Redis}
-    \\resumeItem{Implemented CI/CD pipeline reducing deployment time by 60\\%}
-  \\resumeItemListEnd`,
-  projects: `\\resumeProjectHeading
-  {\\textbf{Open Source Project} $|$ \\emph{TypeScript, React, GraphQL}}{2023}
-  \\resumeItemListStart
-    \\resumeItem{Created developer tool with 500+ GitHub stars}
-    \\resumeItem{Published on npm with 10K+ weekly downloads}
-  \\resumeItemListEnd`,
-  skills: `\\begin{itemize}[leftmargin=0.15in, label={}]
-  \\small{\\item{
-   \\textbf{Languages}{: JavaScript, TypeScript, Python, Go, SQL} \\\\
-   \\textbf{Frameworks}{: React, Node.js, Next.js, Express, FastAPI} \\\\
-   \\textbf{Tools}{: Git, Docker, Kubernetes, AWS, PostgreSQL, Redis}
-  }}
-\\end{itemize}`,
-  education: `\\resumeSubheading
-  {University of California, Berkeley}{2015 -- 2019}
-  {Bachelor of Science in Computer Science}{Berkeley, CA}`
+  name: 'John Smith',
+  email: 'john.smith@email.com',
+  phone: '(555) 123-4567',
+  location: 'San Francisco, CA',
+  linkedin: 'https://linkedin.com/in/johnsmith',
+  github: 'https://github.com/johnsmith',
+  summary: 'Results-driven software engineer with 5+ years of experience building scalable web applications. Expert in React, Node.js, and cloud infrastructure. Passionate about clean code and user experience.',
+  experience: [
+    {
+      title: 'Senior Software Engineer',
+      company: 'Tech Company Inc.',
+      location: 'San Francisco, CA',
+      startDate: 'Jan 2022',
+      endDate: 'Present',
+      highlights: [
+        'Led development of microservices architecture serving 1M+ daily active users',
+        'Reduced API response times by 40% through optimization and caching strategies',
+        'Mentored 3 junior engineers and conducted 50+ technical interviews'
+      ]
+    },
+    {
+      title: 'Software Engineer',
+      company: 'Startup Co.',
+      location: 'New York, NY',
+      startDate: 'Jun 2019',
+      endDate: 'Dec 2021',
+      highlights: [
+        'Built real-time collaboration features using WebSocket and Redis',
+        'Implemented CI/CD pipeline reducing deployment time by 60%'
+      ]
+    }
+  ],
+  education: [
+    {
+      institution: 'University of California, Berkeley',
+      degree: 'Bachelor of Science',
+      field: 'Computer Science',
+      location: 'Berkeley, CA',
+      endDate: '2019'
+    }
+  ],
+  skills: [
+    { category: 'Languages', items: ['JavaScript', 'TypeScript', 'Python', 'Go', 'SQL'] },
+    { category: 'Frameworks', items: ['React', 'Node.js', 'Next.js', 'Express', 'FastAPI'] },
+    { category: 'Tools', items: ['Git', 'Docker', 'Kubernetes', 'AWS', 'PostgreSQL', 'Redis'] }
+  ],
+  projects: [
+    {
+      name: 'Open Source Project',
+      technologies: ['TypeScript', 'React', 'GraphQL'],
+      highlights: [
+        'Created developer tool with 500+ GitHub stars',
+        'Published on npm with 10K+ weekly downloads'
+      ]
+    }
+  ]
 };
-
-/**
- * Fill template placeholders with sample data for preview
- */
-function fillTemplateForPreview(latex) {
-  let filled = latex;
-
-  // Replace main placeholders
-  filled = filled.replace(/\{\{HEADER\}\}/g, SAMPLE_DATA.header);
-  filled = filled.replace(/\{\{EXPERIENCE\}\}/g, SAMPLE_DATA.experience);
-  filled = filled.replace(/\{\{SKILLS\}\}/g, SAMPLE_DATA.skills);
-  filled = filled.replace(/\{\{EDUCATION\}\}/g, SAMPLE_DATA.education);
-
-  // Handle conditional sections - include them with sample data
-  filled = filled.replace(/\{\{#SUMMARY\}\}([\s\S]*?)\{\{\/SUMMARY\}\}/g, (match, content) => {
-    return content.replace(/\{\{SUMMARY\}\}/g, SAMPLE_DATA.summary);
-  });
-
-  filled = filled.replace(/\{\{#PROJECTS\}\}([\s\S]*?)\{\{\/PROJECTS\}\}/g, (match, content) => {
-    return content.replace(/\{\{PROJECTS\}\}/g, SAMPLE_DATA.projects);
-  });
-
-  // Remove any remaining conditional blocks that weren't matched
-  filled = filled.replace(/\{\{#\w+\}\}[\s\S]*?\{\{\/\w+\}\}/g, '');
-
-  // Remove any remaining unfilled placeholders
-  filled = filled.replace(/\{\{\w+\}\}/g, '');
-
-  return filled;
-}
 
 /**
  * GET /api/templates
@@ -97,28 +87,31 @@ router.get('/templates', async (req, res) => {
     }
 
     // Get user's custom templates
-    const userTemplates = await prisma.resumeTemplate.findMany({
-      where: { userId },
-      orderBy: { updatedAt: 'desc' },
-      select: {
-        id: true,
-        name: true,
-        isDefault: true,
-        createdAt: true,
-        updatedAt: true
-      }
-    });
+    let userTemplates = [];
+    try {
+      userTemplates = await prisma.resumeTemplate.findMany({
+        where: { userId },
+        orderBy: { updatedAt: 'desc' },
+        select: {
+          id: true,
+          name: true,
+          isDefault: true,
+          createdAt: true,
+          updatedAt: true
+        }
+      });
+    } catch (dbError) {
+      logger.warn({ error: dbError.message }, 'Could not fetch user templates');
+    }
 
-    // Get default templates (from resume-templates.js)
+    // Get default templates
     const defaultTemplates = Object.keys(TEMPLATES).map(key => ({
       id: `default_${key}`,
       name: TEMPLATES[key].name,
       isDefault: false,
       isSystemDefault: true,
-      fillPercentage: TEMPLATES[key].fillPercentage,
-      bestFor: TEMPLATES[key].bestFor,
-      characteristics: TEMPLATES[key].characteristics,
-      usage: TEMPLATES[key].usage
+      description: TEMPLATES[key].description,
+      bestFor: TEMPLATES[key].bestFor
     }));
 
     res.json({
@@ -163,17 +156,19 @@ router.get('/templates/:id', async (req, res) => {
         });
       }
 
+      // Generate full HTML with sample data for preview
+      const previewHtml = generateHTML(SAMPLE_DATA, templateKey);
+
       return res.json({
         success: true,
         template: {
           id,
           name: template.name,
-          latex: template.latexTemplate,
+          css: template.css,
+          latex: previewHtml, // Full HTML for preview (using 'latex' field for backward compatibility)
           isSystemDefault: true,
-          fillPercentage: template.fillPercentage,
-          bestFor: template.bestFor,
-          characteristics: template.characteristics,
-          usage: template.usage
+          description: template.description,
+          bestFor: template.bestFor
         }
       });
     }
@@ -207,7 +202,7 @@ router.get('/templates/:id', async (req, res) => {
 /**
  * POST /api/templates
  * Save new template
- * Body: { name: string, latex: string, isDefault?: boolean }
+ * Body: { name: string, css?: string, isDefault?: boolean }
  */
 router.post('/templates', async (req, res) => {
   try {
@@ -217,21 +212,12 @@ router.post('/templates', async (req, res) => {
       return res.status(401).json({ error: 'User ID not found' });
     }
 
-    const { name, latex, isDefault } = req.body;
+    const { name, css, html, isDefault } = req.body;
 
-    if (!name || !latex) {
+    if (!name) {
       return res.status(400).json({
         success: false,
-        error: 'Name and latex are required'
-      });
-    }
-
-    // Validate LaTeX structure
-    const validation = await validateLatex(latex);
-    if (!validation.isValid) {
-      return res.status(400).json({
-        success: false,
-        error: `Invalid LaTeX: ${validation.error}`
+        error: 'Name is required'
       });
     }
 
@@ -247,7 +233,8 @@ router.post('/templates', async (req, res) => {
       data: {
         userId,
         name,
-        latex,
+        // Store HTML/CSS in the 'latex' field for backward compatibility
+        latex: css || html || '',
         isDefault: isDefault || false
       }
     });
@@ -271,7 +258,6 @@ router.post('/templates', async (req, res) => {
 /**
  * PUT /api/templates/:id
  * Update template
- * Body: { name?: string, latex?: string, isDefault?: boolean }
  */
 router.put('/templates/:id', async (req, res) => {
   try {
@@ -302,26 +288,14 @@ router.put('/templates/:id', async (req, res) => {
       });
     }
 
-    const { name, latex, isDefault } = req.body;
+    const { name, css, html, isDefault } = req.body;
     const updateData = {};
 
     if (name) updateData.name = name;
-
-    if (latex) {
-      // Validate LaTeX structure
-      const validation = await validateLatex(latex);
-      if (!validation.isValid) {
-        return res.status(400).json({
-          success: false,
-          error: `Invalid LaTeX: ${validation.error}`
-        });
-      }
-      updateData.latex = latex;
-    }
+    if (css || html) updateData.latex = css || html;
 
     if (typeof isDefault === 'boolean') {
       if (isDefault) {
-        // Unset other defaults
         await prisma.resumeTemplate.updateMany({
           where: { userId, isDefault: true, id: { not: id } },
           data: { isDefault: false }
@@ -353,7 +327,6 @@ router.put('/templates/:id', async (req, res) => {
 
 /**
  * DELETE /api/templates/:id
- * Delete template
  */
 router.delete('/templates/:id', async (req, res) => {
   try {
@@ -364,7 +337,6 @@ router.delete('/templates/:id', async (req, res) => {
       return res.status(401).json({ error: 'User ID not found' });
     }
 
-    // Cannot delete default templates
     if (id.startsWith('default_')) {
       return res.status(400).json({
         success: false,
@@ -372,7 +344,6 @@ router.delete('/templates/:id', async (req, res) => {
       });
     }
 
-    // Verify ownership
     const existing = await prisma.resumeTemplate.findFirst({
       where: { id, userId }
     });
@@ -406,8 +377,8 @@ router.delete('/templates/:id', async (req, res) => {
 
 /**
  * POST /api/templates/preview
- * Generate preview PDF from LaTeX
- * Body: { latex: string }
+ * Generate preview PDF from template
+ * Body: { templateId: string } or { html: string }
  */
 router.post('/templates/preview', async (req, res) => {
   try {
@@ -417,32 +388,25 @@ router.post('/templates/preview', async (req, res) => {
       return res.status(401).json({ error: 'User ID not found' });
     }
 
-    const { latex } = req.body;
+    const { templateId, html: customHtml } = req.body;
 
-    if (!latex) {
-      return res.status(400).json({
-        success: false,
-        error: 'LaTeX content is required'
-      });
+    let html;
+
+    if (customHtml) {
+      html = customHtml;
+    } else if (templateId) {
+      // Generate HTML using sample data
+      const id = templateId.replace('default_', '');
+      html = generateHTML(SAMPLE_DATA, id);
+    } else {
+      // Use default template
+      html = generateHTML(SAMPLE_DATA, 'modern_dense');
     }
 
-    // Fill template placeholders with sample data for preview
-    const filledLatex = fillTemplateForPreview(latex);
+    // Generate PDF
+    const pdfBuffer = await generatePDFWithRetry(html);
 
-    // Validate the filled template
-    try {
-      validateLatex(filledLatex);
-    } catch (validationError) {
-      return res.status(400).json({
-        success: false,
-        error: `Invalid LaTeX: ${validationError.message}`
-      });
-    }
-
-    // Compile to PDF
-    const pdfBuffer = await compileLatex(filledLatex);
-
-    // Return as base64 for easy frontend consumption
+    // Return as base64
     const pdfBase64 = pdfBuffer.toString('base64');
 
     res.json({
@@ -455,7 +419,46 @@ router.post('/templates/preview', async (req, res) => {
     logger.error({ error: error.message }, 'Failed to generate template preview');
     res.status(500).json({
       success: false,
-      error: 'Failed to compile PDF: ' + error.message
+      error: 'Failed to generate preview: ' + error.message
+    });
+  }
+});
+
+/**
+ * POST /api/templates/preview-image
+ * Generate preview image (PNG) from template
+ */
+router.post('/templates/preview-image', async (req, res) => {
+  try {
+    const userId = req.userId;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'User ID not found' });
+    }
+
+    const { templateId } = req.body;
+    const id = (templateId || 'modern_dense').replace('default_', '');
+
+    // Generate HTML using sample data
+    const html = generateHTML(SAMPLE_DATA, id);
+
+    // Generate preview image
+    const imageBuffer = await generatePreviewImage(html);
+
+    // Return as base64
+    const imageBase64 = imageBuffer.toString('base64');
+
+    res.json({
+      success: true,
+      image: imageBase64,
+      mimeType: 'image/png'
+    });
+
+  } catch (error) {
+    logger.error({ error: error.message }, 'Failed to generate preview image');
+    res.status(500).json({
+      success: false,
+      error: 'Failed to generate preview image: ' + error.message
     });
   }
 });
@@ -463,7 +466,6 @@ router.post('/templates/preview', async (req, res) => {
 /**
  * POST /api/templates/copy
  * Copy a default template to user's templates
- * Body: { sourceId: string, name: string }
  */
 router.post('/templates/copy', async (req, res) => {
   try {
@@ -482,9 +484,8 @@ router.post('/templates/copy', async (req, res) => {
       });
     }
 
-    let latex;
+    let css = '';
 
-    // Check if source is a default template
     if (sourceId.startsWith('default_')) {
       const templateKey = sourceId.replace('default_', '');
       const template = TEMPLATES[templateKey];
@@ -496,34 +497,33 @@ router.post('/templates/copy', async (req, res) => {
         });
       }
 
-      latex = template.latexTemplate;
+      css = template.css;
     } else {
-      // Copy from existing user template
-      const source = await prisma.resumeTemplate.findFirst({
+      // Copy from user's template
+      const sourceTemplate = await prisma.resumeTemplate.findFirst({
         where: { id: sourceId, userId }
       });
 
-      if (!source) {
+      if (!sourceTemplate) {
         return res.status(404).json({
           success: false,
           error: 'Source template not found'
         });
       }
 
-      latex = source.latex;
+      css = sourceTemplate.latex; // 'latex' field stores CSS now
     }
 
-    // Create the copy
     const template = await prisma.resumeTemplate.create({
       data: {
         userId,
         name,
-        latex,
+        latex: css,
         isDefault: false
       }
     });
 
-    logger.info({ userId, templateId: template.id, sourceId, name }, 'Template copied');
+    logger.info({ userId, templateId: template.id, sourceId }, 'Template copied');
 
     res.json({
       success: true,
@@ -531,7 +531,7 @@ router.post('/templates/copy', async (req, res) => {
     });
 
   } catch (error) {
-    logger.error({ error: error.message, userId: req.userId }, 'Failed to copy template');
+    logger.error({ error: error.message }, 'Failed to copy template');
     res.status(500).json({
       success: false,
       error: 'Failed to copy template'
@@ -540,127 +540,8 @@ router.post('/templates/copy', async (req, res) => {
 });
 
 /**
- * POST /api/templates/chat
- * AI modifies template based on user message
- * Body: { templateId: string, message: string, currentLatex?: string }
- *
- * Note: The actual AI logic will be implemented in template-chat.js
- * For now, this is a placeholder that will be connected to the AI service
- */
-router.post('/templates/chat', async (req, res) => {
-  try {
-    const userId = req.userId;
-
-    if (!userId) {
-      return res.status(401).json({ error: 'User ID not found' });
-    }
-
-    const { templateId, message, currentLatex } = req.body;
-
-    if (!message) {
-      return res.status(400).json({
-        success: false,
-        error: 'Message is required'
-      });
-    }
-
-    // Get the current latex if not provided
-    let latex = currentLatex;
-
-    if (!latex && templateId) {
-      if (templateId.startsWith('default_')) {
-        const templateKey = templateId.replace('default_', '');
-        const template = TEMPLATES[templateKey];
-        if (template) {
-          latex = template.latexTemplate;
-        }
-      } else {
-        const template = await prisma.resumeTemplate.findFirst({
-          where: { id: templateId, userId }
-        });
-        if (template) {
-          latex = template.latex;
-        }
-      }
-    }
-
-    if (!latex) {
-      return res.status(400).json({
-        success: false,
-        error: 'Template not found or currentLatex not provided'
-      });
-    }
-
-    // Import and use template chat AI
-    // This will be implemented in the next phase
-    const { modifyTemplateWithAI } = await import('../lib/template-chat.js');
-
-    const result = await modifyTemplateWithAI({
-      currentLatex: latex,
-      userMessage: message,
-      userId
-    });
-
-    res.json({
-      success: true,
-      latex: result.latex,
-      explanation: result.explanation,
-      changes: result.changes
-    });
-
-  } catch (error) {
-    logger.error({ error: error.message }, 'Failed to process template chat');
-    res.status(500).json({
-      success: false,
-      error: 'Failed to modify template: ' + error.message
-    });
-  }
-});
-
-/**
- * Preview cache for default templates
- * Stores pre-compiled PDF base64 data
- */
-const previewCache = new Map();
-
-/**
- * POST /api/templates/warm-cache
- * Pre-generate previews for all default templates (call on server startup)
- */
-router.post('/templates/warm-cache', async (req, res) => {
-  try {
-    const results = [];
-
-    for (const [key, template] of Object.entries(TEMPLATES)) {
-      const id = `default_${key}`;
-
-      if (previewCache.has(id)) {
-        results.push({ id, status: 'already cached' });
-        continue;
-      }
-
-      try {
-        const filledLatex = fillTemplateForPreview(template.latexTemplate);
-        const pdfBuffer = await compileLatex(filledLatex);
-        const pdfBase64 = pdfBuffer.toString('base64');
-        previewCache.set(id, pdfBase64);
-        results.push({ id, status: 'cached' });
-        logger.info(`Warmed cache for ${id}`);
-      } catch (err) {
-        results.push({ id, status: 'failed', error: err.message });
-        logger.error({ error: err.message, templateId: id }, 'Failed to warm cache');
-      }
-    }
-
-    res.json({ success: true, results });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-/**
  * GET /api/templates/default
- * Get user's default template (or first available)
+ * Get user's default template or recommend one
  */
 router.get('/templates/default', async (req, res) => {
   try {
@@ -670,43 +551,57 @@ router.get('/templates/default', async (req, res) => {
       return res.status(401).json({ error: 'User ID not found' });
     }
 
-    // First try to get user's marked default
-    let template = await prisma.resumeTemplate.findFirst({
+    // Check for user's default template
+    const userDefault = await prisma.resumeTemplate.findFirst({
       where: { userId, isDefault: true }
     });
 
-    // If no default set, get the most recently updated template
-    if (!template) {
-      template = await prisma.resumeTemplate.findFirst({
-        where: { userId },
-        orderBy: { updatedAt: 'desc' }
+    if (userDefault) {
+      return res.json({
+        success: true,
+        template: userDefault,
+        source: 'user'
       });
     }
 
-    // If no user templates, return the modern_dense default
-    if (!template) {
-      const defaultTemplate = TEMPLATES.modern_dense;
-      return res.json({
-        success: true,
-        template: {
-          id: 'default_modern_dense',
-          name: defaultTemplate.name,
-          latex: defaultTemplate.latexTemplate,
-          isSystemDefault: true
-        }
-      });
-    }
+    // Return system default
+    const defaultTemplate = TEMPLATES.modern_dense;
 
     res.json({
       success: true,
-      template
+      template: {
+        id: 'default_modern_dense',
+        name: defaultTemplate.name,
+        css: defaultTemplate.css,
+        isSystemDefault: true
+      },
+      source: 'system'
     });
 
   } catch (error) {
-    logger.error({ error: error.message, userId: req.userId }, 'Failed to get default template');
+    logger.error({ error: error.message }, 'Failed to get default template');
     res.status(500).json({
       success: false,
-      error: 'Failed to retrieve default template'
+      error: 'Failed to get default template'
+    });
+  }
+});
+
+/**
+ * GET /api/templates/list
+ * Simple list of all available templates
+ */
+router.get('/templates/list', async (req, res) => {
+  try {
+    const templates = getAllTemplates();
+    res.json({
+      success: true,
+      templates
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: 'Failed to list templates'
     });
   }
 });

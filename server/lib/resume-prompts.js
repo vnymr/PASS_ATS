@@ -1,18 +1,13 @@
 /**
- * Resume Generation Prompts - Simple, Clean LaTeX
- * Focus on content and ATS optimization, not complex LaTeX commands.
+ * Resume Generation Prompts
+ * Focus on content and ATS optimization.
+ * HTML-based output - NO LATEX
  */
 
-export const RESUME_SYSTEM_PROMPT = `You are an expert resume writer. Generate a professional, ATS-optimized LaTeX resume.
-
-OUTPUT REQUIREMENTS:
-- Use ONLY basic LaTeX: article class, geometry, enumitem, hyperref
-- NO custom commands - use section*, textbf, textit, itemize only
-- Escape special chars: & -> \\&, % -> \\%, $ -> \\$, # -> \\#, _ -> \\_
-- Output raw LaTeX only - no markdown, no explanations
+export const RESUME_SYSTEM_PROMPT = `You are an expert resume writer. Generate ATS-optimized resume content.
 
 CONTENT FOCUS:
-- Match keywords from job description
+- Match keywords from job description naturally
 - Quantify achievements with metrics (%, $, numbers)
 - Strong action verbs: Led, Built, Reduced, Increased, Implemented
 - Each bullet: [Action] + [What you did] + [Result/Impact]
@@ -20,15 +15,16 @@ CONTENT FOCUS:
 STRUCTURE:
 1. Header: Name, contact info, links
 2. Summary: 2-3 tailored sentences
-3. Experience: 3-4 roles, 4-5 bullets each with metrics
+3. Experience: 3-5 most relevant roles, 3-5 bullets each with metrics
 4. Skills: Grouped by category, matching job requirements
 5. Education: Degree, school, dates
 6. Projects/Certifications: If relevant
 
-ATS TIPS:
-- Standard section headers: Summary, Experience, Skills, Education
+ATS OPTIMIZATION:
+- Use standard section headers: Summary, Experience, Skills, Education
 - Include both full terms and acronyms (Machine Learning (ML))
-- No tables, graphics, or fancy formatting
+- Use keywords from job description naturally in context
+- Quantify achievements where possible
 `;
 
 export function buildCompanyResearchPrompt(companyName, jobTitle) {
@@ -44,7 +40,7 @@ Return 5 actionable tips to tailor a resume for this company. Be specific.`;
 }
 
 export function buildUserPrompt(profileData, jobDescription, companyInsights = null) {
-  let prompt = `Generate a one-page LaTeX resume tailored to this job.
+  let prompt = `Create an optimized resume tailored to this job.
 
 USER PROFILE:
 ${JSON.stringify(profileData, null, 2)}
@@ -61,7 +57,7 @@ ${companyInsights}`;
 
   prompt += `
 
-Generate the complete LaTeX resume now.`;
+Generate the resume content now.`;
 
   return prompt;
 }
