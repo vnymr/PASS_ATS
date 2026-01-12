@@ -65,8 +65,8 @@ export default function ModernLayout({ children }: ModernLayoutProps) {
         </motion.div>
 
         {/* Main Content */}
-        <main className="w-full flex-1 min-h-0 pb-24 lg:pb-0 overflow-hidden">
-          <div className="h-full max-w-[1200px] mx-auto">
+        <main className="w-full flex-1 min-h-0 pb-24 lg:pb-0 overflow-y-auto">
+          <div className="max-w-[1200px] mx-auto h-full">
             {children}
           </div>
         </main>
