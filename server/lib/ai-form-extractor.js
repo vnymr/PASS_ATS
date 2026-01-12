@@ -276,6 +276,17 @@ class AIFormExtractor {
   async extractFormFields(page) {
     logger.info('🔍 Extracting form fields from page...');
 
+    // Wait for form elements to be rendered (React/Vue apps lazy-load forms)
+    try {
+      await page.waitForSelector('input, textarea, select, [role="combobox"], [role="listbox"]', {
+        timeout: 10000,
+        state: 'attached'
+      });
+      logger.info('✅ Form elements detected on page');
+    } catch (e) {
+      logger.warn('⚠️ No form elements found after waiting - page may not have a form');
+    }
+
     const extraction = await page.evaluate(() => {
       const fields = [];
       const context = {
