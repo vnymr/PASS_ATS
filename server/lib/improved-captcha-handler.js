@@ -40,7 +40,7 @@ class ImprovedCaptchaHandler {
         return result;
       }
 
-      logger.info(`🔐 CAPTCHA detected: ${captchaInfo.type}`);
+      logger.info(`🔐 CAPTCHA detected: ${captchaInfo.type}, siteKey: ${captchaInfo.siteKey?.substring(0, 30)}...`);
 
       // Step 2: Check if we can solve it
       if (!process.env.TWOCAPTCHA_API_KEY) {

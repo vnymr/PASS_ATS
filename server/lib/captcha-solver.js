@@ -119,7 +119,7 @@ class CaptchaSolver {
       throw new Error('2Captcha API key not configured');
     }
 
-    logger.info({ siteKeyPrefix: siteKey.substring(0, 20) + '...' }, 'Solving hCaptcha');
+    logger.info(`🔐 Solving hCaptcha - siteKey: ${siteKey?.substring(0, 20)}..., pageUrl: ${pageUrl}`);
 
     try {
       const submitResponse = await axios.get(`${this.baseUrl}/in.php`, {
@@ -132,20 +132,24 @@ class CaptchaSolver {
         }
       });
 
+      logger.info(`📡 2Captcha response: ${JSON.stringify(submitResponse.data)}`);
+
       if (submitResponse.data.status !== 1) {
-        throw new Error(`Failed to submit CAPTCHA: ${submitResponse.data.request}`);
+        const errorMsg = `2Captcha rejected: ${submitResponse.data.request}`;
+        logger.error(errorMsg);
+        throw new Error(errorMsg);
       }
 
       const taskId = submitResponse.data.request;
-      logger.info({ taskId }, 'Waiting for CAPTCHA solution');
+      logger.info(`⏳ 2Captcha task submitted: ${taskId} - waiting for solution (15-60 seconds)...`);
 
       const solution = await this.pollForSolution(taskId);
 
-      logger.info('CAPTCHA solved successfully');
+      logger.info('✅ CAPTCHA solved successfully');
       return solution;
 
     } catch (error) {
-      logger.error({ error: error.message }, 'CAPTCHA solving failed');
+      logger.error(`❌ CAPTCHA solving failed: ${error.message}`);
       throw error;
     }
   }
