@@ -54,9 +54,10 @@ RUN apk add --no-cache \
     libxfixes \
     at-spi2-core
 
-# Playwright will use its bundled Chromium (installed during npm install)
-# System chromium is kept as fallback and for other uses
-ENV PLAYWRIGHT_BROWSERS_PATH=/app/server/node_modules/.cache/ms-playwright
+# CRITICAL: Alpine uses musl libc, Playwright's bundled Chromium needs glibc
+# We MUST use the system chromium package instead
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
 # Copy tectonic from builder
 COPY --from=builder /usr/local/bin/tectonic /usr/local/bin/tectonic
@@ -71,11 +72,12 @@ COPY server/package*.json ./server/
 COPY server/prisma ./server/prisma/
 COPY server/scripts ./server/scripts/
 
-# Install dependencies, generate Prisma client, and install Playwright Chromium
+# Install dependencies and generate Prisma client
+# NOTE: We use system chromium (/usr/bin/chromium-browser) instead of Playwright's bundled browser
+# because Alpine uses musl libc while Playwright's Chromium requires glibc
 WORKDIR /app/server
 RUN npm install --production && \
     npx prisma generate && \
-    npx playwright install chromium && \
     npm cache clean --force
 
 # Copy rest of server code
