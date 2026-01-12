@@ -133,14 +133,17 @@ export async function processResumeJob(jobData, onProgress = null) {
       }
     });
 
-    // Save DOCX if available
+    // Save DOCX if available (using LATEX_SOURCE type since schema doesn't have DOCX_OUTPUT)
     if (docx) {
       await prisma.artifact.create({
         data: {
           jobId,
-          type: 'DOCX_OUTPUT',
+          type: 'LATEX_SOURCE',
           content: docx,
-          metadata: { docxSizeKB: (docx.length / 1024).toFixed(2) }
+          metadata: {
+            docxSizeKB: (docx.length / 1024).toFixed(2),
+            format: 'docx'
+          }
         }
       });
     }
