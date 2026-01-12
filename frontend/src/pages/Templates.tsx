@@ -203,33 +203,34 @@ export default function Templates() {
           setUserDefaultId(def.template.id);
         }
 
-        // Pre-load latex for all templates and fill with sample content for preview
+        // Pre-load content for all templates
         const latexCache: Record<string, string> = {};
         const loadErrors: Record<string, string> = {};
-        
-        await Promise.all(
-          allTemplates.map(async (t) => {
-            try {
-              const tRes = await api.getTemplate(t.id, token || undefined);
 
-              if (tRes.success && tRes.template?.latex) {
-                const content = tRes.template.latex;
-                const filledContent = fillTemplateForPreview(content);
+        // Load templates sequentially to avoid rate limiting
+        for (const t of allTemplates) {
+          try {
+            const tRes = await api.getTemplate(t.id, token || undefined);
 
-                if (filledContent && filledContent.trim()) {
-                  latexCache[t.id] = filledContent;
-                } else {
-                  loadErrors[t.id] = 'Template content is empty';
-                }
+            if (tRes.success && tRes.template?.latex) {
+              const content = tRes.template.latex;
+              const filledContent = fillTemplateForPreview(content);
+
+              if (filledContent && filledContent.trim()) {
+                latexCache[t.id] = filledContent;
               } else {
-                loadErrors[t.id] = (tRes as any).error || 'Missing template content';
+                loadErrors[t.id] = 'Empty content';
               }
-            } catch (e: any) {
-              loadErrors[t.id] = e.message || 'Failed to load template';
+            } else {
+              loadErrors[t.id] = (tRes as any).error || 'No content';
             }
-          })
-        );
-        setTemplateLatexCache(latexCache);
+          } catch (e: any) {
+            loadErrors[t.id] = e.message || 'Load failed';
+          }
+          // Update cache progressively so previews appear as they load
+          setTemplateLatexCache({ ...latexCache });
+        }
+
         setTemplateLoadErrors(loadErrors);
       } else {
         console.error('Failed to get templates list:', res);
