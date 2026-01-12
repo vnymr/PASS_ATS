@@ -23,7 +23,6 @@ export default function GenerateResume() {
   const [success, setSuccess] = useState(false);
   const [generatedResume, setGeneratedResume] = useState('');
   const [jobId, setJobId] = useState('');
-  const [tailoringDetails, setTailoringDetails] = useState<string[]>([]);
   const [resumes, setResumes] = useState<ResumeEntry[]>([]);
   const [loadingResumes, setLoadingResumes] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -162,9 +161,6 @@ export default function GenerateResume() {
     try {
       const token = await getToken();
 
-      // Clear tailoring details
-      setTailoringDetails([]);
-
       // Start job processing
       const { jobId } = await api.processJob(jobDescription, 'claude', 'Standard', token || undefined);
       logger.info('Job started', { jobId });
@@ -202,14 +198,6 @@ export default function GenerateResume() {
       setSuccess(true);
       setGeneratedResume('Your tailored resume has been generated successfully!');
 
-      // Add completion details
-      setTailoringDetails([
-        'Job requirements analyzed',
-        'Experience matched and optimized',
-        'ATS keywords integrated',
-        'Resume formatted and ready for download'
-      ]);
-
       // Reload resumes to show the new one
       await loadResumes();
 
@@ -217,7 +205,6 @@ export default function GenerateResume() {
       setTimeout(() => setSuccess(false), 5000);
     } catch (err: any) {
       setError(err.message || 'Failed to generate resume');
-      setTailoringDetails([]);
     } finally {
       setIsGenerating(false);
     }
@@ -349,47 +336,37 @@ export default function GenerateResume() {
               className="rounded-[12px] p-6 border border-[rgba(34,197,94,0.2)]"
               style={{ backgroundColor: 'var(--background-50)' }}
             >
-              <div className="flex items-center gap-2 mb-3">
-                <Icons.checkCircle size={20} style={{ color: 'var(--secondary-500)' }} />
-                <h3
-                  className="font-semibold"
-                  style={{
-                    fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif',
-                    fontSize: '16px',
-                    color: 'var(--text-900)',
-                  }}
+              <div className="flex items-start gap-3 mb-4">
+                <div
+                  className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
+                  style={{ backgroundColor: 'var(--secondary-500)' }}
                 >
-                  Resume Generated Successfully
-                </h3>
-              </div>
-              <p
-                className="mb-4"
-                style={{
-                  fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif',
-                  fontSize: '14px',
-                  color: 'var(--text-600)',
-                  lineHeight: '1.5',
-                }}
-              >
-                {generatedResume}
-              </p>
-
-              {/* What was tailored section */}
-              {tailoringDetails.length > 0 && (
-                <div className="mb-4 p-3 rounded-lg" style={{ backgroundColor: 'var(--background-100)' }}>
-                  <h4 className="text-xs font-semibold mb-2" style={{ color: 'var(--text-700)' }}>
-                    What we optimized:
-                  </h4>
-                  <div className="space-y-1">
-                    {tailoringDetails.map((detail, index) => (
-                      <div key={index} className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-600)' }}>
-                        <Icons.checkCircle size={14} style={{ color: 'var(--secondary-500)' }} />
-                        {detail}
-                      </div>
-                    ))}
-                  </div>
+                  <Icons.checkCircle size={20} style={{ color: 'white' }} />
                 </div>
-              )}
+                <div>
+                  <h3
+                    className="font-medium"
+                    style={{
+                      fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif',
+                      fontSize: '15px',
+                      color: 'var(--text-900)',
+                      marginBottom: '2px',
+                    }}
+                  >
+                    Resume Generated Successfully
+                  </h3>
+                  <p
+                    style={{
+                      fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif',
+                      fontSize: '13px',
+                      color: 'var(--text-600)',
+                      lineHeight: '1.4',
+                    }}
+                  >
+                    Your tailored resume is ready for download.
+                  </p>
+                </div>
+              </div>
 
               {/* Action Buttons */}
               <div className="flex gap-3">
