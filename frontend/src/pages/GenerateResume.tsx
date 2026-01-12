@@ -456,7 +456,7 @@ export default function GenerateResume() {
               Ready to generate your tailored resume. Press Cmd/Ctrl + Enter or click below.
             </p>
             <button
-              onClick={handleGenerate}
+              onClick={() => handleGenerate()}
               disabled={!resumeText || !jobDescription}
               className="mt-4 inline-flex items-center justify-center gap-2 rounded-xl font-semibold h-11 px-6 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               style={{
