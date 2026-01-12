@@ -207,42 +207,28 @@ export default function Templates() {
         const latexCache: Record<string, string> = {};
         const loadErrors: Record<string, string> = {};
         
-        console.log('Loading templates for preview:', allTemplates.map(t => t.id));
-        
         await Promise.all(
           allTemplates.map(async (t) => {
             try {
-              console.log(`Fetching template ${t.id}...`);
               const tRes = await api.getTemplate(t.id, token || undefined);
-              console.log(`Template ${t.id} response:`, { success: tRes.success, hasLatex: !!tRes.template?.latex, latexLength: tRes.template?.latex?.length });
-              
+
               if (tRes.success && tRes.template?.latex) {
-                // Backend already returns filled HTML, so just use it directly
                 const content = tRes.template.latex;
-                // fillTemplateForPreview will return HTML as-is if it's already HTML
                 const filledContent = fillTemplateForPreview(content);
-                
+
                 if (filledContent && filledContent.trim()) {
                   latexCache[t.id] = filledContent;
-                  console.log(`✓ Template ${t.id} loaded successfully (${filledContent.length} chars, isHTML: ${isHtmlContent(filledContent)})`);
                 } else {
-                  loadErrors[t.id] = 'Template content is empty after processing';
-                  console.warn(`Template ${t.id} has empty content after filling`);
+                  loadErrors[t.id] = 'Template content is empty';
                 }
               } else {
-                const errorMsg = tRes.error || 'Missing template content';
-                loadErrors[t.id] = errorMsg;
-                console.warn(`Template ${t.id} missing latex content:`, errorMsg, tRes);
+                loadErrors[t.id] = tRes.error || 'Missing template content';
               }
             } catch (e: any) {
-              const errorMsg = e.message || 'Failed to load template';
-              loadErrors[t.id] = errorMsg;
-              console.error(`Failed to load template ${t.id}:`, e);
+              loadErrors[t.id] = e.message || 'Failed to load template';
             }
           })
         );
-        
-        console.log('Template cache populated:', Object.keys(latexCache), 'Errors:', Object.keys(loadErrors));
         setTemplateLatexCache(latexCache);
         setTemplateLoadErrors(loadErrors);
       } else {
@@ -304,17 +290,6 @@ export default function Templates() {
     const templateContent = templateLatexCache[templateId];
     const error = templateLoadErrors[templateId];
 
-    // Debug: log cache state
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`Rendering preview for ${templateId}:`, {
-        hasContent: !!templateContent,
-        contentLength: templateContent?.length,
-        hasError: !!error,
-        error,
-        cacheKeys: Object.keys(templateLatexCache)
-      });
-    }
-
     // Show error if template failed to load
     if (error) {
       return (
@@ -336,40 +311,25 @@ export default function Templates() {
       );
     }
 
-    // For mini previews, use direct HTML rendering for better scaling compatibility
-    const scale = 0.35;
-    const containerWidth = A4_WIDTH;
-    const containerHeight = A4_HEIGHT;
-    
     if (isHtmlContent(templateContent)) {
-      // For HTML content, use iframe with proper scaling - iframe handles full HTML documents correctly
+      // For HTML content, use iframe with CSS zoom for reliable scaling
       return (
-        <div className="w-full h-full bg-white overflow-hidden relative">
-          <div
+        <div className="w-full h-full bg-white overflow-hidden">
+          <iframe
+            srcDoc={templateContent}
+            className="border-0 bg-white"
+            title={`Preview ${templateId}`}
+            sandbox="allow-same-origin"
             style={{
-              width: `${containerWidth}px`,
-              height: `${containerHeight}px`,
-              transform: `scale(${scale})`,
+              width: '285%',  // Scale up to show full A4 width
+              height: '285%',
+              transform: 'scale(0.35)',
               transformOrigin: 'top left',
-              position: 'absolute',
-              top: 0,
-              left: 0,
+              border: 'none',
+              display: 'block',
               pointerEvents: 'none'
             }}
-          >
-            <iframe
-              srcDoc={templateContent}
-              className="w-full h-full border-0 bg-white"
-              title={`Preview ${templateId}`}
-              sandbox="allow-same-origin"
-              style={{
-                width: '100%',
-                height: '100%',
-                border: 'none',
-                display: 'block'
-              }}
-            />
-          </div>
+          />
         </div>
       );
     } else {
@@ -378,9 +338,9 @@ export default function Templates() {
         <div className="w-full h-full bg-white overflow-hidden relative">
           <div
             style={{
-              width: `${containerWidth}px`,
-              height: `${containerHeight}px`,
-              transform: `scale(${scale})`,
+              width: `${A4_WIDTH}px`,
+              height: `${A4_HEIGHT}px`,
+              transform: 'scale(0.35)',
               transformOrigin: 'top left',
               position: 'absolute',
               top: 0,
