@@ -56,22 +56,51 @@ export async function processResumeJob(jobData, onProgress = null) {
 
     if (onProgress) onProgress(15);
 
-    // Step 3: Generate resume using AI + HTML templates
+    // Step 2: Get user's template if not provided
+    let effectiveTemplateId = templateId || 'jakes_resume';
+    let effectiveCustomization = customization || null;
+
+    if (!templateId) {
+      // Fetch job to get userId if not provided
+      const job = await prisma.job.findUnique({
+        where: { id: jobId },
+        select: { userId: true }
+      });
+
+      if (job?.userId) {
+        // Fetch user's default template
+        const userTemplate = await prisma.resumeTemplate.findFirst({
+          where: { userId: job.userId, isDefault: true },
+          select: { latex: true }
+        });
+
+        if (userTemplate?.latex) {
+          try {
+            const templateConfig = JSON.parse(userTemplate.latex);
+            effectiveTemplateId = templateConfig.baseTemplate || 'jakes_resume';
+            effectiveCustomization = templateConfig.customization || null;
+            logger.info({ jobId, templateId: effectiveTemplateId, hasCustomization: !!effectiveCustomization }, '📝 Using user default template');
+          } catch (e) {
+            logger.warn({ jobId, error: e.message }, 'Failed to parse user template, using jakes_resume');
+          }
+        }
+      }
+    }
+
+    logger.info({ jobId, templateId: effectiveTemplateId }, '📝 Using template for resume generation');
+
+    // Step 3: Generate resume using AI + DOCX templates
     const generator = new AIResumeGenerator();
 
     if (onProgress) onProgress(20);
 
-    // Use provided template or default to jakes_resume
-    const effectiveTemplateId = templateId || 'jakes_resume';
-    logger.info({ jobId, templateId: effectiveTemplateId }, '📝 Using template for resume generation');
-
-    const { latex, pdf, metadata } = await generator.generateAndCompile(
+    const { docx, pdf, metadata } = await generator.generateAndCompile(
       profileData,
       jobDescription,
       {
         enableSearch: true,
         templateId: effectiveTemplateId,
-        customization: customization || null
+        customization: effectiveCustomization
       }
     );
 
@@ -104,14 +133,17 @@ export async function processResumeJob(jobData, onProgress = null) {
       }
     });
 
-    await prisma.artifact.create({
-      data: {
-        jobId,
-        type: 'LATEX_SOURCE',
-        content: Buffer.from(latex, 'utf-8'),
-        metadata: { latexSizeChars: latex.length }
-      }
-    });
+    // Save DOCX if available
+    if (docx) {
+      await prisma.artifact.create({
+        data: {
+          jobId,
+          type: 'DOCX_OUTPUT',
+          content: docx,
+          metadata: { docxSizeKB: (docx.length / 1024).toFixed(2) }
+        }
+      });
+    }
 
     if (onProgress) onProgress(95);
 
