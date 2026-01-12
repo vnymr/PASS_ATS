@@ -1,16 +1,18 @@
 /**
  * AI Form Intelligence
- * Uses OpenAI GPT-4 to intelligently fill form fields and solve problems via screenshots
+ * Uses Google Gemini to intelligently fill form fields and solve problems via screenshots
  */
 
 import logger, { aiLogger } from './logger.js';
-import OpenAI from 'openai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 class AIFormIntelligence {
   constructor() {
-    this.openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY
-    });
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      logger.warn('GEMINI_API_KEY not configured, AI form intelligence will not work');
+    }
+    this.genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
     this.costTracker = {
       totalTokens: 0,
       totalCost: 0,
@@ -26,17 +28,15 @@ class AIFormIntelligence {
    * @returns {Object} AI-generated field responses
    */
   async generateFieldResponses(fields, userProfile, jobData) {
-    logger.info('🤖 Asking AI to generate field responses...');
+    logger.info('🤖 Asking AI (Gemini) to generate field responses...');
+
+    if (!this.genAI) {
+      throw new Error('Gemini AI client not initialized. Check GEMINI_API_KEY configuration.');
+    }
 
     const prompt = this.buildFormFillingPrompt(fields, userProfile, jobData);
 
-    try {
-      const response = await this.openai.chat.completions.create({
-        model: 'gpt-5-mini',
-        messages: [
-          {
-            role: 'system',
-            content: `You are an EXPERT job application assistant with COMPLETE ACCESS to user information. Your job is to intelligently fill out EVERY field in job application forms.
+    const systemPrompt = `You are an EXPERT job application assistant with COMPLETE ACCESS to user information. Your job is to intelligently fill out EVERY field in job application forms.
 
 CRITICAL RULES:
 1. Return ONLY valid JSON, no markdown, no explanation
@@ -51,29 +51,40 @@ CRITICAL RULES:
 10. For checkbox groups, return an array of values to check
 11. For yes/no questions, make intelligent defaults based on user profile
 12. Be professional, enthusiastic, and comprehensive
-13. AT ANY COST, provide ALL information needed to fill the form completely`
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        max_completion_tokens: 4000
+13. AT ANY COST, provide ALL information needed to fill the form completely`;
+
+    try {
+      const model = this.genAI.getGenerativeModel({
+        model: 'gemini-3-flash-preview',
+        systemInstruction: systemPrompt,
+        generationConfig: {
+          temperature: 0.3,
+          maxOutputTokens: 8000,
+          responseMimeType: 'application/json'
+        },
+        tools: [{ googleSearch: {} }]  // Enable Google Search grounding
       });
 
-      const content = response.choices[0].message.content.trim();
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      const content = response.text().trim();
 
-      // Track costs
-      this.updateCostTracking(response.usage);
+      // Track costs (estimate for Gemini)
+      const estimatedUsage = {
+        prompt_tokens: Math.ceil(prompt.length / 4),
+        completion_tokens: Math.ceil(content.length / 4),
+        total_tokens: Math.ceil((prompt.length + content.length) / 4)
+      };
+      this.updateCostTracking(estimatedUsage);
 
       // Parse JSON response
       let fieldResponses;
       try {
-        // Remove markdown code blocks if present
+        // Remove markdown code blocks if present (Gemini should return pure JSON with responseMimeType)
         const jsonContent = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
         fieldResponses = JSON.parse(jsonContent);
       } catch (parseError) {
-        logger.error('❌ Failed to parse AI response as JSON:', content);
+        logger.error('❌ Failed to parse AI response as JSON:', content.substring(0, 500));
         throw new Error('AI returned invalid JSON');
       }
 
@@ -285,15 +296,28 @@ REMEMBER: You have COMPLETE user data. Provide ALL information needed. Be compre
    * @returns {Object} AI's solution
    */
   async analyzeScreenshotAndSolve(screenshotBase64, problem, context = {}) {
-    logger.info('👁️ Asking AI to analyze screenshot and solve problem...');
+    logger.info('👁️ Asking AI (Gemini) to analyze screenshot and solve problem...');
+
+    if (!this.genAI) {
+      logger.error('Gemini AI client not initialized');
+      return {
+        issue: 'AI client not available',
+        solution: 'Manual intervention required',
+        needsManualIntervention: true
+      };
+    }
 
     try {
-      const response = await this.openai.chat.completions.create({
-        model: 'gpt-4o',  // Vision model
-        messages: [
-          {
-            role: 'system',
-            content: `You are an expert at analyzing web page screenshots and solving form-filling problems.
+      const model = this.genAI.getGenerativeModel({
+        model: 'gemini-3-flash-preview',
+        generationConfig: {
+          temperature: 0.3,
+          maxOutputTokens: 1000,
+          responseMimeType: 'application/json'
+        }
+      });
+
+      const systemPrompt = `You are an expert at analyzing web page screenshots and solving form-filling problems.
 
 When you see an error or issue:
 1. Identify what went wrong
@@ -308,34 +332,38 @@ Return format:
   "newValue": "corrected value or null",
   "needsManualIntervention": false/true,
   "learnedPattern": "Pattern to remember for future"
-}`
-          },
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'text',
-                text: `PROBLEM: ${problem}
+}`;
+
+      const prompt = `${systemPrompt}
+
+PROBLEM: ${problem}
 
 CONTEXT:
 ${JSON.stringify(context, null, 2)}
 
-Analyze the screenshot and provide a solution.`
-              },
-              {
-                type: 'image_url',
-                image_url: {
-                  url: `data:image/png;base64,${screenshotBase64}`
-                }
-              }
-            ]
-          }
-        ],
-        max_completion_tokens: 1000
-      });
+Analyze the screenshot and provide a solution.`;
 
-      const content = response.choices[0].message.content.trim();
-      this.updateCostTracking(response.usage);
+      // Gemini multimodal: pass image as inline data
+      const result = await model.generateContent([
+        prompt,
+        {
+          inlineData: {
+            mimeType: 'image/png',
+            data: screenshotBase64
+          }
+        }
+      ]);
+
+      const response = await result.response;
+      const content = response.text().trim();
+
+      // Track costs (estimate)
+      const estimatedUsage = {
+        prompt_tokens: Math.ceil(prompt.length / 4) + 1000, // Add estimate for image
+        completion_tokens: Math.ceil(content.length / 4),
+        total_tokens: Math.ceil((prompt.length + content.length) / 4) + 1000
+      };
+      this.updateCostTracking(estimatedUsage);
 
       // Parse solution
       const jsonContent = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
@@ -463,9 +491,9 @@ Analyze the screenshot and provide a solution.`
     this.costTracker.requests++;
     this.costTracker.totalTokens += usage.total_tokens;
 
-    // GPT-5-mini pricing: $0.25/1M input, $2.00/1M output (as of Aug 2025)
-    const inputCost = (usage.prompt_tokens / 1_000_000) * 0.25;
-    const outputCost = (usage.completion_tokens / 1_000_000) * 2.00;
+    // Gemini 2.0 Flash pricing: $0.10/1M input, $0.40/1M output
+    const inputCost = (usage.prompt_tokens / 1_000_000) * 0.10;
+    const outputCost = (usage.completion_tokens / 1_000_000) * 0.40;
     this.costTracker.totalCost += inputCost + outputCost;
   }
 
