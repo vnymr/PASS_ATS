@@ -312,11 +312,11 @@ export async function processAutoApplyDirect({ applicationId, jobUrl, atsType, u
             // Force local Playwright browser without proxy
             const originalCamoufox = process.env.USE_CAMOUFOX;
             process.env.USE_CAMOUFOX = 'false';
-            launchedBrowser = await launchStealthBrowser({ headless: false });
+            launchedBrowser = await launchStealthBrowser({ headless: true });
             process.env.USE_CAMOUFOX = originalCamoufox;
             logger.info('✅ [PARALLEL] Local browser launched (no proxy)');
           } else {
-            launchedBrowser = await launchStealthBrowser({ headless: false });
+            launchedBrowser = await launchStealthBrowser({ headless: true });
             logger.info('✅ [PARALLEL] Browser launched');
           }
 
