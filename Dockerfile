@@ -22,21 +22,41 @@ RUN npm run build
 # Production stage
 FROM node:18-alpine
 
-# Install Chromium and dependencies for Playwright
+# Install Chromium and ALL dependencies for Playwright
+# Critical: Alpine needs extra libs for headless Chromium to work
 RUN apk add --no-cache \
     ca-certificates \
     openssl \
     curl \
     chromium \
+    chromium-chromedriver \
     nss \
     freetype \
+    freetype-dev \
     harfbuzz \
     ttf-freefont \
-    font-noto-emoji
+    font-noto-emoji \
+    # Additional libs often missing in Alpine
+    libstdc++ \
+    mesa-gl \
+    mesa-egl \
+    libxcomposite \
+    libxdamage \
+    libxrandr \
+    libxshmfence \
+    libxkbcommon \
+    pango \
+    cairo \
+    alsa-lib \
+    cups-libs \
+    dbus-libs \
+    libdrm \
+    libxfixes \
+    at-spi2-core
 
-# Tell Playwright to use installed Chromium
-ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
-    PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser
+# Playwright will use its bundled Chromium (installed during npm install)
+# System chromium is kept as fallback and for other uses
+ENV PLAYWRIGHT_BROWSERS_PATH=/app/server/node_modules/.cache/ms-playwright
 
 # Copy tectonic from builder
 COPY --from=builder /usr/local/bin/tectonic /usr/local/bin/tectonic
@@ -51,10 +71,11 @@ COPY server/package*.json ./server/
 COPY server/prisma ./server/prisma/
 COPY server/scripts ./server/scripts/
 
-# Install dependencies and generate Prisma client
+# Install dependencies, generate Prisma client, and install Playwright Chromium
 WORKDIR /app/server
 RUN npm install --production && \
     npx prisma generate && \
+    npx playwright install chromium && \
     npm cache clean --force
 
 # Copy rest of server code

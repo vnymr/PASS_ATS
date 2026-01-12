@@ -1,8 +1,11 @@
 /**
  * HTML to PDF Generator
  *
- * Uses Playwright to convert HTML resumes to PDF
- * No LaTeX dependencies - pure HTML/CSS rendering
+ * Uses Playwright Chromium to convert HTML resumes to PDF
+ * Supports: Browserless Cloud (production) or local Chromium (fallback)
+ *
+ * NOTE: PDF generation requires Chromium - Firefox/Camoufox cannot be used
+ * because Playwright's page.pdf() only works with Chromium-based browsers.
  */
 
 import { chromium } from 'playwright';
@@ -16,9 +19,100 @@ const MAX_CACHE_SIZE = 100;
 // Browser instance (reused for performance)
 let browserInstance = null;
 let browserLaunchPromise = null;
+let browserType = null; // 'browserless' or 'local'
+
+/**
+ * Connect to Browserless Cloud (Chromium-based)
+ * This is the preferred method for production
+ */
+async function connectToBrowserless() {
+  const browserlessUrl = process.env.BROWSERLESS_URL || process.env.BROWSERLESS_ENDPOINT;
+  const browserlessToken = process.env.BROWSERLESS_TOKEN;
+
+  if (!browserlessUrl) {
+    return null;
+  }
+
+  logger.info('Attempting to connect to Browserless Cloud for PDF generation...');
+
+  try {
+    // Construct WebSocket URL
+    let wsUrl = browserlessUrl;
+
+    // Convert HTTP to WebSocket if needed
+    if (wsUrl.startsWith('http://')) {
+      wsUrl = wsUrl.replace('http://', 'ws://');
+    } else if (wsUrl.startsWith('https://')) {
+      wsUrl = wsUrl.replace('https://', 'wss://');
+    }
+
+    // Add token if provided
+    if (browserlessToken && !wsUrl.includes('token=')) {
+      const separator = wsUrl.includes('?') ? '&' : '?';
+      wsUrl = `${wsUrl}${separator}token=${browserlessToken}`;
+    }
+
+    const browser = await chromium.connectOverCDP(wsUrl, {
+      timeout: 30000
+    });
+
+    logger.info('Connected to Browserless Cloud for PDF generation');
+    browserType = 'browserless';
+    return browser;
+  } catch (error) {
+    logger.warn({
+      error: error.message,
+      browserlessUrl: browserlessUrl?.replace(/token=.*/, 'token=***')
+    }, 'Browserless connection failed, will try local Chromium');
+    return null;
+  }
+}
+
+/**
+ * Launch local Chromium browser
+ */
+async function launchLocalChromium() {
+  logger.info('Launching local Chromium for PDF generation...');
+
+  // Playwright will find its bundled Chromium automatically
+  // Only use explicit path if PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH is set
+  const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined;
+
+  if (executablePath) {
+    logger.info(`Using system Chromium at: ${executablePath}`);
+  } else {
+    logger.info('Using Playwright bundled Chromium (auto-detected)');
+  }
+
+  const browser = await chromium.launch({
+    headless: true,
+    executablePath,
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--disable-software-rasterizer',
+      '--disable-extensions',
+      '--disable-background-networking',
+      '--disable-default-apps',
+      '--disable-sync',
+      '--disable-translate',
+      '--metrics-recording-only',
+      '--mute-audio',
+      '--no-first-run',
+      '--safebrowsing-disable-auto-update'
+    ]
+  });
+
+  logger.info('Local Chromium browser launched successfully');
+  browserType = 'local';
+  return browser;
+}
 
 /**
  * Get or create browser instance
+ * Priority: Browserless Cloud -> Local Chromium
  */
 async function getBrowser() {
   if (browserInstance && browserInstance.isConnected()) {
@@ -32,39 +126,32 @@ async function getBrowser() {
 
   browserLaunchPromise = (async () => {
     try {
-      logger.info('Launching browser for PDF generation...');
+      // Priority 1: Try Browserless Cloud (production)
+      browserInstance = await connectToBrowserless();
 
-      // Use system Chromium if available (for Docker/production)
-      const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined;
-      if (executablePath) {
-        logger.info(`Using system Chromium at: ${executablePath}`);
+      // Priority 2: Fall back to local Chromium
+      if (!browserInstance) {
+        browserInstance = await launchLocalChromium();
       }
-
-      browserInstance = await chromium.launch({
-        headless: true,
-        executablePath,
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-gpu',
-          '--single-process'
-        ]
-      });
 
       // Handle browser disconnect
       browserInstance.on('disconnected', () => {
-        logger.info('Browser disconnected');
+        logger.info(`Browser disconnected (was: ${browserType})`);
         browserInstance = null;
         browserLaunchPromise = null;
+        browserType = null;
       });
 
-      logger.info('Browser launched successfully');
       return browserInstance;
     } catch (error) {
-      logger.error('Failed to launch browser:', error.message);
+      logger.error({
+        error: error.message,
+        stack: error.stack,
+        executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
+        browserlessUrl: process.env.BROWSERLESS_URL ? 'configured' : 'not configured'
+      }, 'Failed to launch browser for PDF generation');
       browserLaunchPromise = null;
-      throw error;
+      throw new Error(`Browser launch failed: ${error.message}. Ensure Chromium is installed or BROWSERLESS_URL is configured.`);
     }
   })();
 
@@ -98,11 +185,15 @@ async function generatePDF(html, options = {}) {
   logger.debug('Generating PDF from HTML...');
 
   let browser = null;
+  let context = null;
   let page = null;
 
   try {
     browser = await getBrowser();
-    page = await browser.newPage();
+
+    // Create a new context for isolation
+    context = await browser.newContext();
+    page = await context.newPage();
 
     // Set content
     await page.setContent(html, {
@@ -134,15 +225,21 @@ async function generatePDF(html, options = {}) {
       logger.debug(`PDF cached with hash ${htmlHash.substring(0, 8)}...`);
     }
 
-    logger.info('PDF generated successfully');
+    logger.info({ browserType }, 'PDF generated successfully');
     return pdfBuffer;
 
   } catch (error) {
-    logger.error('PDF generation failed:', error.message);
+    logger.error({
+      error: error.message,
+      browserType
+    }, 'PDF generation failed');
     throw new Error(`PDF generation failed: ${error.message}`);
   } finally {
     if (page) {
       await page.close().catch(() => {});
+    }
+    if (context) {
+      await context.close().catch(() => {});
     }
   }
 }
@@ -150,7 +247,7 @@ async function generatePDF(html, options = {}) {
 /**
  * Generate PDF with retries
  */
-async function generatePDFWithRetry(html, options = {}, maxRetries = 2) {
+async function generatePDFWithRetry(html, options = {}, maxRetries = 3) {
   let lastError;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -158,17 +255,24 @@ async function generatePDFWithRetry(html, options = {}, maxRetries = 2) {
       return await generatePDF(html, options);
     } catch (error) {
       lastError = error;
-      logger.warn(`PDF generation attempt ${attempt} failed: ${error.message}`);
+      logger.warn({
+        attempt,
+        maxRetries,
+        error: error.message
+      }, `PDF generation attempt ${attempt} failed`);
 
       // Reset browser on failure
       if (browserInstance) {
         await browserInstance.close().catch(() => {});
         browserInstance = null;
         browserLaunchPromise = null;
+        browserType = null;
       }
 
       if (attempt < maxRetries) {
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // Exponential backoff
+        const delay = Math.min(500 * Math.pow(2, attempt - 1), 3000);
+        await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
   }
@@ -187,11 +291,13 @@ async function generatePreviewImage(html, options = {}) {
   } = options;
 
   let browser = null;
+  let context = null;
   let page = null;
 
   try {
     browser = await getBrowser();
-    page = await browser.newPage();
+    context = await browser.newContext();
+    page = await context.newPage();
 
     await page.setViewportSize({ width, height });
     await page.setContent(html, { waitUntil: 'networkidle' });
@@ -212,6 +318,9 @@ async function generatePreviewImage(html, options = {}) {
   } finally {
     if (page) {
       await page.close().catch(() => {});
+    }
+    if (context) {
+      await context.close().catch(() => {});
     }
   }
 }
@@ -243,6 +352,7 @@ async function closeBrowser() {
     await browserInstance.close().catch(() => {});
     browserInstance = null;
     browserLaunchPromise = null;
+    browserType = null;
     logger.info('Browser closed');
   }
 }
@@ -261,7 +371,9 @@ function clearCache() {
 function getCacheStats() {
   return {
     size: pdfCache.size,
-    maxSize: MAX_CACHE_SIZE
+    maxSize: MAX_CACHE_SIZE,
+    browserType: browserType || 'none',
+    browserConnected: browserInstance?.isConnected() || false
   };
 }
 
