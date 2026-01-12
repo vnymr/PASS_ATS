@@ -38,7 +38,7 @@ const execAsync = promisify(exec);
 /**
  * Template configurations
  */
-const TEMPLATES = {
+export const TEMPLATES = {
   jakes_resume: {
     name: "Jake's Resume",
     fonts: {
