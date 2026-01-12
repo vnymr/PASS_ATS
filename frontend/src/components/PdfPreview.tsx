@@ -6,6 +6,7 @@ interface PdfPreviewProps {
   templateId?: string;
   latex?: string;
   html?: string; // HTML content for preview
+  pdfBase64?: string; // Direct base64 PDF data
   className?: string;
   scale?: 'thumbnail' | 'medium' | 'full';
   onError?: (error: string) => void;
@@ -18,6 +19,7 @@ export default function PdfPreview({
   templateId,
   latex,
   html,
+  pdfBase64,
   className = '',
   scale = 'medium',
   onError,
@@ -25,12 +27,21 @@ export default function PdfPreview({
   fallbackLatex,
   fallbackHtml
 }: PdfPreviewProps) {
-  const [pdfData, setPdfData] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [pdfData, setPdfData] = useState<string | null>(pdfBase64 || null);
+  const [loading, setLoading] = useState(!pdfBase64);
   const [error, setError] = useState<string | null>(null);
   const [useFallback, setUseFallback] = useState(false);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
   const lastLatexRef = useRef<string | null>(null);
+
+  // Handle direct pdfBase64 prop
+  useEffect(() => {
+    if (pdfBase64) {
+      setPdfData(pdfBase64);
+      setLoading(false);
+      setError(null);
+    }
+  }, [pdfBase64]);
 
   // Scale configurations
   const scaleConfig = {
@@ -88,14 +99,16 @@ export default function PdfPreview({
 
   // Effect for templateId changes (immediate fetch)
   useEffect(() => {
+    if (pdfBase64) return; // Skip if we have direct PDF data
     if (templateId && !latex && !html) {
       fetchPreview();
     }
-  }, [templateId, latex, html, fetchPreview]);
+  }, [templateId, latex, html, pdfBase64, fetchPreview]);
 
   // Effect for content changes (debounced fetch)
   const content = html || latex;
   useEffect(() => {
+    if (pdfBase64) return; // Skip if we have direct PDF data
     if (!content) return;
 
     // Skip if content hasn't changed

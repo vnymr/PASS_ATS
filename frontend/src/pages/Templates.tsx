@@ -1,13 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@clerk/clerk-react';
 import { api } from '../api-clerk';
-import { ArrowLeft, Check, Eye, Lock } from 'lucide-react';
+import { ArrowLeft, Check, Eye, Settings, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import HtmlPreview, { isHtmlContent } from '../components/HtmlPreview';
-import LatexPreview from '../components/LatexPreview';
-
-const A4_WIDTH = 595;
-const A4_HEIGHT = 842;
+import PdfPreview from '../components/PdfPreview';
 
 type Template = {
   id: string;
@@ -15,134 +11,25 @@ type Template = {
   description?: string;
   isDefault?: boolean;
   isSystemDefault?: boolean;
+  bestFor?: string[];
+  fonts?: { name: string; heading: string };
 };
 
-type ViewMode = 'gallery' | 'view';
-
-const getTemplateDescription = (templateId: string) => {
-  // Remove 'default_' prefix if present
-  const id = templateId.replace('default_', '');
-  switch (id) {
-    case 'jakes_resume':
-      return 'Classic format trusted by thousands. Clean tabular header, ATS-optimized.';
-    case 'minimal_centered':
-      return 'Modern minimal design with centered header and professional summary.';
-    case 'classic_professional':
-      return 'Traditional professional format. Timeless and widely accepted.';
-    case 'modern_dense':
-      return 'Compact modern layout. Fits more content on one page.';
-    case 'academic_research':
-      return 'Academic style with publications section. Ideal for research roles.';
-    default:
-      return 'Custom template';
-  }
+type CustomizationOptions = {
+  fontFamily: string;
+  fontSize: string;
+  margins: string;
+  lineSpacing: string;
 };
 
-// Sample content to fill templates for preview
-const SAMPLE_CONTENT = {
-  name: "Alex Johnson",
-  email: "alex.johnson@email.com",
-  phone: "(555) 123-4567",
-  location: "San Francisco, CA",
-  linkedin: "linkedin.com/in/alexjohnson",
-  summary: "Senior Software Engineer with 8+ years of experience building scalable web applications. Expertise in React, Node.js, and cloud architecture.",
-  experience: [
-    {
-      title: "Senior Software Engineer",
-      company: "Tech Corp",
-      location: "San Francisco, CA",
-      dates: "Jan 2021 - Present",
-      bullets: [
-        "Led development of microservices architecture serving 2M+ daily users",
-        "Reduced API latency by 40% through optimization and caching strategies",
-        "Mentored team of 5 junior developers and established code review practices"
-      ]
-    },
-    {
-      title: "Software Engineer",
-      company: "StartupXYZ",
-      location: "San Francisco, CA",
-      dates: "Jun 2018 - Dec 2020",
-      bullets: [
-        "Built real-time analytics dashboard using React and D3.js",
-        "Implemented CI/CD pipeline reducing deployment time by 60%",
-        "Designed and deployed RESTful APIs handling 100K+ requests/day"
-      ]
-    }
-  ],
-  education: {
-    degree: "B.S. Computer Science",
-    school: "University of California, Berkeley",
-    dates: "2014 - 2018",
-    location: "Berkeley, CA"
-  },
-  skills: {
-    "Languages": ["JavaScript", "TypeScript", "Python", "Go"],
-    "Frameworks": ["React", "Node.js", "Express", "FastAPI"],
-    "Tools": ["Docker", "Kubernetes", "AWS", "PostgreSQL", "Redis"]
-  }
+type ViewMode = 'gallery' | 'view' | 'customize';
+
+const DEFAULT_CUSTOMIZATION: CustomizationOptions = {
+  fontFamily: 'default',
+  fontSize: 'medium',
+  margins: 'normal',
+  lineSpacing: 'normal',
 };
-
-// Fill a template with sample content for preview
-// For HTML content (new system), returns as-is since it's already complete
-// For LaTeX content (legacy), fills in placeholders
-function fillTemplateForPreview(content: string): string {
-  // If it's HTML content (new system), return as-is - it's already filled with sample data
-  if (isHtmlContent(content)) {
-    return content;
-  }
-
-  // Legacy LaTeX filling logic
-  let filled = content;
-
-  // Fill header
-  const headerHtml = `\\begin{center}
-    {\\Huge \\scshape ${SAMPLE_CONTENT.name}} \\\\ \\vspace{1pt}
-    \\small ${SAMPLE_CONTENT.location} $|$ ${SAMPLE_CONTENT.phone} $|$ ${SAMPLE_CONTENT.email} $|$ ${SAMPLE_CONTENT.linkedin}
-\\end{center}`;
-  filled = filled.replace(/\{\{HEADER\}\}/g, headerHtml);
-
-  // Fill summary
-  filled = filled.replace(/\{\{SUMMARY\}\}/g, SAMPLE_CONTENT.summary);
-
-  // Fill experience
-  const expLatex = SAMPLE_CONTENT.experience.map(exp => `
-  \\resumeSubheading
-    {${exp.title}}{${exp.dates}}
-    {${exp.company}}{${exp.location}}
-    \\resumeItemListStart
-      ${exp.bullets.map(b => `\\resumeItem{${b}}`).join('\n      ')}
-    \\resumeItemListEnd`).join('\n');
-  filled = filled.replace(/\{\{EXPERIENCE\}\}/g, expLatex);
-
-  // Fill education
-  const eduLatex = `\\resumeSubheading
-    {${SAMPLE_CONTENT.education.school}}{${SAMPLE_CONTENT.education.dates}}
-    {${SAMPLE_CONTENT.education.degree}}{${SAMPLE_CONTENT.education.location}}`;
-  filled = filled.replace(/\{\{EDUCATION\}\}/g, eduLatex);
-
-  // Fill skills
-  const skillLines = Object.entries(SAMPLE_CONTENT.skills)
-    .map(([cat, items]) => `\\textbf{${cat}}{: ${items.join(', ')}}`)
-    .join(' \\\\\n    ');
-  const skillsLatex = `\\begin{itemize}[leftmargin=0.15in, label={}]
-  \\small{\\item{
-    ${skillLines}
-  }}
-\\end{itemize}`;
-  filled = filled.replace(/\{\{SKILLS\}\}/g, skillsLatex);
-
-  // Remove optional sections (projects, certifications, publications)
-  filled = filled.replace(/\{\{#PROJECTS\}\}[\s\S]*?\{\{\/PROJECTS\}\}/g, '');
-  filled = filled.replace(/\{\{#CERTIFICATIONS\}\}[\s\S]*?\{\{\/CERTIFICATIONS\}\}/g, '');
-  filled = filled.replace(/\{\{#PUBLICATIONS\}\}[\s\S]*?\{\{\/PUBLICATIONS\}\}/g, '');
-  filled = filled.replace(/\{\{#SUMMARY\}\}[\s\S]*?\{\{\/SUMMARY\}\}/g, '');
-
-  // Remove any remaining placeholders
-  filled = filled.replace(/\{\{[A-Z_]+\}\}/g, '');
-
-  return filled;
-}
 
 export default function Templates() {
   const navigate = useNavigate();
@@ -150,41 +37,20 @@ export default function Templates() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [userDefaultId, setUserDefaultId] = useState<string | null>(null);
-  const [latex, setLatex] = useState('');
   const [loading, setLoading] = useState(true);
   const [choosing, setChoosing] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('gallery');
-  const [scale, setScale] = useState(0.8);
-  const [templateLatexCache, setTemplateLatexCache] = useState<Record<string, string>>({});
-  const [showComingSoon, setShowComingSoon] = useState(false);
-  const [templateLoadErrors, setTemplateLoadErrors] = useState<Record<string, string>>({});
-
-  const calculateScale = useCallback(() => {
-    const availableHeight = window.innerHeight - 160;
-    const availableWidth = window.innerWidth - 100;
-    const scaleH = availableHeight / A4_HEIGHT;
-    const scaleW = availableWidth / A4_WIDTH;
-    setScale(Math.min(scaleH, scaleW, 0.9));
-  }, []);
+  const [previewPdf, setPreviewPdf] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [customization, setCustomization] = useState<CustomizationOptions>(DEFAULT_CUSTOMIZATION);
+  const [customizationOptions, setCustomizationOptions] = useState<any>(null);
 
   useEffect(() => {
-    calculateScale();
-    const handler = () => calculateScale();
-    window.addEventListener('resize', handler);
-    return () => window.removeEventListener('resize', handler);
-  }, [calculateScale]);
-
-  useEffect(() => {
-    if (isLoaded && isSignedIn) loadTemplates();
-  }, [isLoaded, isSignedIn]);
-
-  // Auto-hide coming soon toast
-  useEffect(() => {
-    if (showComingSoon) {
-      const timer = setTimeout(() => setShowComingSoon(false), 2000);
-      return () => clearTimeout(timer);
+    if (isLoaded && isSignedIn) {
+      loadTemplates();
+      loadCustomizationOptions();
     }
-  }, [showComingSoon]);
+  }, [isLoaded, isSignedIn]);
 
   const loadTemplates = async () => {
     try {
@@ -202,38 +68,6 @@ export default function Templates() {
         if (def.success && def.template) {
           setUserDefaultId(def.template.id);
         }
-
-        // Pre-load content for all templates
-        const latexCache: Record<string, string> = {};
-        const loadErrors: Record<string, string> = {};
-
-        // Load templates sequentially to avoid rate limiting
-        for (const t of allTemplates) {
-          try {
-            const tRes = await api.getTemplate(t.id, token || undefined);
-
-            if (tRes.success && tRes.template?.latex) {
-              const content = tRes.template.latex;
-              const filledContent = fillTemplateForPreview(content);
-
-              if (filledContent && filledContent.trim()) {
-                latexCache[t.id] = filledContent;
-              } else {
-                loadErrors[t.id] = 'Empty content';
-              }
-            } else {
-              loadErrors[t.id] = (tRes as any).error || 'No content';
-            }
-          } catch (e: any) {
-            loadErrors[t.id] = e.message || 'Load failed';
-          }
-          // Update cache progressively so previews appear as they load
-          setTemplateLatexCache({ ...latexCache });
-        }
-
-        setTemplateLoadErrors(loadErrors);
-      } else {
-        console.error('Failed to get templates list:', res);
       }
     } catch (e) {
       console.error('Failed to load templates:', e);
@@ -242,14 +76,70 @@ export default function Templates() {
     }
   };
 
+  const loadCustomizationOptions = async () => {
+    try {
+      const token = await getToken();
+      const res = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/templates/customization`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setCustomizationOptions(data.options);
+      }
+    } catch (e) {
+      console.error('Failed to load customization options:', e);
+    }
+  };
+
+  const loadPreview = async (templateId: string, customOpts?: CustomizationOptions) => {
+    setPreviewLoading(true);
+    try {
+      const token = await getToken();
+      const res = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/templates/preview`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          templateId,
+          customization: customOpts || null
+        })
+      });
+      const data = await res.json();
+      if (data.success && data.pdf) {
+        setPreviewPdf(data.pdf);
+      } else {
+        console.error('Preview failed:', data.error);
+        setPreviewPdf(null);
+      }
+    } catch (e) {
+      console.error('Failed to load preview:', e);
+      setPreviewPdf(null);
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
   const openTemplate = async (t: Template) => {
-    const token = await getToken();
-    const res = await api.getTemplate(t.id, token || undefined);
-    if (res.success) {
-      setSelectedTemplate(t);
-      // Fill with sample content for preview
-      setLatex(fillTemplateForPreview(res.template.latex));
-      setViewMode('view');
+    setSelectedTemplate(t);
+    setViewMode('view');
+    setCustomization(DEFAULT_CUSTOMIZATION);
+    await loadPreview(t.id);
+  };
+
+  const openCustomize = async (t: Template) => {
+    setSelectedTemplate(t);
+    setViewMode('customize');
+    setCustomization(DEFAULT_CUSTOMIZATION);
+    await loadPreview(t.id);
+  };
+
+  const handleCustomizationChange = async (key: string, value: string) => {
+    const newCustomization = { ...customization, [key]: value };
+    setCustomization(newCustomization);
+    if (selectedTemplate) {
+      await loadPreview(selectedTemplate.id, newCustomization);
     }
   };
 
@@ -261,24 +151,28 @@ export default function Templates() {
     try {
       const token = await getToken();
 
-      // Get the ORIGINAL template latex (not the preview-filled version)
-      const res = await api.getTemplate(templateToChoose.id, token || undefined);
-      if (!res.success) {
-        throw new Error('Failed to get template');
-      }
-      const templateLatex = res.template.latex;
-
       if (templateToChoose.isSystemDefault) {
-        await api.saveTemplate(templateToChoose.name, templateLatex, true, token || undefined);
+        // For system templates, save with current customization
+        await api.saveTemplate(
+          templateToChoose.name,
+          JSON.stringify({
+            baseTemplate: templateToChoose.id.replace('default_', ''),
+            customization
+          }),
+          true,
+          token || undefined
+        );
       } else {
         await api.updateTemplate(templateToChoose.id, { isDefault: true }, token || undefined);
       }
+
       setUserDefaultId(templateToChoose.id);
       await loadTemplates();
 
       if (viewMode !== 'gallery') {
         setViewMode('gallery');
         setSelectedTemplate(null);
+        setPreviewPdf(null);
       }
     } catch (e) {
       console.error('Failed to choose template:', e);
@@ -286,98 +180,42 @@ export default function Templates() {
     setChoosing(false);
   };
 
-  // Mini preview for gallery cards - use HTML or LaTeX preview based on content type
-  const renderMiniPreview = (templateId: string) => {
-    const templateContent = templateLatexCache[templateId];
-    const error = templateLoadErrors[templateId];
+  const handleSaveCustomized = async () => {
+    if (!selectedTemplate) return;
 
-    // Show error if template failed to load
-    if (error) {
-      return (
-        <div className="w-full h-full bg-white flex items-center justify-center p-4">
-          <div className="text-center">
-            <p className="text-xs text-neutral-400 mb-1">Preview unavailable</p>
-            <p className="text-xs text-neutral-300">{error}</p>
-          </div>
-        </div>
-      );
+    setChoosing(true);
+    try {
+      const token = await getToken();
+      const baseTemplate = selectedTemplate.id.replace('default_', '');
+
+      // Save as new custom template
+      await fetch(`${import.meta.env.VITE_API_URL || ''}/api/templates/copy`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          sourceId: selectedTemplate.id,
+          name: `${selectedTemplate.name} (Custom)`,
+          customization
+        })
+      });
+
+      await loadTemplates();
+      setViewMode('gallery');
+      setSelectedTemplate(null);
+      setPreviewPdf(null);
+    } catch (e) {
+      console.error('Failed to save customized template:', e);
     }
-
-    // Show loading spinner if content not yet loaded
-    if (!templateContent) {
-      return (
-        <div className="w-full h-full bg-white flex items-center justify-center">
-          <div className="w-4 h-4 border-2 border-neutral-200 border-t-neutral-400 rounded-full animate-spin" />
-        </div>
-      );
-    }
-
-    if (isHtmlContent(templateContent)) {
-      // For HTML content, use iframe with CSS zoom for reliable scaling
-      return (
-        <div className="w-full h-full bg-white overflow-hidden">
-          <iframe
-            srcDoc={templateContent}
-            className="border-0 bg-white"
-            title={`Preview ${templateId}`}
-            sandbox="allow-same-origin"
-            style={{
-              width: '285%',  // Scale up to show full A4 width
-              height: '285%',
-              transform: 'scale(0.35)',
-              transformOrigin: 'top left',
-              border: 'none',
-              display: 'block',
-              pointerEvents: 'none'
-            }}
-          />
-        </div>
-      );
-    } else {
-      // For LaTeX content, use LatexPreview component
-      return (
-        <div className="w-full h-full bg-white overflow-hidden relative">
-          <div
-            style={{
-              width: `${A4_WIDTH}px`,
-              height: `${A4_HEIGHT}px`,
-              transform: 'scale(0.35)',
-              transformOrigin: 'top left',
-              position: 'absolute',
-              top: 0,
-              left: 0
-            }}
-          >
-            <LatexPreview latex={templateContent} className="w-full h-full" />
-          </div>
-        </div>
-      );
-    }
-  };
-
-  // Full preview - render using HtmlPreview or LatexPreview based on content type
-  const renderFullPreview = () => {
-    const contentToRender = latex || (selectedTemplate ? templateLatexCache[selectedTemplate.id] : '');
-
-    if (!contentToRender) {
-      return (
-        <div className="w-full h-full flex items-center justify-center bg-white">
-          <div className="w-6 h-6 border-2 border-neutral-300 border-t-neutral-600 rounded-full animate-spin" />
-        </div>
-      );
-    }
-
-    // Use HtmlPreview for HTML content, LatexPreview for legacy LaTeX
-    if (isHtmlContent(contentToRender)) {
-      return <HtmlPreview html={contentToRender} className="w-full h-full" />;
-    }
-    return <LatexPreview latex={contentToRender} className="w-full h-full" />;
+    setChoosing(false);
   };
 
   if (loading) {
     return (
       <div className="min-h-screen bg-[#fafafa] flex items-center justify-center">
-        <div className="w-5 h-5 border-2 border-neutral-300 border-t-neutral-600 rounded-full animate-spin" />
+        <Loader2 className="w-6 h-6 animate-spin text-neutral-400" />
       </div>
     );
   }
@@ -397,6 +235,10 @@ export default function Templates() {
         </div>
 
         <div className="max-w-5xl mx-auto px-6 py-8">
+          <p className="text-center text-neutral-500 mb-8">
+            Professional DOCX templates • Customizable fonts, sizes, and spacing
+          </p>
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {templates.map((t) => (
               <div
@@ -411,13 +253,32 @@ export default function Templates() {
                   </div>
                 )}
 
-                <div className="aspect-[8.5/11] border-b border-neutral-100 overflow-hidden">
-                  {renderMiniPreview(t.id)}
+                {/* Template preview placeholder */}
+                <div className="aspect-[8.5/11] border-b border-neutral-100 bg-neutral-50 flex items-center justify-center">
+                  <div className="text-center p-6">
+                    <div className="text-4xl mb-3">📄</div>
+                    <p className="text-sm font-medium text-neutral-700">{t.name}</p>
+                    <p className="text-xs text-neutral-400 mt-1">
+                      {t.fonts?.name || 'Professional'} font
+                    </p>
+                  </div>
                 </div>
 
                 <div className="p-4">
                   <h3 className="font-semibold text-neutral-900">{t.name}</h3>
-                  <p className="text-sm text-neutral-500 mt-1 line-clamp-2">{getTemplateDescription(t.id)}</p>
+                  <p className="text-sm text-neutral-500 mt-1 line-clamp-2">
+                    {t.description || 'Professional resume template'}
+                  </p>
+
+                  {t.bestFor && t.bestFor.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {t.bestFor.slice(0, 3).map((tag, i) => (
+                        <span key={i} className="text-xs px-2 py-0.5 bg-neutral-100 text-neutral-600 rounded-full">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
 
                   <div className="flex gap-2 mt-4">
                     <button
@@ -428,10 +289,10 @@ export default function Templates() {
                       Preview
                     </button>
                     <button
-                      onClick={() => setShowComingSoon(true)}
-                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm font-medium text-neutral-400 bg-neutral-100 rounded-xl cursor-not-allowed"
+                      onClick={() => openCustomize(t)}
+                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm font-medium text-neutral-700 bg-neutral-100 hover:bg-neutral-200 rounded-xl transition"
                     >
-                      <Lock className="w-4 h-4" />
+                      <Settings className="w-4 h-4" />
                       Customize
                     </button>
                   </div>
@@ -451,55 +312,145 @@ export default function Templates() {
             ))}
           </div>
         </div>
-        {/* Coming Soon Toast */}
-        {showComingSoon && (
-          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-3 bg-neutral-900 text-white text-sm font-medium rounded-xl shadow-lg animate-in fade-in slide-in-from-bottom-4">
-            ✨ Template customization coming soon!
-          </div>
-        )}
       </div>
     );
   }
 
-  // === VIEW MODE ===
+  // === VIEW MODE (Preview) ===
+  if (viewMode === 'view') {
+    return (
+      <div className="fixed inset-0 bg-[#f5f5f4] z-50">
+        <div className="absolute top-0 left-0 right-0 h-14 flex items-center justify-between px-6 bg-white/90 backdrop-blur-sm border-b border-neutral-200/50">
+          <button
+            onClick={() => { setViewMode('gallery'); setSelectedTemplate(null); setPreviewPdf(null); }}
+            className="p-2 -ml-2 hover:bg-neutral-100 rounded-lg transition"
+          >
+            <ArrowLeft className="w-5 h-5 text-neutral-600" />
+          </button>
+
+          <h2 className="text-sm font-semibold text-neutral-900">{selectedTemplate?.name}</h2>
+
+          <div className="flex gap-2">
+            <button
+              onClick={() => setViewMode('customize')}
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-neutral-700 bg-neutral-100 hover:bg-neutral-200 rounded-lg transition"
+            >
+              <Settings className="w-4 h-4" />
+              Customize
+            </button>
+            <button
+              onClick={() => handleChoose()}
+              disabled={choosing || userDefaultId === selectedTemplate?.id}
+              className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg transition ${
+                userDefaultId === selectedTemplate?.id
+                  ? 'bg-neutral-100 text-neutral-400 cursor-default'
+                  : 'bg-neutral-900 text-white hover:bg-neutral-800'
+              }`}
+            >
+              <Check className="w-4 h-4" />
+              {userDefaultId === selectedTemplate?.id ? 'Current' : choosing ? 'Choosing...' : 'Choose'}
+            </button>
+          </div>
+        </div>
+
+        <div className="absolute inset-0 top-14 flex items-center justify-center p-8">
+          {previewLoading ? (
+            <div className="flex flex-col items-center gap-4">
+              <Loader2 className="w-8 h-8 animate-spin text-neutral-400" />
+              <p className="text-sm text-neutral-500">Generating preview...</p>
+            </div>
+          ) : previewPdf ? (
+            <div className="bg-white shadow-2xl rounded-lg overflow-hidden" style={{ maxHeight: '90vh' }}>
+              <PdfPreview pdfBase64={previewPdf} />
+            </div>
+          ) : (
+            <div className="text-center">
+              <p className="text-neutral-500">Preview not available</p>
+              <p className="text-sm text-neutral-400 mt-1">LibreOffice may not be installed</p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // === CUSTOMIZE MODE ===
   return (
-    <div className="fixed inset-0 bg-[#f5f5f4] z-50">
-      <div className="absolute top-0 left-0 right-0 h-14 flex items-center justify-between px-6 bg-white/90 backdrop-blur-sm border-b border-neutral-200/50">
-        <button
-          onClick={() => { setViewMode('gallery'); setSelectedTemplate(null); }}
-          className="p-2 -ml-2 hover:bg-neutral-100 rounded-lg transition"
-        >
-          <ArrowLeft className="w-5 h-5 text-neutral-600" />
-        </button>
+    <div className="fixed inset-0 bg-[#f5f5f4] z-50 flex">
+      {/* Left panel - Customization options */}
+      <div className="w-80 bg-white border-r border-neutral-200 flex flex-col">
+        <div className="h-14 flex items-center justify-between px-4 border-b border-neutral-200">
+          <button
+            onClick={() => { setViewMode('gallery'); setSelectedTemplate(null); setPreviewPdf(null); }}
+            className="p-2 -ml-2 hover:bg-neutral-100 rounded-lg transition"
+          >
+            <ArrowLeft className="w-5 h-5 text-neutral-600" />
+          </button>
+          <h2 className="text-sm font-semibold text-neutral-900">Customize</h2>
+          <div className="w-9" />
+        </div>
 
-        <h2 className="text-sm font-semibold text-neutral-900">{selectedTemplate?.name}</h2>
+        <div className="flex-1 overflow-y-auto p-4">
+          <p className="text-sm text-neutral-500 mb-4">
+            Customize {selectedTemplate?.name}
+          </p>
 
-        <button
-          onClick={() => handleChoose()}
-          disabled={choosing || userDefaultId === selectedTemplate?.id}
-          className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg transition ${
-            userDefaultId === selectedTemplate?.id
-              ? 'bg-neutral-100 text-neutral-400 cursor-default'
-              : 'bg-neutral-900 text-white hover:bg-neutral-800'
-          }`}
-        >
-          <Check className="w-4 h-4" />
-          {userDefaultId === selectedTemplate?.id ? 'Current Template' : choosing ? 'Choosing...' : 'Choose This'}
-        </button>
+          {customizationOptions && Object.entries(customizationOptions).map(([key, opt]: [string, any]) => (
+            <div key={key} className="mb-4">
+              <label className="block text-sm font-medium text-neutral-700 mb-1.5">
+                {opt.label}
+              </label>
+              <select
+                value={(customization as any)[key] || opt.default}
+                onChange={(e) => handleCustomizationChange(key, e.target.value)}
+                className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-neutral-900"
+              >
+                {opt.options.map((option: any) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ))}
+        </div>
+
+        <div className="p-4 border-t border-neutral-200 space-y-2">
+          <button
+            onClick={handleSaveCustomized}
+            disabled={choosing}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium bg-neutral-900 text-white rounded-lg hover:bg-neutral-800 transition"
+          >
+            {choosing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+            Save as Custom Template
+          </button>
+          <button
+            onClick={() => handleChoose()}
+            disabled={choosing}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium border border-neutral-200 text-neutral-700 rounded-lg hover:bg-neutral-50 transition"
+          >
+            Use Without Saving
+          </button>
+        </div>
       </div>
 
-      <div className="absolute inset-0 top-14 flex items-center justify-center p-8">
-        <div
-          className="bg-white shadow-[0_4px_60px_rgba(0,0,0,0.12)]"
-          style={{
-            width: `${A4_WIDTH}px`,
-            height: `${A4_HEIGHT}px`,
-            transform: `scale(${scale})`,
-            transformOrigin: 'center center',
-          }}
-        >
-          {renderFullPreview()}
-        </div>
+      {/* Right panel - Preview */}
+      <div className="flex-1 flex items-center justify-center p-8">
+        {previewLoading ? (
+          <div className="flex flex-col items-center gap-4">
+            <Loader2 className="w-8 h-8 animate-spin text-neutral-400" />
+            <p className="text-sm text-neutral-500">Updating preview...</p>
+          </div>
+        ) : previewPdf ? (
+          <div className="bg-white shadow-2xl rounded-lg overflow-hidden" style={{ maxHeight: '90vh' }}>
+            <PdfPreview pdfBase64={previewPdf} />
+          </div>
+        ) : (
+          <div className="text-center">
+            <p className="text-neutral-500">Preview not available</p>
+            <p className="text-sm text-neutral-400 mt-1">LibreOffice may not be installed</p>
+          </div>
+        )}
       </div>
     </div>
   );

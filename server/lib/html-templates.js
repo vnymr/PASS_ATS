@@ -1400,10 +1400,209 @@ export function getTemplateRecommendation(context) {
   };
 }
 
+/**
+ * Default customization options
+ */
+export const DEFAULT_CUSTOMIZATION = {
+  primaryColor: '#000000',      // Main text and headings
+  accentColor: '#0066cc',       // Links and highlights
+  backgroundColor: '#ffffff',   // Page background
+  fontFamily: 'default',        // Use template default or: 'serif', 'sans-serif', 'modern'
+  fontSize: 'medium',           // 'small', 'medium', 'large'
+  lineSpacing: 'normal',        // 'compact', 'normal', 'relaxed'
+  margins: 'normal'             // 'narrow', 'normal', 'wide'
+};
+
+/**
+ * Font family presets
+ */
+const FONT_PRESETS = {
+  default: null, // Use template default
+  serif: "'Georgia', 'Times New Roman', Times, serif",
+  'sans-serif': "'Helvetica Neue', Helvetica, Arial, sans-serif",
+  modern: "'Roboto', 'Segoe UI', 'Arial', sans-serif"
+};
+
+/**
+ * Font size presets
+ */
+const FONT_SIZE_PRESETS = {
+  small: '9pt',
+  medium: '10pt',
+  large: '11pt'
+};
+
+/**
+ * Line spacing presets
+ */
+const LINE_SPACING_PRESETS = {
+  compact: '1.1',
+  normal: '1.2',
+  relaxed: '1.4'
+};
+
+/**
+ * Margin presets
+ */
+const MARGIN_PRESETS = {
+  narrow: '0.3in 0.4in',
+  normal: '0.5in 0.5in',
+  wide: '0.6in 0.75in'
+};
+
+/**
+ * Apply customization to generated HTML
+ * @param {string} html - The generated HTML
+ * @param {Object} customization - Customization options
+ * @returns {string} - HTML with customization applied
+ */
+export function applyCustomization(html, customization = {}) {
+  if (!customization || Object.keys(customization).length === 0) {
+    return html;
+  }
+
+  const opts = { ...DEFAULT_CUSTOMIZATION, ...customization };
+
+  // Build custom CSS overrides
+  const customCSS = [];
+
+  // Primary color (text, headings, borders)
+  if (opts.primaryColor && opts.primaryColor !== '#000000') {
+    customCSS.push(`
+      body { color: ${opts.primaryColor}; }
+      .section-title { color: ${opts.primaryColor}; border-color: ${opts.primaryColor}; }
+      .entry-title { color: ${opts.primaryColor}; }
+      .header-name { color: ${opts.primaryColor}; }
+      .skill-category { color: ${opts.primaryColor}; }
+    `);
+  }
+
+  // Accent color (links)
+  if (opts.accentColor && opts.accentColor !== '#0066cc') {
+    customCSS.push(`
+      a { color: ${opts.accentColor}; }
+      .header-contact a { color: ${opts.accentColor}; }
+    `);
+  }
+
+  // Background color
+  if (opts.backgroundColor && opts.backgroundColor !== '#ffffff') {
+    customCSS.push(`
+      body { background-color: ${opts.backgroundColor}; }
+      .resume { background-color: ${opts.backgroundColor}; }
+    `);
+  }
+
+  // Font family
+  if (opts.fontFamily && opts.fontFamily !== 'default' && FONT_PRESETS[opts.fontFamily]) {
+    customCSS.push(`
+      body { font-family: ${FONT_PRESETS[opts.fontFamily]}; }
+    `);
+  }
+
+  // Font size
+  if (opts.fontSize && FONT_SIZE_PRESETS[opts.fontSize]) {
+    customCSS.push(`
+      body { font-size: ${FONT_SIZE_PRESETS[opts.fontSize]}; }
+    `);
+  }
+
+  // Line spacing
+  if (opts.lineSpacing && LINE_SPACING_PRESETS[opts.lineSpacing]) {
+    customCSS.push(`
+      body { line-height: ${LINE_SPACING_PRESETS[opts.lineSpacing]}; }
+    `);
+  }
+
+  // Margins
+  if (opts.margins && MARGIN_PRESETS[opts.margins]) {
+    customCSS.push(`
+      .resume { padding: ${MARGIN_PRESETS[opts.margins]}; }
+    `);
+  }
+
+  // If no custom CSS, return original
+  if (customCSS.length === 0) {
+    return html;
+  }
+
+  // Inject custom CSS before </style> tag
+  const customStyleBlock = `
+    /* Custom styling */
+    ${customCSS.join('\n')}
+  `;
+
+  return html.replace('</style>', `${customStyleBlock}</style>`);
+}
+
+/**
+ * Get available customization options
+ */
+export function getCustomizationOptions() {
+  return {
+    primaryColor: {
+      label: 'Primary Color',
+      type: 'color',
+      default: '#000000',
+      description: 'Main text and headings color'
+    },
+    accentColor: {
+      label: 'Accent Color',
+      type: 'color',
+      default: '#0066cc',
+      description: 'Links and highlights color'
+    },
+    fontFamily: {
+      label: 'Font Style',
+      type: 'select',
+      default: 'default',
+      options: [
+        { value: 'default', label: 'Template Default' },
+        { value: 'serif', label: 'Classic (Georgia, Times)' },
+        { value: 'sans-serif', label: 'Modern (Helvetica, Arial)' },
+        { value: 'modern', label: 'Tech (Roboto, Segoe UI)' }
+      ]
+    },
+    fontSize: {
+      label: 'Font Size',
+      type: 'select',
+      default: 'medium',
+      options: [
+        { value: 'small', label: 'Small (9pt)' },
+        { value: 'medium', label: 'Medium (10pt)' },
+        { value: 'large', label: 'Large (11pt)' }
+      ]
+    },
+    lineSpacing: {
+      label: 'Line Spacing',
+      type: 'select',
+      default: 'normal',
+      options: [
+        { value: 'compact', label: 'Compact' },
+        { value: 'normal', label: 'Normal' },
+        { value: 'relaxed', label: 'Relaxed' }
+      ]
+    },
+    margins: {
+      label: 'Margins',
+      type: 'select',
+      default: 'normal',
+      options: [
+        { value: 'narrow', label: 'Narrow (more content)' },
+        { value: 'normal', label: 'Normal' },
+        { value: 'wide', label: 'Wide (more whitespace)' }
+      ]
+    }
+  };
+}
+
 export default {
   TEMPLATES,
   generateHTML,
   getAllTemplates,
   getTemplateById,
-  getTemplateRecommendation
+  getTemplateRecommendation,
+  applyCustomization,
+  getCustomizationOptions,
+  DEFAULT_CUSTOMIZATION
 };

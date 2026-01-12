@@ -1,13 +1,20 @@
 /**
  * Resume Template Management API
  * Endpoints for managing user resume templates
- * HTML-based - NO LATEX
+ * DOCX-based professional templates
  */
 
 import express from 'express';
 import { prisma } from '../lib/prisma-client.js';
-import { TEMPLATES, getAllTemplates, generateHTML } from '../lib/html-templates.js';
-import { generatePDFWithRetry, generatePreviewImage } from '../lib/html-pdf-generator.js';
+import {
+  TEMPLATES,
+  getAllTemplates,
+  generateDOCX,
+  convertDocxToPdf,
+  isLibreOfficeAvailable,
+  getCustomizationOptions,
+  DEFAULT_CUSTOMIZATION
+} from '../lib/docx-resume-generator.js';
 import logger from '../lib/logger.js';
 
 const router = express.Router();
@@ -104,14 +111,16 @@ router.get('/templates', async (req, res) => {
       logger.warn({ error: dbError.message }, 'Could not fetch user templates');
     }
 
-    // Get default templates
-    const defaultTemplates = Object.keys(TEMPLATES).map(key => ({
+    // Get default templates (only main templates, not aliases)
+    const mainTemplateIds = ['jakes_resume', 'harvard_classic', 'modern_executive', 'minimal_tech', 'academic_cv'];
+    const defaultTemplates = mainTemplateIds.map(key => ({
       id: `default_${key}`,
       name: TEMPLATES[key].name,
       isDefault: false,
       isSystemDefault: true,
       description: TEMPLATES[key].description,
-      bestFor: TEMPLATES[key].bestFor
+      bestFor: TEMPLATES[key].bestFor,
+      fonts: TEMPLATES[key].fonts
     }));
 
     res.json({
@@ -127,6 +136,25 @@ router.get('/templates', async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to retrieve templates'
+    });
+  }
+});
+
+/**
+ * GET /api/templates/customization
+ * Get available customization options
+ */
+router.get('/templates/customization', async (req, res) => {
+  try {
+    res.json({
+      success: true,
+      options: getCustomizationOptions(),
+      defaults: DEFAULT_CUSTOMIZATION
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get customization options'
     });
   }
 });
@@ -156,19 +184,15 @@ router.get('/templates/:id', async (req, res) => {
         });
       }
 
-      // Generate full HTML with sample data for preview
-      const previewHtml = generateHTML(SAMPLE_DATA, templateKey);
-
       return res.json({
         success: true,
         template: {
           id,
           name: template.name,
-          css: template.css,
-          latex: previewHtml, // Full HTML for preview (using 'latex' field for backward compatibility)
-          isSystemDefault: true,
           description: template.description,
-          bestFor: template.bestFor
+          bestFor: template.bestFor,
+          fonts: template.fonts,
+          isSystemDefault: true
         }
       });
     }
@@ -201,8 +225,7 @@ router.get('/templates/:id', async (req, res) => {
 
 /**
  * POST /api/templates
- * Save new template
- * Body: { name: string, css?: string, isDefault?: boolean }
+ * Save new template (copy from default with customization)
  */
 router.post('/templates', async (req, res) => {
   try {
@@ -212,7 +235,7 @@ router.post('/templates', async (req, res) => {
       return res.status(401).json({ error: 'User ID not found' });
     }
 
-    const { name, css, html, isDefault } = req.body;
+    const { name, baseTemplate, customization, isDefault } = req.body;
 
     if (!name) {
       return res.status(400).json({
@@ -233,8 +256,11 @@ router.post('/templates', async (req, res) => {
       data: {
         userId,
         name,
-        // Store HTML/CSS in the 'latex' field for backward compatibility
-        latex: css || html || '',
+        // Store base template and customization as JSON
+        latex: JSON.stringify({
+          baseTemplate: baseTemplate || 'jakes_resume',
+          customization: customization || DEFAULT_CUSTOMIZATION
+        }),
         isDefault: isDefault || false
       }
     });
@@ -288,11 +314,23 @@ router.put('/templates/:id', async (req, res) => {
       });
     }
 
-    const { name, css, html, isDefault } = req.body;
+    const { name, customization, isDefault } = req.body;
     const updateData = {};
 
     if (name) updateData.name = name;
-    if (css || html) updateData.latex = css || html;
+
+    if (customization) {
+      // Parse existing data and merge customization
+      let existingData = {};
+      try {
+        existingData = JSON.parse(existing.latex || '{}');
+      } catch (e) {}
+
+      updateData.latex = JSON.stringify({
+        ...existingData,
+        customization
+      });
+    }
 
     if (typeof isDefault === 'boolean') {
       if (isDefault) {
@@ -378,7 +416,6 @@ router.delete('/templates/:id', async (req, res) => {
 /**
  * POST /api/templates/preview
  * Generate preview PDF from template
- * Body: { templateId: string } or { html: string }
  */
 router.post('/templates/preview', async (req, res) => {
   try {
@@ -388,23 +425,23 @@ router.post('/templates/preview', async (req, res) => {
       return res.status(401).json({ error: 'User ID not found' });
     }
 
-    const { templateId, html: customHtml } = req.body;
-
-    let html;
-
-    if (customHtml) {
-      html = customHtml;
-    } else if (templateId) {
-      // Generate HTML using sample data
-      const id = templateId.replace('default_', '');
-      html = generateHTML(SAMPLE_DATA, id);
-    } else {
-      // Use default template
-      html = generateHTML(SAMPLE_DATA, 'modern_dense');
+    // Check LibreOffice availability
+    const libreOfficeOk = await isLibreOfficeAvailable();
+    if (!libreOfficeOk) {
+      return res.status(503).json({
+        success: false,
+        error: 'LibreOffice is not available for PDF generation'
+      });
     }
 
-    // Generate PDF
-    const pdfBuffer = await generatePDFWithRetry(html);
+    const { templateId, customization } = req.body;
+    const id = (templateId || 'jakes_resume').replace('default_', '');
+
+    // Generate DOCX with sample data
+    const docxBuffer = await generateDOCX(SAMPLE_DATA, id, customization || null);
+
+    // Convert to PDF
+    const pdfBuffer = await convertDocxToPdf(docxBuffer);
 
     // Return as base64
     const pdfBase64 = pdfBuffer.toString('base64');
@@ -425,47 +462,8 @@ router.post('/templates/preview', async (req, res) => {
 });
 
 /**
- * POST /api/templates/preview-image
- * Generate preview image (PNG) from template
- */
-router.post('/templates/preview-image', async (req, res) => {
-  try {
-    const userId = req.userId;
-
-    if (!userId) {
-      return res.status(401).json({ error: 'User ID not found' });
-    }
-
-    const { templateId } = req.body;
-    const id = (templateId || 'modern_dense').replace('default_', '');
-
-    // Generate HTML using sample data
-    const html = generateHTML(SAMPLE_DATA, id);
-
-    // Generate preview image
-    const imageBuffer = await generatePreviewImage(html);
-
-    // Return as base64
-    const imageBase64 = imageBuffer.toString('base64');
-
-    res.json({
-      success: true,
-      image: imageBase64,
-      mimeType: 'image/png'
-    });
-
-  } catch (error) {
-    logger.error({ error: error.message }, 'Failed to generate preview image');
-    res.status(500).json({
-      success: false,
-      error: 'Failed to generate preview image: ' + error.message
-    });
-  }
-});
-
-/**
  * POST /api/templates/copy
- * Copy a default template to user's templates
+ * Copy a default template to user's templates with customization
  */
 router.post('/templates/copy', async (req, res) => {
   try {
@@ -475,7 +473,7 @@ router.post('/templates/copy', async (req, res) => {
       return res.status(401).json({ error: 'User ID not found' });
     }
 
-    const { sourceId, name } = req.body;
+    const { sourceId, name, customization } = req.body;
 
     if (!sourceId || !name) {
       return res.status(400).json({
@@ -484,41 +482,24 @@ router.post('/templates/copy', async (req, res) => {
       });
     }
 
-    let css = '';
+    const baseTemplate = sourceId.replace('default_', '');
 
-    if (sourceId.startsWith('default_')) {
-      const templateKey = sourceId.replace('default_', '');
-      const template = TEMPLATES[templateKey];
-
-      if (!template) {
-        return res.status(404).json({
-          success: false,
-          error: 'Source template not found'
-        });
-      }
-
-      css = template.css;
-    } else {
-      // Copy from user's template
-      const sourceTemplate = await prisma.resumeTemplate.findFirst({
-        where: { id: sourceId, userId }
+    // Verify base template exists
+    if (!TEMPLATES[baseTemplate]) {
+      return res.status(404).json({
+        success: false,
+        error: 'Source template not found'
       });
-
-      if (!sourceTemplate) {
-        return res.status(404).json({
-          success: false,
-          error: 'Source template not found'
-        });
-      }
-
-      css = sourceTemplate.latex; // 'latex' field stores CSS now
     }
 
     const template = await prisma.resumeTemplate.create({
       data: {
         userId,
         name,
-        latex: css,
+        latex: JSON.stringify({
+          baseTemplate,
+          customization: customization || DEFAULT_CUSTOMIZATION
+        }),
         isDefault: false
       }
     });
@@ -565,14 +546,14 @@ router.get('/templates/default', async (req, res) => {
     }
 
     // Return system default
-    const defaultTemplate = TEMPLATES.modern_dense;
+    const defaultTemplate = TEMPLATES.jakes_resume;
 
     res.json({
       success: true,
       template: {
-        id: 'default_modern_dense',
+        id: 'default_jakes_resume',
         name: defaultTemplate.name,
-        css: defaultTemplate.css,
+        description: defaultTemplate.description,
         isSystemDefault: true
       },
       source: 'system'
@@ -602,6 +583,26 @@ router.get('/templates/list', async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to list templates'
+    });
+  }
+});
+
+/**
+ * GET /api/templates/status
+ * Check LibreOffice availability for DOCX generation
+ */
+router.get('/templates/status', async (req, res) => {
+  try {
+    const libreOfficeOk = await isLibreOfficeAvailable();
+    res.json({
+      success: true,
+      libreOfficeAvailable: libreOfficeOk,
+      mode: 'docx'
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: 'Failed to check status'
     });
   }
 });

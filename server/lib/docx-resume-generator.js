@@ -41,6 +41,8 @@ const execAsync = promisify(exec);
 export const TEMPLATES = {
   jakes_resume: {
     name: "Jake's Resume",
+    description: "The famous LaTeX template - clean, ATS-optimized, industry standard",
+    bestFor: ['software engineering', 'tech', 'startups', 'new grads'],
     fonts: {
       name: 'Calibri',
       heading: 'Calibri',
@@ -65,6 +67,8 @@ export const TEMPLATES = {
   },
   harvard_classic: {
     name: 'Harvard Classic',
+    description: "Traditional Harvard format - education-first, conservative, professional",
+    bestFor: ['finance', 'consulting', 'law', 'MBA', 'new grads'],
     fonts: {
       name: 'Times New Roman',
       heading: 'Times New Roman',
@@ -89,6 +93,8 @@ export const TEMPLATES = {
   },
   modern_executive: {
     name: 'Modern Executive',
+    description: "Sophisticated design for senior roles and executives",
+    bestFor: ['executives', 'directors', 'senior managers', 'VP', 'C-level'],
     fonts: {
       name: 'Garamond',
       heading: 'Garamond',
@@ -113,6 +119,8 @@ export const TEMPLATES = {
   },
   minimal_tech: {
     name: 'Minimal Tech',
+    description: "Dense layout - maximizes content for tech roles",
+    bestFor: ['software engineering', 'data science', 'AI/ML', 'DevOps'],
     fonts: {
       name: 'Arial',
       heading: 'Arial',
@@ -137,6 +145,8 @@ export const TEMPLATES = {
   },
   academic_cv: {
     name: 'Academic CV',
+    description: "Traditional academic format with publications section",
+    bestFor: ['academia', 'research', 'PhD', 'postdoc', 'professors'],
     fonts: {
       name: 'Times New Roman',
       heading: 'Times New Roman',
@@ -168,14 +178,169 @@ TEMPLATES.minimal_centered = TEMPLATES.modern_executive;
 TEMPLATES.academic_research = TEMPLATES.academic_cv;
 
 /**
+ * Customization options
+ */
+export const DEFAULT_CUSTOMIZATION = {
+  fontFamily: 'default',    // 'default', 'serif', 'sans-serif', 'modern'
+  fontSize: 'medium',       // 'small', 'medium', 'large'
+  margins: 'normal',        // 'narrow', 'normal', 'wide'
+  lineSpacing: 'normal',    // 'compact', 'normal', 'relaxed'
+};
+
+/**
+ * Font presets
+ */
+const FONT_PRESETS = {
+  default: null,
+  serif: { name: 'Times New Roman', heading: 'Times New Roman' },
+  'sans-serif': { name: 'Arial', heading: 'Arial' },
+  modern: { name: 'Calibri', heading: 'Calibri Light' },
+};
+
+/**
+ * Font size multipliers
+ */
+const FONT_SIZE_MULTIPLIERS = {
+  small: 0.9,
+  medium: 1.0,
+  large: 1.1,
+};
+
+/**
+ * Margin presets (in inches)
+ */
+const MARGIN_PRESETS = {
+  narrow: { top: 0.3, bottom: 0.3, left: 0.4, right: 0.4 },
+  normal: { top: 0.5, bottom: 0.5, left: 0.5, right: 0.5 },
+  wide: { top: 0.6, bottom: 0.6, left: 0.75, right: 0.75 },
+};
+
+/**
+ * Line spacing multipliers
+ */
+const LINE_SPACING_MULTIPLIERS = {
+  compact: 0.9,
+  normal: 1.0,
+  relaxed: 1.15,
+};
+
+/**
+ * Apply customization to template settings
+ */
+export function applyCustomization(template, customization = {}) {
+  if (!customization || Object.keys(customization).length === 0) {
+    return template;
+  }
+
+  const opts = { ...DEFAULT_CUSTOMIZATION, ...customization };
+  const customized = JSON.parse(JSON.stringify(template)); // Deep clone
+
+  // Apply font family
+  if (opts.fontFamily && opts.fontFamily !== 'default' && FONT_PRESETS[opts.fontFamily]) {
+    customized.fonts = FONT_PRESETS[opts.fontFamily];
+  }
+
+  // Apply font size
+  if (opts.fontSize && FONT_SIZE_MULTIPLIERS[opts.fontSize]) {
+    const multiplier = FONT_SIZE_MULTIPLIERS[opts.fontSize];
+    customized.sizes = {
+      name: Math.round(customized.sizes.name * multiplier),
+      sectionTitle: Math.round(customized.sizes.sectionTitle * multiplier),
+      body: Math.round(customized.sizes.body * multiplier),
+      small: Math.round(customized.sizes.small * multiplier),
+    };
+  }
+
+  // Apply margins
+  if (opts.margins && MARGIN_PRESETS[opts.margins]) {
+    const m = MARGIN_PRESETS[opts.margins];
+    customized.margins = {
+      top: convertInchesToTwip(m.top),
+      bottom: convertInchesToTwip(m.bottom),
+      left: convertInchesToTwip(m.left),
+      right: convertInchesToTwip(m.right),
+    };
+  }
+
+  // Apply line spacing
+  if (opts.lineSpacing && LINE_SPACING_MULTIPLIERS[opts.lineSpacing]) {
+    const multiplier = LINE_SPACING_MULTIPLIERS[opts.lineSpacing];
+    customized.spacing = {
+      section: Math.round(customized.spacing.section * multiplier),
+      entry: Math.round(customized.spacing.entry * multiplier),
+      line: Math.round(customized.spacing.line * multiplier),
+    };
+  }
+
+  return customized;
+}
+
+/**
+ * Get available customization options
+ */
+export function getCustomizationOptions() {
+  return {
+    fontFamily: {
+      label: 'Font Style',
+      type: 'select',
+      default: 'default',
+      options: [
+        { value: 'default', label: 'Template Default' },
+        { value: 'serif', label: 'Classic (Times New Roman)' },
+        { value: 'sans-serif', label: 'Clean (Arial)' },
+        { value: 'modern', label: 'Modern (Calibri)' },
+      ],
+    },
+    fontSize: {
+      label: 'Font Size',
+      type: 'select',
+      default: 'medium',
+      options: [
+        { value: 'small', label: 'Small (more content)' },
+        { value: 'medium', label: 'Medium (balanced)' },
+        { value: 'large', label: 'Large (easier to read)' },
+      ],
+    },
+    margins: {
+      label: 'Margins',
+      type: 'select',
+      default: 'normal',
+      options: [
+        { value: 'narrow', label: 'Narrow (more content)' },
+        { value: 'normal', label: 'Normal' },
+        { value: 'wide', label: 'Wide (more whitespace)' },
+      ],
+    },
+    lineSpacing: {
+      label: 'Line Spacing',
+      type: 'select',
+      default: 'normal',
+      options: [
+        { value: 'compact', label: 'Compact' },
+        { value: 'normal', label: 'Normal' },
+        { value: 'relaxed', label: 'Relaxed' },
+      ],
+    },
+  };
+}
+
+/**
  * Generate a professional DOCX resume
  *
  * @param {Object} data - Resume data
  * @param {string} templateId - Template to use
+ * @param {Object} customization - Customization options
  * @returns {Promise<Buffer>} - DOCX buffer
  */
-export async function generateDOCX(data, templateId = 'jakes_resume') {
-  const template = TEMPLATES[templateId] || TEMPLATES.jakes_resume;
+export async function generateDOCX(data, templateId = 'jakes_resume', customization = null) {
+  let template = TEMPLATES[templateId] || TEMPLATES.jakes_resume;
+
+  // Apply customization if provided
+  if (customization) {
+    template = applyCustomization(template, customization);
+    logger.info({ customization }, 'Applied DOCX customization');
+  }
+
   const { fonts, sizes, margins, spacing } = template;
 
   logger.info({ templateId, templateName: template.name }, 'Generating DOCX resume');
@@ -839,5 +1004,8 @@ export default {
   generateDocxAndPdf,
   getAllTemplates,
   isLibreOfficeAvailable,
+  applyCustomization,
+  getCustomizationOptions,
   TEMPLATES,
+  DEFAULT_CUSTOMIZATION,
 };
