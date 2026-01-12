@@ -100,24 +100,24 @@ export default function ProfileCompletionBanner() {
 
   return (
     <div className="bg-gradient-to-r from-[var(--primary-50)] to-[var(--secondary-50)] border-b border-[var(--primary-200)]">
-      <div className="max-w-7xl mx-auto px-4 py-3">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 flex-1 min-w-0">
-            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[var(--primary-100)] flex items-center justify-center">
-              <Icons.user className="w-4 h-4 text-[var(--primary-600)]" />
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+        <div className="flex items-center justify-between gap-4 sm:gap-6">
+          <div className="flex items-center gap-4 flex-1 min-w-0">
+            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-[var(--primary-100)] flex items-center justify-center ring-2 ring-[var(--primary-200)]">
+              <Icons.user className="w-5 h-5 text-[var(--primary-600)]" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-sm font-medium text-[var(--text-800)]">
+              <div className="flex items-baseline gap-2 mb-2">
+                <span className="text-sm sm:text-base font-semibold text-[var(--text-900)]">
                   Complete your profile
                 </span>
-                <span className="text-xs font-semibold text-[var(--primary-600)]">
+                <span className="text-sm font-bold text-[var(--primary-600)] whitespace-nowrap">
                   {completion}%
                 </span>
               </div>
-              <div className="h-1.5 bg-[var(--primary-200)] rounded-full overflow-hidden max-w-xs">
+              <div className="h-2 bg-[var(--primary-200)] rounded-full overflow-hidden max-w-md">
                 <div
-                  className="h-full bg-[var(--primary)] transition-all duration-300"
+                  className="h-full bg-gradient-to-r from-[var(--primary-500)] to-[var(--primary-600)] transition-all duration-500 ease-out rounded-full"
                   style={{ width: `${completion}%` }}
                 />
               </div>
@@ -127,14 +127,14 @@ export default function ProfileCompletionBanner() {
           <div className="flex items-center gap-2 flex-shrink-0">
             <button
               onClick={() => navigate('/profile')}
-              className="px-3 py-1.5 text-sm font-medium text-white bg-[var(--primary)] hover:bg-[var(--primary-600)] rounded-lg transition-colors flex items-center gap-1"
+              className="px-4 py-2 text-sm font-semibold text-white bg-[var(--primary)] hover:bg-[var(--primary-600)] rounded-lg transition-all duration-200 flex items-center gap-1.5 shadow-sm hover:shadow-md active:scale-95"
             >
-              Complete Now
+              <span>Complete Now</span>
               <Icons.chevronRight className="w-4 h-4" />
             </button>
             <button
               onClick={handleDismiss}
-              className="p-1.5 text-[var(--text-500)] hover:text-[var(--text-700)] hover:bg-[var(--text-100)] rounded-lg transition-colors"
+              className="p-2 text-[var(--text-400)] hover:text-[var(--text-700)] hover:bg-[var(--text-100)] rounded-lg transition-colors duration-200"
               aria-label="Dismiss"
             >
               <Icons.x className="w-4 h-4" />

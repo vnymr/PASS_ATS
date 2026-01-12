@@ -215,9 +215,10 @@ export const api = {
       template: {
         id: string;
         name: string;
-        latex: string;
+        latex?: string;
         isSystemDefault?: boolean;
       };
+      source?: 'user' | 'system';
     }>(r);
   },
 
