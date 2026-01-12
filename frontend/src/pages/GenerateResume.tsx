@@ -226,18 +226,18 @@ export default function GenerateResume() {
   return (
     <div className="flex-1 w-full bg-background min-h-screen text-text font-sans">
       {/* ChatGPT-style Input */}
-      <div className="max-w-[780px] mx-auto px-4 sm:px-8 py-8 sm:py-16">
+      <div className="max-w-[780px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-16">
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.6 }}
-          className="mb-6"
+          className="mb-4 sm:mb-6"
         >
           <motion.h1
             style={{
               fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif',
               fontWeight: 500,
-              fontSize: '24px',
+              fontSize: 'clamp(20px, 5vw, 24px)',
               color: 'var(--text-900)',
               letterSpacing: '-0.01em',
               marginBottom: '8px',
@@ -253,36 +253,21 @@ export default function GenerateResume() {
             placeholder="Paste the job description here..."
             disabled={isGenerating}
             className="w-full"
+            leftButton={
+              <Link
+                to="/templates"
+                className="inline-flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium text-primary hover:text-primary-700 bg-primary/5 border border-primary/20 rounded-lg hover:bg-primary/10 transition-colors"
+              >
+                <Layout size={10} className="sm:w-3 sm:h-3" />
+                <span className="hidden xs:inline">Template</span>
+              </Link>
+            }
           />
         </form>
       </div>
 
       {/* Content Area */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-8 pb-8">
-        {/* Template Customization Banner */}
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3"
-        >
-          <div className="flex items-center gap-3">
-            <div className="h-8 w-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
-              <Layout size={16} />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-neutral-800">Customize Your Resume Template</p>
-              <p className="text-xs text-neutral-500">AI uses your template when generating resumes</p>
-            </div>
-          </div>
-          <Link
-            to="/templates"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-primary hover:text-primary-700 bg-white border border-primary/30 rounded-lg hover:bg-primary/5 transition-colors"
-          >
-            <Layout size={14} />
-            Customize
-          </Link>
-        </motion.div>
-
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-6 sm:pb-8">
         {/* Resume Profile Status */}
         <AnimatePresence>
           {!resumeText && (
@@ -290,10 +275,10 @@ export default function GenerateResume() {
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="mb-4 flex items-center gap-2 rounded-xl border border-[rgba(245,158,11,0.3)] bg-[rgba(245,158,11,0.08)] px-4 py-3 text-[13px] text-[#92400e]"
+              className="mb-4 flex items-start sm:items-center gap-2 rounded-xl border border-[rgba(245,158,11,0.3)] bg-[rgba(245,158,11,0.08)] px-3 sm:px-4 py-2.5 sm:py-3 text-[12px] sm:text-[13px] text-[#92400e]"
             >
-              <Icons.alertCircle size={18} />
-              <div className="flex items-center flex-wrap gap-1">
+              <Icons.alertCircle size={16} className="sm:w-[18px] sm:h-[18px] flex-shrink-0 mt-0.5 sm:mt-0" />
+              <div className="flex items-start sm:items-center flex-wrap gap-1">
                 <span>Please set up your resume text in your</span>
                 <button
                   className="underline decoration-[var(--primary)] underline-offset-4 text-primary font-semibold"
@@ -314,10 +299,10 @@ export default function GenerateResume() {
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="mb-4 flex items-center gap-2 rounded-xl border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.08)] px-4 py-3 text-[13px] text-[#b91c1c]"
+              className="mb-4 flex items-start sm:items-center gap-2 rounded-xl border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.08)] px-3 sm:px-4 py-2.5 sm:py-3 text-[12px] sm:text-[13px] text-[#b91c1c]"
             >
-              <Icons.alertCircle size={18} />
-              <span>{error}</span>
+              <Icons.alertCircle size={16} className="sm:w-[18px] sm:h-[18px] flex-shrink-0 mt-0.5 sm:mt-0" />
+              <span className="break-words">{error}</span>
             </motion.div>
           )}
         </AnimatePresence>
@@ -328,10 +313,10 @@ export default function GenerateResume() {
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="mb-4 flex items-center gap-2 rounded-xl border border-[rgba(34,197,94,0.35)] bg-[rgba(34,197,94,0.08)] px-4 py-3 text-[13px] text-[#166534]"
+              className="mb-4 flex items-start sm:items-center gap-2 rounded-xl border border-[rgba(34,197,94,0.35)] bg-[rgba(34,197,94,0.08)] px-3 sm:px-4 py-2.5 sm:py-3 text-[12px] sm:text-[13px] text-[#166534]"
             >
-              <Icons.checkCircle size={18} />
-              <span>Resume generated and downloaded successfully!</span>
+              <Icons.checkCircle size={16} className="sm:w-[18px] sm:h-[18px] flex-shrink-0 mt-0.5 sm:mt-0" />
+              <span className="break-words">Resume generated and downloaded successfully!</span>
             </motion.div>
           )}
         </AnimatePresence>
@@ -343,20 +328,13 @@ export default function GenerateResume() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 10 }}
-              className="rounded-[12px] p-6 mb-6"
+              className="rounded-lg px-3 sm:px-4 py-2 sm:py-2.5 mb-4 inline-flex items-center gap-2 sm:gap-2.5"
               style={{ backgroundColor: 'var(--background-50)' }}
             >
-              <div className="flex flex-col items-center justify-center py-4">
-                <div className="h-12 w-12 rounded-full bg-[var(--primary-50)] text-[var(--primary)] flex items-center justify-center mb-4">
-                  <Icons.loader className="animate-spin" size={24} />
-                </div>
-                <h4 className="text-base font-semibold mb-1" style={{ color: 'var(--text-900)' }}>
-                  Generating your resume...
-                </h4>
-                <p className="text-sm" style={{ color: 'var(--text-600)' }}>
-                  This usually takes about 10 seconds
-                </p>
-              </div>
+              <Icons.loader className="animate-spin w-4 h-4 sm:w-4 sm:h-4" style={{ color: 'var(--primary)' }} />
+              <span className="text-xs sm:text-sm font-medium" style={{ color: 'var(--text-700)' }}>
+                Generating your resume...
+              </span>
             </motion.div>
           )}
         </AnimatePresence>
@@ -368,22 +346,22 @@ export default function GenerateResume() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 10 }}
-              className="rounded-[12px] p-6 border border-[rgba(34,197,94,0.2)]"
+              className="rounded-[12px] p-4 sm:p-6 border border-[rgba(34,197,94,0.2)]"
               style={{ backgroundColor: 'var(--background-50)' }}
             >
               <div className="flex items-start gap-3 mb-4">
                 <div
-                  className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
+                  className="w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center flex-shrink-0"
                   style={{ backgroundColor: 'var(--secondary-500)' }}
                 >
-                  <Icons.checkCircle size={20} style={{ color: 'white' }} />
+                  <Icons.checkCircle size={16} className="sm:w-5 sm:h-5" style={{ color: 'white' }} />
                 </div>
-                <div>
+                <div className="flex-1 min-w-0">
                   <h3
                     className="font-medium"
                     style={{
                       fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif',
-                      fontSize: '15px',
+                      fontSize: 'clamp(14px, 3vw, 15px)',
                       color: 'var(--text-900)',
                       marginBottom: '2px',
                     }}
@@ -393,7 +371,7 @@ export default function GenerateResume() {
                   <p
                     style={{
                       fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif',
-                      fontSize: '13px',
+                      fontSize: 'clamp(12px, 2.5vw, 13px)',
                       color: 'var(--text-600)',
                       lineHeight: '1.4',
                     }}
@@ -404,26 +382,26 @@ export default function GenerateResume() {
               </div>
 
               {/* Action Buttons */}
-              <div className="flex gap-3">
+              <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
                 <button
                   onClick={() => {
                     if (jobId) {
                       downloadResume(`resume_${jobId}.pdf`);
                     }
                   }}
-                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl font-semibold h-11 px-6 transition-all duration-200"
+                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl font-semibold h-10 sm:h-11 px-4 sm:px-6 transition-all duration-200 text-sm sm:text-base"
                   style={{
                     backgroundColor: 'var(--primary-600)',
                     color: 'white',
                     fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif',
                   }}
                 >
-                  <Icons.download size={18} />
+                  <Icons.download size={16} className="sm:w-[18px] sm:h-[18px]" />
                   Download PDF
                 </button>
                 <button
                   onClick={() => navigate('/history')}
-                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl font-semibold h-11 px-6 transition-all duration-200 border"
+                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl font-semibold h-10 sm:h-11 px-4 sm:px-6 transition-all duration-200 border text-sm sm:text-base"
                   style={{
                     backgroundColor: 'white',
                     color: 'var(--text-700)',
@@ -431,7 +409,7 @@ export default function GenerateResume() {
                     fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif',
                   }}
                 >
-                  <Icons.fileText size={18} />
+                  <Icons.fileText size={16} className="sm:w-[18px] sm:h-[18px]" />
                   View All Resumes
                 </button>
               </div>
@@ -444,10 +422,10 @@ export default function GenerateResume() {
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="text-center"
+            className="text-center px-2"
           >
             <p
-              className="text-sm"
+              className="text-xs sm:text-sm"
               style={{
                 color: 'var(--text-600)',
                 fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif',
@@ -458,59 +436,54 @@ export default function GenerateResume() {
             <button
               onClick={() => handleGenerate()}
               disabled={!resumeText || !jobDescription}
-              className="mt-4 inline-flex items-center justify-center gap-2 rounded-xl font-semibold h-11 px-6 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="mt-3 sm:mt-4 inline-flex items-center justify-center gap-2 rounded-xl font-semibold h-10 sm:h-11 px-4 sm:px-6 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base"
               style={{
                 backgroundColor: 'var(--primary-600)',
                 color: 'white',
                 fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif',
               }}
             >
-              <Icons.zap size={18} />
+              <Icons.zap size={16} className="sm:w-[18px] sm:h-[18px]" />
               Generate Tailored Resume
             </button>
           </motion.div>
         )}
 
         {/* History Section */}
-        <div className="mt-10">
+        <div className="mt-6 sm:mt-10">
           <SectionHeader
-            icon={<Icons.clock size={22} />}
+            icon={<Icons.clock size={20} className="sm:w-[22px] sm:h-[22px]" />}
             title="Generation History"
             count={getFilteredResumes().length}
             right={
-              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                <div className="relative">
-                  <Input
-                    placeholder="Search resumes..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-9 w-full sm:w-64"
-                  />
-                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400">
-                    <Icons.search size={16} />
-                  </div>
+              <div className="relative w-full sm:w-64">
+                <Input
+                  placeholder="Search resumes..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-9 w-full text-sm"
+                />
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400">
+                  <Icons.search size={14} className="sm:w-4 sm:h-4" />
                 </div>
-                <Button variant={filter === 'all' ? 'solid' : 'outline'} size="sm" onClick={() => setFilter('all')}>All</Button>
-                <Button variant={filter === 'recent' ? 'solid' : 'outline'} size="sm" onClick={() => setFilter('recent')}>Recent</Button>
-                <Button variant={filter === 'week' ? 'solid' : 'outline'} size="sm" onClick={() => setFilter('week')}>Week</Button>
               </div>
             }
-            className="mb-6"
+            className="mb-4 sm:mb-6"
           />
 
           {loadingResumes ? (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
               {[1, 2, 3].map((i) => (
                 <Card key={i}>
-                  <CardContent className="pt-5">
+                  <CardContent className="pt-4 sm:pt-5">
                     <div className="flex items-start gap-3 animate-pulse">
-                      <div className="w-5 h-5 bg-gray-200 rounded"></div>
+                      <div className="w-4 h-4 sm:w-5 sm:h-5 bg-gray-200 rounded"></div>
                       <div className="flex-1 space-y-2">
-                        <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-                        <div className="h-3 bg-gray-200 rounded w-1/2"></div>
-                        <div className="flex gap-3 mt-2">
-                          <div className="h-3 bg-gray-200 rounded w-20"></div>
-                          <div className="h-3 bg-gray-200 rounded w-16"></div>
+                        <div className="h-3 sm:h-4 bg-gray-200 rounded w-3/4"></div>
+                        <div className="h-2.5 sm:h-3 bg-gray-200 rounded w-1/2"></div>
+                        <div className="flex gap-2 sm:gap-3 mt-2">
+                          <div className="h-2.5 sm:h-3 bg-gray-200 rounded w-16 sm:w-20"></div>
+                          <div className="h-2.5 sm:h-3 bg-gray-200 rounded w-12 sm:w-16"></div>
                         </div>
                       </div>
                     </div>
@@ -519,38 +492,39 @@ export default function GenerateResume() {
               ))}
             </div>
           ) : getFilteredResumes().length > 0 ? (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
               {getFilteredResumes().map((resume, idx) => (
                 <Card key={idx}>
-                  <CardContent className="pt-5">
-                    <div className="flex items-start gap-3">
-                      <div className="text-primary-600 mt-0.5"><Icons.fileText size={20} /></div>
+                  <CardContent className="pt-4 sm:pt-5">
+                    <div className="flex items-start gap-2 sm:gap-3">
+                      <div className="text-primary-600 mt-0.5 flex-shrink-0"><Icons.fileText size={18} className="sm:w-5 sm:h-5" /></div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <h3 className="font-semibold truncate">{resume.company || 'Unknown Company'}</h3>
-                            <p className="text-xs text-neutral-600 truncate">{resume.role || 'Position not specified'}</p>
+                          <div className="min-w-0 flex-1">
+                            <h3 className="font-semibold truncate text-sm sm:text-base">{resume.company || 'Unknown Company'}</h3>
+                            <p className="text-[11px] sm:text-xs text-neutral-600 truncate mt-0.5">{resume.role || 'Position not specified'}</p>
                           </div>
                         </div>
-                        <div className="mt-2 flex items-center gap-3 text-xs text-neutral-500">
+                        <div className="mt-2 flex flex-wrap items-center gap-2 sm:gap-3 text-[10px] sm:text-xs text-neutral-500">
                           <span className="inline-flex items-center gap-1">
-                            <Icons.calendar size={14} />
+                            <Icons.calendar size={12} className="sm:w-3.5 sm:h-3.5" />
                             {formatDate(resume.createdAt)}
                           </span>
                           <span className="inline-flex items-center gap-1">
-                            <Icons.file size={14} />
+                            <Icons.file size={12} className="sm:w-3.5 sm:h-3.5" />
                             {formatFileSize()}
                           </span>
                         </div>
                       </div>
-                      <div className="self-start">
+                      <div className="self-start flex-shrink-0">
                         <Button
                           aria-label="Download resume"
                           variant="outline"
                           size="sm"
                           onClick={() => downloadResume(resume.fileName)}
+                          className="h-8 w-8 sm:h-9 sm:w-9 p-0"
                         >
-                          <Icons.download size={16} />
+                          <Icons.download size={14} className="sm:w-4 sm:h-4" />
                         </Button>
                       </div>
                     </div>
@@ -560,11 +534,11 @@ export default function GenerateResume() {
             </div>
           ) : (
             <Card>
-              <CardContent className="pt-5">
-                <div className="text-center py-8">
-                  <div className="mx-auto mb-3 text-neutral-400"><Icons.inbox size={40} /></div>
-                  <h3 className="text-base font-semibold">No resumes found</h3>
-                  <p className="text-sm text-neutral-600">
+              <CardContent className="pt-4 sm:pt-5">
+                <div className="text-center py-6 sm:py-8 px-2">
+                  <div className="mx-auto mb-3 text-neutral-400"><Icons.inbox size={32} className="sm:w-10 sm:h-10" /></div>
+                  <h3 className="text-sm sm:text-base font-semibold">No resumes found</h3>
+                  <p className="text-xs sm:text-sm text-neutral-600 mt-1">
                     {searchTerm ? `No results matching "${searchTerm}"` : 'Generate your first resume to get started'}
                   </p>
                 </div>
@@ -576,3 +550,4 @@ export default function GenerateResume() {
     </div>
   );
 }
+

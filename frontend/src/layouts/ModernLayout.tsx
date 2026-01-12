@@ -10,7 +10,6 @@ import {
   User,
   MessageSquare,
   ListChecks,
-  Layout,
 } from 'lucide-react';
 
 interface ModernLayoutProps {
@@ -30,19 +29,18 @@ export default function ModernLayout({ children }: ModernLayoutProps) {
 
   const navItems: NavItem[] = [
     { id: 'resume', label: 'Resume', icon: FileText, path: '/generate' },
-    { id: 'templates', label: 'Templates', icon: Layout, path: '/templates' },
     { id: 'chat', label: 'Coach', icon: MessageSquare, path: '/happy' },
     { id: 'applications', label: 'Apps', icon: ListChecks, path: '/applications' },
     { id: 'profile', label: 'Profile', icon: User, path: '/profile' },
   ];
 
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="h-screen bg-background flex overflow-hidden">
       {/* Minimal Left Navigation - hidden on mobile */}
       <MinimalNav />
 
       {/* Main Content Column */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
         {/* Profile Completion Banner */}
         <ProfileCompletionBanner />
 
@@ -51,7 +49,7 @@ export default function ModernLayout({ children }: ModernLayoutProps) {
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.2 }}
-          className="hidden lg:flex justify-end px-4 lg:px-8 pt-6 md:pt-8"
+          className="hidden lg:flex justify-end px-4 lg:px-8 pt-4 flex-shrink-0"
         >
           <div className="p-1 bg-card rounded-full shadow-[0_2px_12px_rgba(0,0,0,0.08)] hover:shadow-[0_4px_20px_rgba(0,0,0,0.12)] transition-all duration-200">
             <UserButton
@@ -67,8 +65,8 @@ export default function ModernLayout({ children }: ModernLayoutProps) {
         </motion.div>
 
         {/* Main Content */}
-        <main className="w-full flex-1 px-4 lg:px-8 pb-24 lg:pb-8 pt-4 lg:pt-0">
-          <div className="max-w-[1200px] mx-auto">
+        <main className="w-full flex-1 min-h-0 pb-24 lg:pb-0 overflow-hidden">
+          <div className="h-full max-w-[1200px] mx-auto">
             {children}
           </div>
         </main>

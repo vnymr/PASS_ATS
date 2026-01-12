@@ -44,6 +44,8 @@ export default function Templates() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [customization, setCustomization] = useState<CustomizationOptions>(DEFAULT_CUSTOMIZATION);
   const [customizationOptions, setCustomizationOptions] = useState<any>(null);
+  const [cardPreviews, setCardPreviews] = useState<Record<string, string>>({});
+  const [cardPreviewLoading, setCardPreviewLoading] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (isLoaded && isSignedIn) {
@@ -51,6 +53,38 @@ export default function Templates() {
       loadCustomizationOptions();
     }
   }, [isLoaded, isSignedIn]);
+
+  // Load mini previews for all templates
+  useEffect(() => {
+    if (templates.length > 0) {
+      templates.forEach((template) => {
+        loadCardPreview(template.id);
+      });
+    }
+  }, [templates]);
+
+  const loadCardPreview = async (templateId: string) => {
+    if (cardPreviews[templateId]) return; // Already loaded
+    
+    setCardPreviewLoading(prev => ({ ...prev, [templateId]: true }));
+    try {
+      const token = await getToken();
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL || ''}/api/templates/${templateId}/preview-image`,
+        {
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        }
+      );
+      const data = await response.json();
+      if (data.success && data.pdf) {
+        setCardPreviews(prev => ({ ...prev, [templateId]: data.pdf }));
+      }
+    } catch (e) {
+      console.error(`Failed to load preview for ${templateId}:`, e);
+    } finally {
+      setCardPreviewLoading(prev => ({ ...prev, [templateId]: false }));
+    }
+  };
 
   const loadTemplates = async () => {
     try {
@@ -252,54 +286,92 @@ export default function Templates() {
             {templates.map((t) => (
               <div
                 key={t.id}
-                className={`group relative bg-white rounded-2xl border-2 transition-all duration-200 hover:shadow-lg overflow-hidden ${
-                  userDefaultId === t.id ? 'border-neutral-900 shadow-md' : 'border-neutral-200 hover:border-neutral-300'
+                className={`group relative bg-white rounded-xl border transition-all duration-300 hover:shadow-xl overflow-hidden cursor-pointer ${
+                  userDefaultId === t.id 
+                    ? 'border-neutral-900 shadow-lg ring-2 ring-neutral-900 ring-offset-2' 
+                    : 'border-neutral-200 hover:border-neutral-300 hover:-translate-y-1'
                 }`}
               >
                 {userDefaultId === t.id && (
-                  <div className="absolute top-3 right-3 z-10 px-2.5 py-1 bg-neutral-900 text-white text-xs font-medium rounded-full">
+                  <div className="absolute top-3 right-3 z-20 px-3 py-1 bg-gradient-to-r from-neutral-900 to-neutral-800 text-white text-xs font-semibold rounded-full shadow-lg">
                     Current
                   </div>
                 )}
 
-                {/* Template preview placeholder */}
-                <div className="aspect-[8.5/11] border-b border-neutral-100 bg-neutral-50 flex items-center justify-center">
-                  <div className="text-center p-6">
-                    <div className="text-4xl mb-3">📄</div>
-                    <p className="text-sm font-medium text-neutral-700">{t.name}</p>
-                    <p className="text-xs text-neutral-400 mt-1">
-                      {t.fonts?.name || 'Professional'} font
-                    </p>
-                  </div>
+                {/* Template preview with PDF or placeholder */}
+                <div 
+                  className="aspect-[8.5/11] border-b border-neutral-100 bg-gradient-to-br from-neutral-50 to-white relative overflow-hidden"
+                  onClick={() => openTemplate(t)}
+                >
+                  {cardPreviewLoading[t.id] ? (
+                    <div className="absolute inset-0 flex items-center justify-center bg-neutral-50">
+                      <div className="text-center">
+                        <Loader2 className="w-6 h-6 animate-spin text-neutral-400 mx-auto mb-2" />
+                        <p className="text-xs text-neutral-400">Loading preview...</p>
+                      </div>
+                    </div>
+                  ) : cardPreviews[t.id] ? (
+                    <div className="absolute inset-0 bg-white overflow-hidden rounded-t-xl">
+                      <iframe
+                        src={`data:application/pdf;base64,${cardPreviews[t.id]}#toolbar=0&navpanes=0&zoom=40`}
+                        className="w-full h-full border-0 pointer-events-none"
+                        title={`Preview of ${t.name}`}
+                      />
+                    </div>
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="text-center p-6">
+                        <div className="text-5xl mb-3 opacity-60">📄</div>
+                        <p className="text-sm font-semibold text-neutral-700 mb-1">{t.name}</p>
+                        <p className="text-xs text-neutral-400">
+                          {t.fonts?.name || 'Professional'} font
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Overlay on hover */}
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors duration-300" />
                 </div>
 
-                <div className="p-4">
-                  <h3 className="font-semibold text-neutral-900">{t.name}</h3>
-                  <p className="text-sm text-neutral-500 mt-1 line-clamp-2">
-                    {t.description || 'Professional resume template'}
-                  </p>
+                <div className="p-5 bg-white">
+                  <div className="mb-3">
+                    <h3 className="font-bold text-base text-neutral-900 mb-1.5">{t.name}</h3>
+                    <p className="text-sm text-neutral-600 line-clamp-2 leading-relaxed">
+                      {t.description || 'Professional resume template'}
+                    </p>
+                  </div>
 
                   {t.bestFor && t.bestFor.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-2">
+                    <div className="flex flex-wrap gap-1.5 mb-4">
                       {t.bestFor.slice(0, 3).map((tag, i) => (
-                        <span key={i} className="text-xs px-2 py-0.5 bg-neutral-100 text-neutral-600 rounded-full">
+                        <span 
+                          key={i} 
+                          className="text-xs px-2.5 py-1 bg-gradient-to-r from-neutral-100 to-neutral-50 text-neutral-700 rounded-md font-medium border border-neutral-200/50"
+                        >
                           {tag}
                         </span>
                       ))}
                     </div>
                   )}
 
-                  <div className="flex gap-2 mt-4">
+                  <div className="flex gap-2 mb-3">
                     <button
-                      onClick={() => openTemplate(t)}
-                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm font-medium text-neutral-700 bg-neutral-100 hover:bg-neutral-200 rounded-xl transition"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openTemplate(t);
+                      }}
+                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm font-semibold text-neutral-700 bg-neutral-100 hover:bg-neutral-200 rounded-lg transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
                     >
                       <Eye className="w-4 h-4" />
                       Preview
                     </button>
                     <button
-                      onClick={() => openCustomize(t)}
-                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm font-medium text-neutral-700 bg-neutral-100 hover:bg-neutral-200 rounded-xl transition"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openCustomize(t);
+                      }}
+                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm font-semibold text-neutral-700 bg-neutral-100 hover:bg-neutral-200 rounded-lg transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
                     >
                       <Settings className="w-4 h-4" />
                       Customize
@@ -308,13 +380,23 @@ export default function Templates() {
 
                   {userDefaultId !== t.id && (
                     <button
-                      onClick={() => handleChoose(t)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleChoose(t);
+                      }}
                       disabled={choosing}
-                      className="w-full mt-2 flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm font-medium text-neutral-700 border border-neutral-200 hover:bg-neutral-50 rounded-xl transition"
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-neutral-900 to-neutral-800 hover:from-neutral-800 hover:to-neutral-700 rounded-lg transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed shadow-sm hover:shadow-md"
                     >
                       <Check className="w-4 h-4" />
                       {choosing ? 'Choosing...' : 'Choose This'}
                     </button>
+                  )}
+                  
+                  {userDefaultId === t.id && (
+                    <div className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-neutral-600 bg-neutral-100 rounded-lg">
+                      <Check className="w-4 h-4 text-neutral-900" />
+                      Selected
+                    </div>
                   )}
                 </div>
               </div>

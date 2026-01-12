@@ -1,7 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LayoutGrid, Briefcase } from 'lucide-react';
-import { UserButton } from '@clerk/clerk-react';
 import { ProcessingStep } from './happy/ProcessingStep';
 import { JobCard } from './happy/JobCard';
 import { SectionHeader } from './happy/SectionHeader';
@@ -9,8 +7,6 @@ import { ActionCard } from './happy/ActionCard';
 import { RoutineCard } from './happy/RoutineCard';
 import { ProgressCard } from './happy/ProgressCard';
 import { ApplicationCard } from './happy/ApplicationCard';
-import { RoutinesPanel } from './happy/RoutinesPanel';
-import { DashboardPanel } from './happy/DashboardPanel';
 import { PromptBox } from './ui/chatgpt-prompt-input';
 
 export type ContentType = 'jobs' | 'routines' | 'progress' | 'actions' | 'applications' | 'overview' | 'resume' | 'general';
@@ -63,8 +59,6 @@ export default function ChatInterface({
   const [isTyping, setIsTyping] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [currentProcessing, setCurrentProcessing] = useState<ProcessingTool[]>([]);
-  const [isPanelOpen, setIsPanelOpen] = useState(false);
-  const [isDashboardPanelOpen, setIsDashboardPanelOpen] = useState(false);
   const [streamingMessageIndex, setStreamingMessageIndex] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -84,7 +78,7 @@ export default function ChatInterface({
   }, [messages, streamingMessageIndex, isLoading]);
 
   useEffect(() => {
-    if (containerRef.current) {
+    if (containerRef.current && messages.length > 0) {
       containerRef.current.scrollTop = containerRef.current.scrollHeight;
     }
   }, [messages, isLoading, currentProcessing]);
@@ -314,98 +308,131 @@ export default function ChatInterface({
 
   return (
     <>
-      {/* Top Right - User Button and Panel Buttons */}
-      <div className="fixed top-6 right-6 md:top-8 md:right-8 z-40 flex items-center gap-3">
-        {showDashboard && (
-          <>
-            <motion.button
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 0.2 }}
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsPanelOpen(true);
-              }}
-              className="p-3 bg-card rounded-[12px] shadow-[0_2px_12px_rgba(0,0,0,0.08)] hover:shadow-[0_4px_20px_rgba(0,0,0,0.12)] transition-all duration-200 cursor-pointer"
-              style={{
-                color: 'var(--text-900)'
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--background-100)'}
-              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'var(--card)'}
-              title="Routines"
-            >
-              <LayoutGrid className="w-5 h-5" />
-            </motion.button>
 
-            <motion.button
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 0.25 }}
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsDashboardPanelOpen(true);
-              }}
-              className="p-3 bg-card rounded-[12px] shadow-[0_2px_12px_rgba(0,0,0,0.08)] hover:shadow-[0_4px_20px_rgba(0,0,0,0.12)] transition-all duration-200 cursor-pointer"
-              style={{
-                color: 'var(--text-900)'
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--background-100)'}
-              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'var(--card)'}
-              title="Applications Dashboard"
-            >
-              <Briefcase className="w-5 h-5" />
-            </motion.button>
-          </>
-        )}
+      <div className="h-full bg-background flex flex-col overflow-hidden">
+        {messages.length === 0 ? (
+          /* Initial centered state */
+          <div className="flex-1 flex items-center justify-center overflow-y-auto">
+            <div className="max-w-[780px] mx-auto px-4 sm:px-8 w-full">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.6 }}
+                className="text-center mb-8"
+              >
+                <motion.h1
+                  animate={{
+                    fontSize: '24px',
+                    marginBottom: '8px',
+                  }}
+                  transition={{ duration: 0.3, ease: 'easeOut' }}
+                  style={{
+                    fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif',
+                    fontWeight: 500,
+                    color: 'var(--text-900)',
+                    letterSpacing: '-0.01em',
+                  }}
+                >
+                  {title}
+                </motion.h1>
+              </motion.div>
 
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.3 }}
-        >
-          <div className="p-1 bg-card rounded-full shadow-[0_2px_12px_rgba(0,0,0,0.08)] hover:shadow-[0_4px_20px_rgba(0,0,0,0.12)] transition-all duration-200">
-            <UserButton
-              afterSignOutUrl="/"
-              appearance={{
-                elements: {
-                  avatarBox: 'w-9 h-9',
-                  userButtonPopoverCard: 'shadow-lg'
-                }
-              }}
-            />
+              <AnimatePresence>
+                {isLoading && currentProcessing.length > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0 }}
+                    className="rounded-[12px] p-4 mb-6"
+                    style={{ backgroundColor: 'var(--background-50)' }}
+                  >
+                    {currentProcessing.map((tool, toolIndex) => (
+                      <ProcessingStep
+                        key={toolIndex}
+                        tool={tool.name}
+                        status={tool.status}
+                        delay={0}
+                      />
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {error && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="rounded-[12px] p-4 mb-6"
+                  style={{ backgroundColor: 'var(--accent-100)', borderLeft: '3px solid var(--accent-600)' }}
+                >
+                  <div className="flex items-start gap-3">
+                    <span style={{ color: 'var(--accent-700)', fontSize: '14px' }}>⚠️</span>
+                    <div style={{ flex: 1 }}>
+                      <p style={{ color: 'var(--accent-900)', fontSize: '14px', marginBottom: '8px' }}>{error}</p>
+                      <button
+                        onClick={() => {
+                          setError(null);
+                        }}
+                        style={{
+                          padding: '6px 12px',
+                          borderRadius: '6px',
+                          backgroundColor: 'var(--accent-600)',
+                          color: 'white',
+                          fontSize: '13px',
+                          fontWeight: 500,
+                          border: 'none',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+              
+              <form onSubmit={handleSubmit} className="w-full">
+                <PromptBox
+                  name="message"
+                  placeholder={placeholder || "Message Resume Tailor..."}
+                  disabled={isLoading}
+                  className="w-full"
+                />
+              </form>
+            </div>
           </div>
-        </motion.div>
-      </div>
-
-      <div
-        ref={containerRef}
-        className="min-h-screen bg-background"
-      >
-        <div className="max-w-[780px] mx-auto px-4 sm:px-8 py-8 sm:py-16">
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.6 }}
-            className="mb-8"
-          >
-            <motion.h1
-              animate={{
-                fontSize: messages.length > 0 || isTyping ? '18px' : '24px',
-                marginBottom: messages.length > 0 || isTyping ? '32px' : '8px',
-              }}
-              transition={{ duration: 0.3, ease: 'easeOut' }}
-              style={{
-                fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif',
-                fontWeight: 500,
-                color: 'var(--text-900)',
-                letterSpacing: '-0.01em',
-              }}
+        ) : (
+          /* Chat state with messages */
+          <>
+            <div
+              ref={containerRef}
+              className="flex-1 overflow-y-auto min-h-0"
             >
-              {title}
-            </motion.h1>
-          </motion.div>
+              <div className="max-w-[780px] mx-auto px-4 sm:px-8 py-8 sm:py-16 pb-24">
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.6 }}
+                  className="mb-8"
+                >
+                  <motion.h1
+                    animate={{
+                      fontSize: '18px',
+                      marginBottom: '32px',
+                    }}
+                    transition={{ duration: 0.3, ease: 'easeOut' }}
+                    style={{
+                      fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif',
+                      fontWeight: 500,
+                      color: 'var(--text-900)',
+                      letterSpacing: '-0.01em',
+                    }}
+                  >
+                    {title}
+                  </motion.h1>
+                </motion.div>
 
-          <div className="space-y-8 mb-6">
+                <div className="space-y-8">
             {messages.map((message, index) => (
               <motion.div
                 key={index}
@@ -568,96 +595,81 @@ export default function ChatInterface({
                 )}
               </motion.div>
             ))}
-          </div>
-
-          <AnimatePresence>
-            {isLoading && currentProcessing.length > 0 && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                className="rounded-[12px] p-4 mb-6"
-                style={{ backgroundColor: 'var(--background-50)' }}
-              >
-                {currentProcessing.map((tool, toolIndex) => (
-                  <ProcessingStep
-                    key={toolIndex}
-                    tool={tool.name}
-                    status={tool.status}
-                    delay={0}
-                  />
-                ))}
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {error && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="rounded-[12px] p-4 mb-6"
-              style={{ backgroundColor: 'var(--accent-100)', borderLeft: '3px solid var(--accent-600)' }}
-            >
-              <div className="flex items-start gap-3">
-                <span style={{ color: 'var(--accent-700)', fontSize: '14px' }}>⚠️</span>
-                <div style={{ flex: 1 }}>
-                  <p style={{ color: 'var(--accent-900)', fontSize: '14px', marginBottom: '8px' }}>{error}</p>
-                  <button
-                    onClick={() => {
-                      setError(null);
-                    }}
-                    style={{
-                      padding: '6px 12px',
-                      borderRadius: '6px',
-                      backgroundColor: 'var(--accent-600)',
-                      color: 'white',
-                      fontSize: '13px',
-                      fontWeight: 500,
-                      border: 'none',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Dismiss
-                  </button>
                 </div>
-              </div>
-            </motion.div>
-          )}
 
-          <form onSubmit={handleSubmit} className="w-full">
-            <PromptBox
-              name="message"
-              placeholder={placeholder || "Message Resume Tailor..."}
-              disabled={isLoading}
-              className="w-full"
-            />
-          </form>
-        </div>
+                <AnimatePresence>
+                  {isLoading && currentProcessing.length > 0 && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0 }}
+                      className="rounded-[12px] p-4 mb-6"
+                      style={{ backgroundColor: 'var(--background-50)' }}
+                    >
+                      {currentProcessing.map((tool, toolIndex) => (
+                        <ProcessingStep
+                          key={toolIndex}
+                          tool={tool.name}
+                          status={tool.status}
+                          delay={0}
+                        />
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {error && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="rounded-[12px] p-4 mb-6"
+                    style={{ backgroundColor: 'var(--accent-100)', borderLeft: '3px solid var(--accent-600)' }}
+                  >
+                    <div className="flex items-start gap-3">
+                      <span style={{ color: 'var(--accent-700)', fontSize: '14px' }}>⚠️</span>
+                      <div style={{ flex: 1 }}>
+                        <p style={{ color: 'var(--accent-900)', fontSize: '14px', marginBottom: '8px' }}>{error}</p>
+                        <button
+                          onClick={() => {
+                            setError(null);
+                          }}
+                          style={{
+                            padding: '6px 12px',
+                            borderRadius: '6px',
+                            backgroundColor: 'var(--accent-600)',
+                            color: 'white',
+                            fontSize: '13px',
+                            fontWeight: 500,
+                            border: 'none',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          Dismiss
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </div>
+            </div>
+            
+            {/* Fixed input at bottom when messages exist */}
+            <div className="bg-background flex-shrink-0">
+              <div className="max-w-[780px] mx-auto px-4 sm:px-8 py-4">
+                <form onSubmit={handleSubmit} className="w-full">
+                  <PromptBox
+                    name="message"
+                    placeholder={placeholder || "Message Resume Tailor..."}
+                    disabled={isLoading}
+                    className="w-full"
+                  />
+                </form>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
-      {/* Routines Panel */}
-      {showDashboard && (
-        <AnimatePresence>
-          {isPanelOpen && (
-            <RoutinesPanel
-              isOpen={isPanelOpen}
-              onClose={() => setIsPanelOpen(false)}
-            />
-          )}
-        </AnimatePresence>
-      )}
-
-      {/* Dashboard Panel */}
-      {showDashboard && (
-        <AnimatePresence>
-          {isDashboardPanelOpen && (
-            <DashboardPanel
-              isOpen={isDashboardPanelOpen}
-              onClose={() => setIsDashboardPanelOpen(false)}
-            />
-          )}
-        </AnimatePresence>
-      )}
     </>
   );
 }

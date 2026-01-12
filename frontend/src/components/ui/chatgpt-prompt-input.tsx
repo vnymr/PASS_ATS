@@ -40,8 +40,12 @@ const SendIcon = (props: React.SVGProps<SVGSVGElement>) => (
 );
 
 // --- The Simplified PromptBox Component ---
-export const PromptBox = React.forwardRef<HTMLTextAreaElement, React.TextareaHTMLAttributes<HTMLTextAreaElement>>(
-  ({ className, ...props }, ref) => {
+interface PromptBoxProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
+  leftButton?: React.ReactNode;
+}
+
+export const PromptBox = React.forwardRef<HTMLTextAreaElement, PromptBoxProps>(
+  ({ className, leftButton, ...props }, ref) => {
     const internalTextareaRef = React.useRef<HTMLTextAreaElement>(null);
     const [value, setValue] = React.useState("");
 
@@ -66,7 +70,7 @@ export const PromptBox = React.forwardRef<HTMLTextAreaElement, React.TextareaHTM
 
     return (
       <div className={cn(
-        "flex flex-col rounded-[28px] p-2 shadow-sm transition-colors bg-white border dark:bg-[#303030] dark:border-transparent cursor-text",
+        "flex flex-col rounded-[20px] sm:rounded-[28px] p-1.5 sm:p-2 shadow-sm transition-colors bg-white border dark:bg-[#303030] dark:border-transparent cursor-text",
         className
       )}>
         <textarea
@@ -75,28 +79,35 @@ export const PromptBox = React.forwardRef<HTMLTextAreaElement, React.TextareaHTM
           value={value}
           onChange={handleInputChange}
           placeholder="Message..."
-          className="custom-scrollbar w-full resize-none border-0 bg-transparent p-3 text-foreground dark:text-white placeholder:text-muted-foreground dark:placeholder:text-gray-300 focus:ring-0 focus-visible:outline-none min-h-12"
+          className="custom-scrollbar w-full resize-none border-0 bg-transparent p-2.5 sm:p-3 text-sm sm:text-base text-foreground dark:text-white placeholder:text-muted-foreground dark:placeholder:text-gray-300 focus:ring-0 focus-visible:outline-none min-h-12"
           {...props}
         />
 
         <div className="mt-0.5 p-1 pt-0">
           <TooltipProvider delayDuration={100}>
-            <div className="flex items-center justify-end">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="submit"
-                    disabled={!hasValue}
-                    className="flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none bg-black text-white hover:bg-black/80 dark:bg-white dark:text-black dark:hover:bg-white/80 disabled:bg-black/40 dark:disabled:bg-[#515151]"
-                  >
-                    <SendIcon className="h-6 w-6" />
-                    <span className="sr-only">Send message</span>
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="top" showArrow={true}>
-                  <p>Send</p>
-                </TooltipContent>
-              </Tooltip>
+            <div className="flex items-center justify-between">
+              {leftButton && (
+                <div className="flex items-center">
+                  {leftButton}
+                </div>
+              )}
+              <div className="flex items-center justify-end ml-auto">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="submit"
+                      disabled={!hasValue}
+                      className="flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-full text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none bg-black text-white hover:bg-black/80 dark:bg-white dark:text-black dark:hover:bg-white/80 disabled:bg-black/40 dark:disabled:bg-[#515151]"
+                    >
+                      <SendIcon className="h-5 w-5 sm:h-6 sm:w-6" />
+                      <span className="sr-only">Send message</span>
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" showArrow={true}>
+                    <p>Send</p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
             </div>
           </TooltipProvider>
         </div>
