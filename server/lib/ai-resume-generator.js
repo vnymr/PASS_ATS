@@ -1,8 +1,11 @@
 /**
- * AI Resume Generator - HTML-Based Implementation
+ * AI Resume Generator - DOCX-Based Implementation
  *
- * Uses Google Gemini for content generation and Playwright for PDF rendering.
- * NO LATEX DEPENDENCIES - Pure HTML/CSS output.
+ * Uses Google Gemini for content generation and LibreOffice for PDF rendering.
+ * Creates professional Word documents that look like real resumes.
+ *
+ * Primary: DOCX → PDF via LibreOffice
+ * Fallback: HTML → PDF via Playwright (if LibreOffice not available)
  *
  * Includes "Spotlight Strategy" for handling large profiles (10-20+ experiences).
  * Supports Google Search grounding for company-specific optimization.
@@ -10,13 +13,21 @@
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { generatePDFWithRetry } from './html-pdf-generator.js';
-import { generateHTML, TEMPLATES, getTemplateRecommendation } from './html-templates.js';
-import { jsonToHtml } from './json-to-html.js';
+import { generateHTML, TEMPLATES as HTML_TEMPLATES, getTemplateRecommendation } from './html-templates.js';
+import {
+  generateDOCX,
+  convertDocxToPdf,
+  isLibreOfficeAvailable,
+  TEMPLATES as DOCX_TEMPLATES
+} from './docx-resume-generator.js';
 import {
   extractCompanyName,
   extractJobTitle
 } from './resume-prompts.js';
 import logger from './logger.js';
+
+// Cache LibreOffice availability check
+let libreOfficeAvailable = null;
 
 class AIResumeGenerator {
   /**
@@ -32,7 +43,8 @@ class AIResumeGenerator {
 
     this.genAI = new GoogleGenerativeAI(key);
     this.model = 'gemini-2.0-flash';
-    logger.info('AIResumeGenerator initialized with Gemini (HTML mode)');
+    this.useDocx = process.env.USE_HTML_RESUME !== 'true'; // Default to DOCX
+    logger.info({ useDocx: this.useDocx }, 'AIResumeGenerator initialized with Gemini');
   }
 
   /**
@@ -40,17 +52,27 @@ class AIResumeGenerator {
    * @param {Object} userData - User profile data
    * @param {string} jobDescription - Target job description
    * @param {Object} options - Generation options
-   * @returns {Promise<{html: string, pdf: Buffer, metadata: Object}>}
+   * @returns {Promise<{html: string, pdf: Buffer, docx: Buffer, metadata: Object}>}
    */
   async generateAndCompile(userData, jobDescription, options = {}) {
     const startTime = Date.now();
     const templateId = options.templateId || 'jakes_resume';
 
+    // Check LibreOffice availability (cached)
+    if (libreOfficeAvailable === null) {
+      libreOfficeAvailable = await isLibreOfficeAvailable();
+      logger.info({ libreOfficeAvailable }, 'LibreOffice availability checked');
+    }
+
+    const useDocx = this.useDocx && libreOfficeAvailable;
+
     logger.info({
       profileSize: JSON.stringify(userData).length,
       templateId,
-      enableSearch: options.enableSearch !== false
-    }, 'Starting HTML Resume Generation');
+      enableSearch: options.enableSearch !== false,
+      useDocx,
+      libreOfficeAvailable
+    }, `Starting ${useDocx ? 'DOCX' : 'HTML'} Resume Generation`);
 
     // Validate user data has minimum required fields
     if (!userData || Object.keys(userData).length === 0) {
@@ -70,31 +92,49 @@ class AIResumeGenerator {
       // Phase 2: Generate optimized resume content
       const resumeData = await this.generateResumeContent(userData, jobDescription, companyInsights);
 
-      // Phase 3: Generate HTML
-      logger.info('Generating HTML...');
-      const html = generateHTML(resumeData, templateId);
-      logger.info({ htmlLength: html.length }, 'HTML generated');
+      let pdf, html, docx;
 
-      // Phase 4: Generate PDF
-      logger.info('Generating PDF...');
-      const pdf = await generatePDFWithRetry(html, {
-        format: 'Letter',
-        margin: { top: '0.5in', right: '0.5in', bottom: '0.5in', left: '0.5in' }
-      });
-      logger.info('PDF generated successfully');
+      if (useDocx) {
+        // DOCX Approach - Professional Word document
+        logger.info('Generating DOCX...');
+        docx = await generateDOCX(resumeData, templateId);
+        logger.info({ docxSize: docx.length }, 'DOCX generated');
+
+        // Convert to PDF via LibreOffice
+        logger.info('Converting DOCX to PDF via LibreOffice...');
+        pdf = await convertDocxToPdf(docx);
+        logger.info({ pdfSize: pdf.length }, 'PDF generated from DOCX');
+
+        // Also generate HTML for preview purposes
+        html = generateHTML(resumeData, templateId);
+      } else {
+        // HTML Fallback - Use Playwright
+        logger.info('Generating HTML (LibreOffice not available)...');
+        html = generateHTML(resumeData, templateId);
+        logger.info({ htmlLength: html.length }, 'HTML generated');
+
+        logger.info('Generating PDF via Playwright...');
+        pdf = await generatePDFWithRetry(html, {
+          format: 'Letter',
+          margin: { top: '0.5in', right: '0.5in', bottom: '0.5in', left: '0.5in' }
+        });
+        logger.info({ pdfSize: pdf.length }, 'PDF generated from HTML');
+      }
 
       const totalTime = Date.now() - startTime;
 
       logger.info({
         totalTime,
         company: companyName,
-        usedResearch: !!companyInsights
+        usedResearch: !!companyInsights,
+        approach: useDocx ? 'docx-libreoffice' : 'html-playwright'
       }, `Resume generated in ${(totalTime / 1000).toFixed(2)}s`);
 
       return {
         html,
         pdf,
-        // Keep 'latex' key for backward compatibility (contains HTML now)
+        docx: docx || null,
+        // Keep 'latex' key for backward compatibility
         latex: html,
         metadata: {
           generatedAt: new Date().toISOString(),
@@ -104,7 +144,8 @@ class AIResumeGenerator {
           jobTitle,
           templateId,
           usedCompanyResearch: !!companyInsights,
-          approach: 'html-gemini'
+          approach: useDocx ? 'docx-libreoffice' : 'html-playwright',
+          usedDocx: useDocx
         }
       };
 
