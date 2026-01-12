@@ -14,7 +14,7 @@ RUN npm ci
 COPY frontend/ ./
 
 # Set build-time environment variables for frontend
-ENV VITE_API_URL=/api
+ENV VITE_API_URL=https://api.happyresumes.com
 ENV VITE_CLERK_PUBLISHABLE_KEY=pk_live_Y2xlcmsuaGFwcHlyZXN1bWVzLmNvbSQ
 
 RUN npm run build
