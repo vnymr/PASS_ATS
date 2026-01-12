@@ -22,7 +22,8 @@ import {
 } from './email-verification-checker.js';
 
 /**
- * Get user's default template ID
+ * Get user's default template config
+ * Returns { templateId, customization } for use in resume generation
  * Falls back to 'jakes_resume' if no default is set
  */
 async function getUserDefaultTemplate(userId) {
@@ -32,20 +33,35 @@ async function getUserDefaultTemplate(userId) {
         userId,
         isDefault: true
       },
-      select: { id: true, name: true }
+      select: { id: true, name: true, latex: true }
     });
 
     if (defaultTemplate) {
       logger.info({ templateId: defaultTemplate.id, templateName: defaultTemplate.name }, 'Using user default template');
-      return defaultTemplate.id;
+
+      // Parse the stored template config (contains baseTemplate + customization)
+      let templateConfig = { templateId: 'jakes_resume', customization: null };
+      try {
+        if (defaultTemplate.latex) {
+          const parsed = JSON.parse(defaultTemplate.latex);
+          templateConfig = {
+            templateId: parsed.baseTemplate || 'jakes_resume',
+            customization: parsed.customization || null
+          };
+        }
+      } catch (e) {
+        logger.warn({ error: e.message }, 'Failed to parse template config, using defaults');
+      }
+
+      return templateConfig;
     }
 
     // No user default, use system default
     logger.info('No user default template, using jakes_resume');
-    return 'jakes_resume';
+    return { templateId: 'jakes_resume', customization: null };
   } catch (error) {
     logger.warn({ error: error.message }, 'Failed to fetch user default template, using jakes_resume');
-    return 'jakes_resume';
+    return { templateId: 'jakes_resume', customization: null };
   }
 }
 
@@ -59,11 +75,18 @@ const aiFormFiller = new AIFormFiller();
  * 3. Generate new tailored resume if nothing relevant exists
  * 4. Fall back to uploaded resume or latest resume if generation fails
  */
-async function getOrGenerateTailoredResume(userId, aggregatedJob, profileData, templateId = null) {
+async function getOrGenerateTailoredResume(userId, aggregatedJob, profileData, templateConfig = null) {
   const { id: jobId, company, title, description, requirements } = aggregatedJob;
 
   // Get user's default template if not provided
-  const effectiveTemplateId = templateId || await getUserDefaultTemplate(userId);
+  let effectiveConfig = templateConfig;
+  if (!effectiveConfig) {
+    effectiveConfig = await getUserDefaultTemplate(userId);
+  } else if (typeof effectiveConfig === 'string') {
+    // Legacy: if just a string ID was passed, convert to config object
+    effectiveConfig = { templateId: effectiveConfig, customization: null };
+  }
+  const { templateId: effectiveTemplateId, customization } = effectiveConfig;
 
   // Combine description and requirements for full job context
   const fullJobDescription = [description, requirements].filter(Boolean).join('\n\n');
@@ -160,12 +183,13 @@ async function getOrGenerateTailoredResume(userId, aggregatedJob, profileData, t
     });
 
     // Process the resume generation (synchronously for auto-apply)
-    // Pass user's template selection
+    // Pass user's template selection with customization
     await processResumeJob({
       jobId: newResumeJob.id,
       profileData,
       jobDescription: fullJobDescription,
-      templateId: effectiveTemplateId
+      templateId: effectiveTemplateId,
+      customization
     });
 
     // Fetch the generated artifact

@@ -32,7 +32,7 @@ import { extractCompanyName, extractJobTitle } from './resume-prompts.js';
  * @returns {Promise<void>}
  */
 export async function processResumeJob(jobData, onProgress = null) {
-  const { jobId, profileData, jobDescription, userId, templateId } = jobData;
+  const { jobId, profileData, jobDescription, userId, templateId, customization } = jobData;
   const startTime = Date.now();
 
   try {
@@ -70,7 +70,8 @@ export async function processResumeJob(jobData, onProgress = null) {
       jobDescription,
       {
         enableSearch: true,
-        templateId: effectiveTemplateId
+        templateId: effectiveTemplateId,
+        customization: customization || null
       }
     );
 
