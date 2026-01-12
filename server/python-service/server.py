@@ -228,15 +228,19 @@ async def start_python_proxy(proxy_port: int, target_port: int, browser_id: str)
 def start_proxy_in_thread(proxy_port: int, target_port: int, browser_id: str):
     """Start the Python proxy in a background thread with its own event loop"""
     def run_proxy():
+        print(f"[{browser_id}] Starting proxy thread...", flush=True)
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
             loop.run_until_complete(start_python_proxy(proxy_port, target_port, browser_id))
         except Exception as e:
+            import traceback
             print(f"[{browser_id}] Proxy error: {e}", flush=True)
+            print(f"[{browser_id}] Traceback: {traceback.format_exc()}", flush=True)
 
     thread = Thread(target=run_proxy, daemon=True)
     thread.start()
+    print(f"[{browser_id}] Proxy thread started", flush=True)
     return thread
 
 
