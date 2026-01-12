@@ -1,6 +1,6 @@
 FROM node:20-slim
 
-# Install system dependencies for Playwright (fallback browser)
+# Install system dependencies for Playwright and LibreOffice
 RUN apt-get update && apt-get install -y \
     wget \
     gnupg \
@@ -23,7 +23,17 @@ RUN apt-get update && apt-get install -y \
     libxkbcommon0 \
     libxrandr2 \
     xdg-utils \
+    # LibreOffice for DOCX to PDF conversion
+    libreoffice-writer \
+    libreoffice-common \
+    # Additional fonts for professional resumes
+    fonts-dejavu \
+    fonts-freefont-ttf \
+    fonts-noto \
     && rm -rf /var/lib/apt/lists/*
+
+# Set LibreOffice path
+ENV LIBREOFFICE_PATH=/usr/bin/soffice
 
 # Set working directory
 WORKDIR /app

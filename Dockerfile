@@ -1,11 +1,6 @@
 # Optimized Dockerfile for Railway deployment
-FROM node:18-alpine AS builder
-
-# Install tectonic for LaTeX compilation
-RUN apk add --no-cache curl && \
-    curl -L https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic%400.15.0/tectonic-0.15.0-x86_64-unknown-linux-musl.tar.gz \
-    | tar -xz -C /usr/local/bin/ && \
-    apk del curl
+# Using Debian-slim for better LibreOffice support
+FROM node:18-slim AS builder
 
 # Build frontend
 WORKDIR /app/frontend
@@ -20,47 +15,48 @@ ENV VITE_CLERK_PUBLISHABLE_KEY=pk_live_Y2xlcmsuaGFwcHlyZXN1bWVzLmNvbSQ
 RUN npm run build
 
 # Production stage
-FROM node:18-alpine
+FROM node:18-slim
 
-# Install Chromium and ALL dependencies for Playwright
-# Critical: Alpine needs extra libs for headless Chromium to work
-RUN apk add --no-cache \
+# Install Chromium, LibreOffice and dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     openssl \
     curl \
+    gnupg \
+    # Chromium dependencies
     chromium \
-    chromium-chromedriver \
-    nss \
-    freetype \
-    freetype-dev \
-    harfbuzz \
-    ttf-freefont \
-    font-noto-emoji \
-    # Additional libs often missing in Alpine
-    libstdc++ \
-    mesa-gl \
-    mesa-egl \
-    libxcomposite \
-    libxdamage \
-    libxrandr \
-    libxshmfence \
-    libxkbcommon \
-    pango \
-    cairo \
-    alsa-lib \
-    cups-libs \
-    dbus-libs \
-    libdrm \
-    libxfixes \
-    at-spi2-core
+    fonts-liberation \
+    libasound2 \
+    libatk-bridge2.0-0 \
+    libatk1.0-0 \
+    libcups2 \
+    libdbus-1-3 \
+    libdrm2 \
+    libgbm1 \
+    libgtk-3-0 \
+    libnspr4 \
+    libnss3 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxkbcommon0 \
+    libxrandr2 \
+    xdg-utils \
+    # LibreOffice for DOCX to PDF conversion
+    libreoffice-writer-nogui \
+    libreoffice-common \
+    # Professional fonts for resumes
+    fonts-dejavu \
+    fonts-freefont-ttf \
+    fonts-noto \
+    fonts-noto-color-emoji \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
 
-# CRITICAL: Alpine uses musl libc, Playwright's bundled Chromium needs glibc
-# We MUST use the system chromium package instead
+# Set browser and LibreOffice paths
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
-ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser
-
-# Copy tectonic from builder
-COPY --from=builder /usr/local/bin/tectonic /usr/local/bin/tectonic
+ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
+ENV LIBREOFFICE_PATH=/usr/bin/soffice
 
 WORKDIR /app
 
