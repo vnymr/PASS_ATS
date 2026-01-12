@@ -2,23 +2,21 @@
  * Redis Connection Configuration
  *
  * Centralizes Redis connection logic for both queue and worker
- * With retry limits to prevent infinite connection loops
+ * Optimized for Railway Redis proxy which has aggressive idle timeouts
  */
 
 import Redis from 'ioredis';
 import logger from './logger.js';
 
-// Maximum retry attempts before giving up
-const MAX_REDIS_RETRIES = 5;
-let globalRetryCount = 0;
 let redisAvailable = false;
 
 /**
  * Create Redis connection with proper configuration
  *
- * Supports both local development (localhost:6379) and production (Railway Redis)
- * Optimized for 1000+ concurrent users with connection pooling
- * Has retry limits to prevent infinite loops when Redis is unavailable
+ * Optimized for Railway Redis proxy:
+ * - Short keepAlive to prevent idle disconnects
+ * - Aggressive reconnection for transient failures
+ * - No retry limit (Railway connections are transient)
  */
 export function createRedisConnection() {
   const redisUrl = process.env.REDIS_URL;
@@ -34,48 +32,40 @@ export function createRedisConnection() {
 
   const finalUrl = redisUrl || 'redis://localhost:6379';
 
-  // If we've already exceeded retries, return null
-  if (globalRetryCount >= MAX_REDIS_RETRIES) {
-    logger.warn('Redis max retries already exceeded, skipping connection');
-    return null;
-  }
-
   try {
     const connection = new Redis(finalUrl, {
       maxRetriesPerRequest: null, // Required for BullMQ
       enableReadyCheck: false,
-      lazyConnect: true, // Don't connect immediately - wait for first command
-      keepAlive: 30000,
-      connectTimeout: 5000, // Reduced to 5s
-      // Auto-reconnect with retry limit
+      lazyConnect: false, // Connect immediately to establish keepalive
+      // Aggressive keepalive to prevent Railway proxy timeout
+      keepAlive: 10000, // Send TCP keepalive every 10 seconds
+      connectTimeout: 10000, // 10 second connect timeout
+      commandTimeout: 30000, // 30 second command timeout
+      // Always reconnect - Railway connections are transient
       retryStrategy(times) {
-        globalRetryCount = times;
-        if (times > MAX_REDIS_RETRIES) {
-          logger.warn({ attempt: times, maxRetries: MAX_REDIS_RETRIES }, 'Redis max retries exceeded, stopping reconnection');
-          redisAvailable = false;
-          return null; // Stop retrying
+        // Exponential backoff: 100ms, 200ms, 400ms... max 3s
+        const delay = Math.min(times * 100, 3000);
+        if (times <= 3 || times % 10 === 0) { // Log first 3 and every 10th
+          logger.warn({ attempt: times, delay }, 'Redis retry attempt');
         }
-        const delay = Math.min(times * 500, 3000);
-        logger.warn({ attempt: times, delay, maxRetries: MAX_REDIS_RETRIES }, 'Redis retry attempt');
-        return delay;
+        return delay; // Always retry
       },
       reconnectOnError(err) {
-        if (globalRetryCount >= MAX_REDIS_RETRIES) {
-          return false; // Don't reconnect if max retries exceeded
+        // Always reconnect on any error (Railway connections are unstable)
+        const shouldReconnect = err.message.includes('ECONNRESET') ||
+                               err.message.includes('ETIMEDOUT') ||
+                               err.message.includes('READONLY') ||
+                               err.message.includes('ENOTFOUND');
+        if (shouldReconnect) {
+          logger.info('Redis error triggered reconnect');
         }
-        const targetError = 'READONLY';
-        if (err.message.includes(targetError)) {
-          logger.warn('Redis READONLY error, reconnecting...');
-          return true;
-        }
-        return false;
+        return shouldReconnect;
       },
-      enableOfflineQueue: false, // Disable to prevent queue buildup when Redis is down
+      enableOfflineQueue: true, // Queue commands while reconnecting
     });
 
     connection.on('connect', () => {
       redisAvailable = true;
-      globalRetryCount = 0;
       logger.info({ url: finalUrl.replace(/\/\/.*@/, '//**:**@') }, 'Redis connected');
     });
 
@@ -86,29 +76,25 @@ export function createRedisConnection() {
 
     connection.on('error', (error) => {
       redisAvailable = false;
-      // Only log if under retry limit to prevent spam
-      if (globalRetryCount <= MAX_REDIS_RETRIES) {
+      // Only log occasional errors to prevent spam
+      if (!error._logged) {
         logger.error({ error: error.message }, 'Redis connection error');
+        error._logged = true;
       }
-      // Don't rethrow - let retry strategy handle it
     });
 
     connection.on('close', () => {
       redisAvailable = false;
-      if (globalRetryCount <= MAX_REDIS_RETRIES) {
-        logger.warn('Redis connection closed');
-      }
+      logger.warn('Redis connection closed');
     });
 
     connection.on('end', () => {
       redisAvailable = false;
-      logger.warn('Redis connection ended permanently');
+      logger.warn('Redis connection ended');
     });
 
     connection.on('reconnecting', () => {
-      if (globalRetryCount <= MAX_REDIS_RETRIES) {
-        logger.info('Redis reconnecting...');
-      }
+      logger.info('Redis reconnecting...');
     });
 
     return connection;

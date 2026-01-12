@@ -44,8 +44,10 @@ async function compileLatex(latexCode) {
     await fs.writeFile(texFile, latexCode);
 
     // Try to compile with different engines in order of preference
+    const homeDir = process.env.HOME || '/root';
     const compilers = [
       { cmd: 'tectonic', args: '--outdir . --keep-logs resume.tex', name: 'tectonic' },
+      { cmd: `${homeDir}/.local/bin/tectonic`, args: '--outdir . --keep-logs resume.tex', name: 'tectonic (~/.local/bin)' },
       { cmd: '/opt/homebrew/bin/tectonic', args: '--outdir . --keep-logs resume.tex', name: 'tectonic (homebrew)' },
       { cmd: '/usr/local/bin/tectonic', args: '--outdir . --keep-logs resume.tex', name: 'tectonic (usr/local)' },
       { cmd: 'pdflatex', args: '-interaction=nonstopmode -output-directory=. resume.tex', name: 'pdflatex' },
@@ -97,14 +99,19 @@ async function compileLatex(latexCode) {
         logger.info(`✅ Successfully compiled PDF with ${compiler.name || compiler.cmd}`);
         break;
       } catch (error) {
-        lastError = error;
+        // Store the full error object for better debugging
+        lastError = {
+          message: error.message || 'Unknown error',
+          stderr: error.stderr || '',
+          stdout: error.stdout || '',
+          compiler: compiler.name
+        };
+
         // Only log errors that aren't about missing binaries
         if (error.message && !error.message.includes('not found') && !error.message.includes('ENOENT')) {
-          if (compiler.name.includes('tectonic')) {
-            logger.info(`⚠️ ${compiler.name} compilation failed: ${error.message.substring(0, 200)}`);
-            if (error.stderr && error.stderr.length > 0) {
-              logger.info(`📋 Stderr: ${error.stderr.substring(0, 300)}`);
-            }
+          logger.info(`⚠️ ${compiler.name} compilation failed: ${(error.message || '').substring(0, 200)}`);
+          if (error.stderr && error.stderr.length > 0) {
+            logger.info(`📋 Stderr: ${error.stderr.substring(0, 500)}`);
           }
         }
         continue;
@@ -112,7 +119,42 @@ async function compileLatex(latexCode) {
     }
 
     if (!compiled) {
-      throw new Error(`LaTeX compilation failed. Last error: ${lastError?.message}`);
+      // Build a meaningful error message
+      let errorMsg = 'LaTeX compilation failed';
+
+      if (lastError) {
+        const parts = [];
+
+        if (lastError.compiler) {
+          parts.push(`[${lastError.compiler}]`);
+        }
+
+        if (lastError.message && lastError.message !== 'Unknown error') {
+          parts.push(lastError.message.substring(0, 300));
+        }
+
+        if (lastError.stderr && lastError.stderr.length > 0) {
+          // Extract the most relevant part of stderr
+          const stderr = lastError.stderr;
+          // Look for common LaTeX error patterns
+          const errorMatch = stderr.match(/error:([^\n]+)/i) ||
+                            stderr.match(/!([^\n]+)/);
+          if (errorMatch) {
+            parts.push(errorMatch[0].substring(0, 200));
+          } else {
+            parts.push(stderr.substring(0, 200));
+          }
+        }
+
+        if (parts.length > 0) {
+          errorMsg += ': ' + parts.join(' - ');
+        }
+      } else {
+        // No compiler was found at all
+        errorMsg += ': No LaTeX compiler available. Please install tectonic (recommended) or pdflatex.';
+      }
+
+      throw new Error(errorMsg);
     }
 
     // Read the PDF

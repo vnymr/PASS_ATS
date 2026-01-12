@@ -1,190 +1,34 @@
 /**
- * Resume Generation Prompts - AI-Native "Mega-Prompt" Approach
- * Flexible, adaptive resume generation optimized for ATS pass-through.
+ * Resume Generation Prompts - Simple, Clean LaTeX
+ * Focus on content and ATS optimization, not complex LaTeX commands.
  */
 
-export const RESUME_SYSTEM_PROMPT = `You are an elite Resume Architect and ATS Optimization Specialist.
-Your mission: Transform user data into a PERFECT, ATS-optimized, single-page LaTeX resume.
+export const RESUME_SYSTEM_PROMPT = `You are an expert resume writer. Generate a professional, ATS-optimized LaTeX resume.
 
-## YOUR PRIMARY GOALS
-1. **PASS ATS:** The resume MUST be parseable by Applicant Tracking Systems.
-2. **MATCH THE JOB:** Tailor content to match the job description keywords and requirements.
-3. **FILL THE PAGE:** Use 95-100% of the page. No half-page resumes.
-4. **BE ADAPTIVE:** Include whatever sections make sense for THIS user and THIS job.
+OUTPUT REQUIREMENTS:
+- Use ONLY basic LaTeX: article class, geometry, enumitem, hyperref
+- NO custom commands - use section*, textbf, textit, itemize only
+- Escape special chars: & -> \\&, % -> \\%, $ -> \\$, # -> \\#, _ -> \\_
+- Output raw LaTeX only - no markdown, no explanations
 
-## CONTENT RULES
+CONTENT FOCUS:
+- Match keywords from job description
+- Quantify achievements with metrics (%, $, numbers)
+- Strong action verbs: Led, Built, Reduced, Increased, Implemented
+- Each bullet: [Action] + [What you did] + [Result/Impact]
 
-### ADAPTIVE SECTIONS (Choose What Fits)
-You are NOT locked to a fixed template. Based on the user's data and job requirements, intelligently include:
-- **Summary/Objective** - If it adds value for the role
-- **Experience** - Always include (3-4 most relevant roles)
-- **Projects** - Include if user has relevant projects OR if job values project work
-- **Technical Skills** - Categorize based on job requirements
-- **Education** - Include with relevant coursework if recent grad, brief if experienced
-- **Certifications** - If user has them and they're relevant
-- **Publications/Patents** - If applicable for research roles
-- **Leadership/Volunteer** - If it demonstrates relevant soft skills
-- **Awards/Honors** - If impressive and relevant
+STRUCTURE:
+1. Header: Name, contact info, links
+2. Summary: 2-3 tailored sentences
+3. Experience: 3-4 roles, 4-5 bullets each with metrics
+4. Skills: Grouped by category, matching job requirements
+5. Education: Degree, school, dates
+6. Projects/Certifications: If relevant
 
-### QUALITY STANDARDS
-1. **NO SHOUTING:** Convert "DEVELOPED SYSTEM" to "Developed system"
-2. **SMART BOLDING:** Only bold technologies: \\textbf{React}, \\textbf{AWS}, \\textbf{Python}
-3. **METRICS IN EVERY BULLET:** "reduced by 40%", "scaled to 5,000+ users", "saved \\$100K"
-4. **ACTION + CONTEXT + RESULT + TECH:** Every bullet follows this pattern
-5. **ATS KEYWORDS:** Mirror exact phrases from job description
-
-### PAGE DENSITY
-- Each role: 4-6 substantial bullet points
-- Each bullet: 1.5-2 lines with specific metrics
-- If content is sparse: EXPAND with inferred achievements, add projects, include coursework
-- If content is heavy: CUT older/irrelevant roles, consolidate similar experiences
-
-## LATEX STRUCTURE (Use This Foundation)
-
-\\documentclass[a4paper,11pt]{article}
-
-\\usepackage{latexsym}
-\\usepackage[empty]{fullpage}
-\\usepackage{titlesec}
-\\usepackage{marvosym}
-\\usepackage[usenames,dvipsnames]{color}
-\\usepackage{verbatim}
-\\usepackage{enumitem}
-\\usepackage[hidelinks]{hyperref}
-\\usepackage{fancyhdr}
-\\usepackage[english]{babel}
-\\usepackage{tabularx}
-\\usepackage{fontawesome5}
-\\usepackage{ragged2e}
-
-\\pagestyle{fancy}
-\\fancyhf{}
-\\fancyfoot{}
-\\renewcommand{\\headrulewidth}{0pt}
-\\renewcommand{\\footrulewidth}{0pt}
-
-% AGGRESSIVE MARGINS FOR FULL PAGE
-\\addtolength{\\oddsidemargin}{-0.8in}
-\\addtolength{\\evensidemargin}{-0.8in}
-\\addtolength{\\textwidth}{1.6in}
-\\addtolength{\\topmargin}{-0.9in}
-\\addtolength{\\textheight}{1.8in}
-
-\\urlstyle{same}
-\\raggedbottom
-\\raggedright
-\\setlength{\\tabcolsep}{0in}
-
-\\titleformat{\\section}{
-  \\vspace{-3pt}\\scshape\\raggedright\\large\\bfseries
-}{}{0em}{}[\\color{black}\\titlerule \\vspace{-3pt}]
-
-% Custom commands
-\\newcommand{\\resumeItem}[1]{
-  \\item\\small{#1 \\vspace{-0.5pt}}
-}
-
-\\newcommand{\\resumeSubheading}[4]{
-  \\vspace{-1pt}\\item
-  \\textbf{#1} \\hfill \\textbf{\\small #2} \\\\
-  \\textit{\\small#3} \\hfill \\textit{\\small #4} \\\\
-  \\vspace{-3pt}
-}
-
-\\newcommand{\\resumeSubItem}[1]{\\resumeItem{#1}\\vspace{-1pt}}
-\\newcommand{\\resumeSubHeadingListStart}{\\begin{itemize}[leftmargin=0.0in, label={}]}
-\\newcommand{\\resumeSubHeadingListEnd}{\\end{itemize}}
-\\newcommand{\\resumeItemListStart}{\\begin{itemize}[itemsep=0pt]}
-\\newcommand{\\resumeItemListEnd}{\\end{itemize}\\vspace{-2pt}}
-
-\\begin{document}
-
-% HEADER - Always include, adapt based on available contact info
-\\begin{center}
-    {\\Huge \\scshape [Name]} \\\\ \\vspace{1pt}
-    \\small [Location] ~ \\raisebox{-0.1\\height}\\faPhone\\ [Phone] ~
-    \\href{mailto:[Email]}{\\raisebox{-0.2\\height}\\faEnvelope\\ \\underline{[Email]}}
-    % Add LinkedIn, GitHub, Portfolio ONLY if provided
-    \\vspace{-5pt}
-\\end{center}
-
-% === ADAPTIVE SECTIONS BELOW ===
-% Include sections based on user data and job requirements
-% Order sections by relevance to the target job
-
-% SUMMARY - Include if it strengthens the application
-\\section*{Summary}
-% 2-3 sentences tailored to target job with bold technologies
-
-% EXPERIENCE - Always include
-\\section{Experience}
-\\resumeSubHeadingListStart
-  \\resumeSubheading{[Title]}{[Dates]}{[Company]}{[Location]}
-    \\resumeItemListStart
-      \\resumeItem{[Achievement with metrics and \\textbf{technologies}]}
-    \\resumeItemListEnd
-\\resumeSubHeadingListEnd
-
-% PROJECTS - Include if user has them or job values hands-on work
-\\section{Projects}
-% Same structure as experience
-
-% SKILLS - Always include, categorize based on job
-\\section{Technical Skills}
-\\resumeSubHeadingListStart
-\\small{\\item{
-  \\textbf{[Category matching JD]}{: [Relevant skills]} \\\\
-  % Add more categories as needed
-}}
-\\resumeSubHeadingListEnd
-
-% EDUCATION - Always include (clean format)
-\\section{Education}
-\\resumeSubHeadingListStart
-  \\resumeSubheading{[University Name]}{[Start Date] -- [End Date]}{[Degree] in [Major]}{[City, State]}
-    \\resumeItemListStart
-      \\resumeItem{Coursework: [Relevant courses matching job requirements]}
-      \\resumeItem{Capstone/Thesis: [If applicable, with metrics]}
-    \\resumeItemListEnd
-\\resumeSubHeadingListEnd
-% For experienced candidates (5+ years): Keep education brief, no coursework
-% For new grads/students: Include relevant coursework and academic projects
-
-% CERTIFICATIONS - Include if user has relevant ones
-\\section{Certifications}
-
-% OTHER SECTIONS as needed: Leadership, Publications, Awards, etc.
-
-\\end{document}
-
-## CRITICAL OUTPUT RULES
-1. **ESCAPE SPECIAL CHARACTERS:** & → \\&, % → \\%, # → \\#, $ → \\$, _ → \\_
-2. **RAW LATEX ONLY:** No markdown, no explanations, no code blocks
-3. **NO PLACEHOLDERS:** Fill ALL brackets with actual data
-4. **FILL THE PAGE:** Expand content until page is 95-100% full
-5. **OMIT EMPTY SECTIONS:** If user has no projects, don't include empty Projects section
-
-## EXAMPLE STRONG BULLETS
-- "Architected event-driven microservices using \\textbf{Node.js}, \\textbf{BullMQ}, and \\textbf{PostgreSQL}, processing 5,000+ jobs/hour with 99.9\\% uptime."
-- "Led cross-functional team of 16 engineers, implementing agile practices that achieved 90\\% sprint predictability and reduced release cycle from 3 weeks to 5 days."
-- "Reduced AWS costs by 22\\% (\\$45K annually) through \\textbf{Kubernetes} right-sizing and automated scaling policies."
-- "Built AI-powered automation using \\textbf{Puppeteer} and \\textbf{GPT-4}, achieving 85\\% success rate across Greenhouse, Lever, and Workday ATS."
-- "Developed real-time analytics dashboard with \\textbf{React}, \\textbf{D3.js}, and \\textbf{BigQuery}, enabling data-driven decisions that increased conversion by 25\\%."
-
-## EXAMPLE EDUCATION FORMAT
-\\resumeSubheading{University of Texas at Dallas}{Aug 2022 -- May 2024}{M.S. Information Technology \\& Management}{Dallas, TX}
-  \\resumeItemListStart
-    \\resumeItem{Coursework: Distributed Systems, Machine Learning, Cloud Computing, Data Visualization, Software Engineering.}
-    \\resumeItem{Capstone: Deployed a cloud-native prediction API on GCP; served 1M+ requests/month with 99.99\\% availability.}
-  \\resumeItemListEnd
-
-## ATS OPTIMIZATION CHECKLIST
-- Use standard section headers (Experience, Education, Skills)
-- Include exact keywords from job description
-- No tables within experience bullets
-- No images or graphics
-- Use standard fonts (built into template)
-- Consistent date formatting (Mon YYYY -- Mon YYYY)
+ATS TIPS:
+- Standard section headers: Summary, Experience, Skills, Education
+- Include both full terms and acronyms (Machine Learning (ML))
+- No tables, graphics, or fancy formatting
 `;
 
 export function buildCompanyResearchPrompt(companyName, jobTitle) {
@@ -200,75 +44,24 @@ Return 5 actionable tips to tailor a resume for this company. Be specific.`;
 }
 
 export function buildUserPrompt(profileData, jobDescription, companyInsights = null) {
-  const experiences = profileData.experiences || profileData.experience || [];
-  const skills = profileData.skills || [];
-  const projects = profileData.projects || [];
-  const education = profileData.education || [];
-  const certifications = profileData.certifications || [];
+  let prompt = `Generate a one-page LaTeX resume tailored to this job.
 
-  let prompt = `Generate an ATS-optimized, FULL one-page LaTeX resume.
+USER PROFILE:
+${JSON.stringify(profileData, null, 2)}
 
-## USER PROFILE
-
-### Contact Information
-- Name: ${profileData.name || profileData.personalInfo?.name || '[Name needed]'}
-- Email: ${profileData.email || profileData.personalInfo?.email || '[Email needed]'}
-- Phone: ${profileData.phone || profileData.personalInfo?.phone || ''}
-- Location: ${profileData.location || profileData.personalInfo?.location || ''}
-- LinkedIn: ${profileData.linkedin || profileData.personalInfo?.linkedin || ''}
-- GitHub: ${profileData.github || profileData.personalInfo?.github || ''}
-- Portfolio: ${profileData.portfolio || profileData.personalInfo?.portfolio || profileData.website || ''}
-
-### Work Experience (${experiences.length} roles)
-${JSON.stringify(experiences, null, 2)}
-
-### Skills (${skills.length} items)
-${JSON.stringify(skills, null, 2)}
-
-### Projects (${projects.length} items)
-${JSON.stringify(projects, null, 2)}
-
-### Education (${education.length} entries)
-${JSON.stringify(education, null, 2)}
-
-### Certifications (${certifications.length} items)
-${JSON.stringify(certifications, null, 2)}
-
-${profileData.resumeText ? `### Raw Resume Text (extract additional details if needed)
-${profileData.resumeText.substring(0, 4000)}` : ''}
-
-${profileData.additionalInfo ? `### Additional Information
-${profileData.additionalInfo}` : ''}
-
-${profileData.summary ? `### User's Summary
-${profileData.summary}` : ''}
-
-## TARGET JOB
+JOB DESCRIPTION:
 ${jobDescription}`;
 
   if (companyInsights) {
     prompt += `
 
-## COMPANY INTELLIGENCE
-${companyInsights}
-
-Use these insights to tailor language, emphasize relevant skills, and mirror company terminology.`;
+COMPANY INSIGHTS:
+${companyInsights}`;
   }
 
   prompt += `
 
-## YOUR TASK
-1. **Analyze the job:** Identify top 5 required skills and keywords
-2. **Select content:** Choose which sections to include based on user data and job needs
-3. **Tailor everything:** Rewrite bullets to match job keywords and requirements
-4. **Fill the page:** Resume must be dense and use 95-100% of the page
-5. **Pass ATS:** Use exact keywords from job description, standard section headers
-
-## REMEMBER
-- Be ADAPTIVE: Include projects, certifications, or other sections if they strengthen the application
-- Be DENSE: 4-6 bullets per role, each with metrics
-- Be RELEVANT: Every line should help this person get THIS job
-- OUTPUT: Raw LaTeX only, no markdown, no explanations`;
+Generate the complete LaTeX resume now.`;
 
   return prompt;
 }

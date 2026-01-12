@@ -1,6 +1,17 @@
 /**
- * Resume Template Library for Function Calling
- * AI can call these functions to get appropriate templates based on context
+ * Resume Template Library with Placeholder Support
+ *
+ * Templates use mustache-style placeholders that get filled with content:
+ * - {{HEADER}} - Name, contact info
+ * - {{SUMMARY}} - Professional summary (optional)
+ * - {{EXPERIENCE}} - Work experience entries
+ * - {{EDUCATION}} - Education entries
+ * - {{SKILLS}} - Skills section
+ * - {{PROJECTS}} - Projects (optional, conditional)
+ * - {{CERTIFICATIONS}} - Certifications (optional, conditional)
+ * - {{PUBLICATIONS}} - Publications (optional, for academic)
+ *
+ * Conditional sections use: {{#SECTION}}...{{/SECTION}}
  */
 
 export const TEMPLATES = {
@@ -23,9 +34,9 @@ export const TEMPLATES = {
 \\usepackage[usenames,dvipsnames]{color}
 \\usepackage{verbatim}
 \\usepackage{enumitem}
-\\usepackage[pdftex]{hyperref}
+\\usepackage[pdftex,hidelinks]{hyperref}
 \\usepackage{fancyhdr}
-\\usepackage{multirow}
+\\usepackage{tabularx}
 
 \\pagestyle{fancy}
 \\fancyhf{}
@@ -51,16 +62,8 @@ export const TEMPLATES = {
 }{}{0em}{}[\\color{black}\\titlerule \\vspace{-5pt}]
 
 % Custom commands
-\\newcommand{\\resumeItem}[2]{
-  \\item\\small{
-    \\textbf{#1}{: #2 \\vspace{-2pt}}
-  }
-}
-
-\\newcommand{\\resumeItemNH}[1]{
-  \\item\\small{
-    {#1 \\vspace{-2pt}}
-  }
+\\newcommand{\\resumeItem}[1]{
+  \\item\\small{#1 \\vspace{-2pt}}
 }
 
 \\newcommand{\\resumeSubheading}[4]{
@@ -71,27 +74,58 @@ export const TEMPLATES = {
     \\end{tabular*}\\vspace{-5pt}
 }
 
-\\newcommand{\\resumeSubItem}[2]{\\resumeItem{#1}{#2}\\vspace{-4pt}}
+\\newcommand{\\resumeSubItem}[1]{\\resumeItem{#1}\\vspace{-4pt}}
 
 \\renewcommand{\\labelitemii}{$\\circ$}
 
 \\newcommand{\\resumeSubHeadingListStart}{\\begin{itemize}[leftmargin=*,label={}]}
-\\newcommand{\\resumeSubHeadingListStartBullets}{\\begin{itemize}[leftmargin=*]}
 \\newcommand{\\resumeSubHeadingListEnd}{\\end{itemize}}
 \\newcommand{\\resumeItemListStart}{\\begin{itemize}}
-\\newcommand{\\resumeItemListEnd}{\\end{itemize}}
+\\newcommand{\\resumeItemListEnd}{\\end{itemize}\\vspace{-5pt}}
 
 \\begin{document}
 
-%----------HEADING-----------------
-\\begin{tabular*}{\\textwidth}{L@{\\extracolsep{\\fill}}C@{\\extracolsep{\\fill}}R}
-  \\href{mailto:[EMAIL]}{[EMAIL]} &
-  \\multirow{2}{*}{\\Huge \\textbf{[NAME]}} &
-  \\href{[WEBSITE]}{[WEBSITE]} \\\\
-  [PHONE] & & [LOCATION]
-\\end{tabular*}
+%----------HEADING-----------
+{{HEADER}}
 
-% Content sections follow...
+%----------SUMMARY-----------
+{{#SUMMARY}}
+\\section{Summary}
+{{SUMMARY}}
+{{/SUMMARY}}
+
+%-----------EXPERIENCE-----------
+\\section{Experience}
+\\resumeSubHeadingListStart
+{{EXPERIENCE}}
+\\resumeSubHeadingListEnd
+
+%-----------EDUCATION-----------
+\\section{Education}
+\\resumeSubHeadingListStart
+{{EDUCATION}}
+\\resumeSubHeadingListEnd
+
+%-----------SKILLS-----------
+\\section{Technical Skills}
+{{SKILLS}}
+
+%----------PROJECTS-----------
+{{#PROJECTS}}
+\\section{Projects}
+\\resumeSubHeadingListStart
+{{PROJECTS}}
+\\resumeSubHeadingListEnd
+{{/PROJECTS}}
+
+%----------CERTIFICATIONS-----------
+{{#CERTIFICATIONS}}
+\\section{Certifications}
+\\resumeSubHeadingListStart
+{{CERTIFICATIONS}}
+\\resumeSubHeadingListEnd
+{{/CERTIFICATIONS}}
+
 \\end{document}`,
     usage: "Use for traditional industries, conservative companies, or senior executive roles where clean, professional appearance is valued over modern aesthetics."
   },
@@ -122,7 +156,7 @@ export const TEMPLATES = {
 \\usepackage{fontawesome5}
 \\usepackage{ragged2e}
 
-\\input{glyphtounicode}
+% glyphtounicode removed for tectonic compatibility
 \\pagestyle{fancy}
 \\fancyhf{}
 \\fancyfoot{}
@@ -130,11 +164,11 @@ export const TEMPLATES = {
 \\renewcommand{\\footrulewidth}{0pt}
 
 % Aggressive margins for maximum space utilization
-\\addtolength{\\oddsidemargin}{-0.8in}
-\\addtolength{\\evensidemargin}{-0.8in}
-\\addtolength{\\textwidth}{1.6in}
-\\addtolength{\\topmargin}{-0.9in}
-\\addtolength{\\textheight}{1.8in}
+\\addtolength{\\oddsidemargin}{-0.6in}
+\\addtolength{\\evensidemargin}{-0.6in}
+\\addtolength{\\textwidth}{1.2in}
+\\addtolength{\\topmargin}{-0.7in}
+\\addtolength{\\textheight}{1.4in}
 
 \\urlstyle{same}
 \\raggedbottom
@@ -142,42 +176,79 @@ export const TEMPLATES = {
 \\setlength{\\tabcolsep}{0in}
 
 \\titleformat{\\section}{
-  \\vspace{-3pt}\\scshape\\raggedright\\large\\bfseries
-}{}{0em}{}[\\color{black}\\titlerule \\vspace{-3pt}]
+  \\vspace{-4pt}\\scshape\\raggedright\\large\\bfseries
+}{}{0em}{}[\\color{black}\\titlerule \\vspace{-5pt}]
 
 \\pdfgentounicode=1
 
 % Custom Commands - Optimized for density
 \\newcommand{\\resumeItem}[1]{
-  \\item\\small{#1 \\vspace{-0.5pt}}
+  \\item\\small{#1 \\vspace{-2pt}}
 }
 
 \\newcommand{\\resumeSubheading}[4]{
-  \\vspace{-1pt}\\item
-  \\textbf{#1} \\hfill \\textbf{\\small #2} \\\\
-  \\textit{\\small#3} \\hfill \\textit{\\small #4} \\\\
-  \\vspace{-3pt}
+  \\vspace{-2pt}\\item
+    \\begin{tabular*}{0.97\\textwidth}[t]{l@{\\extracolsep{\\fill}}r}
+      \\textbf{#1} & #2 \\\\
+      \\textit{\\small#3} & \\textit{\\small #4} \\\\
+    \\end{tabular*}\\vspace{-7pt}
 }
 
-\\newcommand{\\resumeSubItem}[1]{\\resumeItem{#1}\\vspace{-1pt}}
-\\newcommand{\\resumeSubHeadingListStart}{\\begin{itemize}[leftmargin=0.0in, label={}]}
+\\newcommand{\\resumeProjectHeading}[2]{
+  \\vspace{-2pt}\\item
+    \\begin{tabular*}{0.97\\textwidth}{l@{\\extracolsep{\\fill}}r}
+      \\small#1 & #2 \\\\
+    \\end{tabular*}\\vspace{-7pt}
+}
+
+\\newcommand{\\resumeSubItem}[1]{\\resumeItem{#1}\\vspace{-4pt}}
+\\newcommand{\\resumeSubHeadingListStart}{\\begin{itemize}[leftmargin=0.15in, label={}]}
 \\newcommand{\\resumeSubHeadingListEnd}{\\end{itemize}}
-\\newcommand{\\resumeItemListStart}{\\begin{itemize}[itemsep=0pt]}
-\\newcommand{\\resumeItemListEnd}{\\end{itemize}\\vspace{-2pt}}
+\\newcommand{\\resumeItemListStart}{\\begin{itemize}[itemsep=0pt,parsep=0pt]}
+\\newcommand{\\resumeItemListEnd}{\\end{itemize}\\vspace{-5pt}}
 
 \\begin{document}
 
-% ---------- Header ----------
-\\begin{center}
-    {\\Huge \\scshape [NAME]} \\\\ \\vspace{1pt}
-    \\small [LOCATION] ~ \\raisebox{-0.1\\height}\\faPhone\\ [PHONE] ~
-    \\href{mailto:[EMAIL]}{\\raisebox{-0.2\\height}\\faEnvelope\\ \\underline{[EMAIL]}} ~
-    \\href{[LINKEDIN]}{\\raisebox{-0.2\\height}\\faLinkedin\\ \\underline{linkedin}} ~
-    \\href{[WEBSITE]}{\\raisebox{-0.2\\height}\\faGlobe\\ \\underline{website}}
-    \\vspace{-5pt}
-\\end{center}
+%----------HEADING----------
+{{HEADER}}
 
-% Content sections follow...
+%----------SUMMARY----------
+{{#SUMMARY}}
+\\section{Summary}
+\\small{{{SUMMARY}}}
+\\vspace{-5pt}
+{{/SUMMARY}}
+
+%-----------EXPERIENCE-----------
+\\section{Experience}
+\\resumeSubHeadingListStart
+{{EXPERIENCE}}
+\\resumeSubHeadingListEnd
+
+%-----------PROJECTS-----------
+{{#PROJECTS}}
+\\section{Projects}
+\\resumeSubHeadingListStart
+{{PROJECTS}}
+\\resumeSubHeadingListEnd
+{{/PROJECTS}}
+
+%-----------SKILLS-----------
+\\section{Technical Skills}
+{{SKILLS}}
+
+%-----------EDUCATION-----------
+\\section{Education}
+\\resumeSubHeadingListStart
+{{EDUCATION}}
+\\resumeSubHeadingListEnd
+
+%----------CERTIFICATIONS-----------
+{{#CERTIFICATIONS}}
+\\section{Certifications}
+{{CERTIFICATIONS}}
+{{/CERTIFICATIONS}}
+
 \\end{document}`,
     usage: "Use for tech roles, startups, product positions where modern aesthetics and content density are valued. Best for candidates with rich experience."
   },
@@ -187,11 +258,193 @@ export const TEMPLATES = {
    * Best for: PhD, research roles, academic positions, publications-heavy
    * Style: Traditional academic format, publication-friendly, LaTeX-native feel
    */
+  /**
+   * Template: Jake's Resume (Clean Traditional)
+   * Based on the popular open-source template
+   * Style: Tabular header, clean sections, proven format
+   */
+  jakes_resume: {
+    name: "Jake's Resume",
+    fillPercentage: 90,
+    bestFor: ["software engineering", "tech", "general purpose", "internships"],
+    characteristics: ["tabular header", "clean sections", "proven format", "ATS-friendly"],
+    latexTemplate: `\\documentclass[letterpaper,11pt]{article}
+
+\\usepackage{latexsym}
+\\usepackage[empty]{fullpage}
+\\usepackage{titlesec}
+\\usepackage{marvosym}
+\\usepackage[usenames,dvipsnames]{color}
+\\usepackage{verbatim}
+\\usepackage{enumitem}
+\\usepackage[pdftex]{hyperref}
+\\usepackage{fancyhdr}
+
+\\pagestyle{fancy}
+\\fancyhf{}
+\\fancyfoot{}
+\\renewcommand{\\headrulewidth}{0pt}
+\\renewcommand{\\footrulewidth}{0pt}
+
+\\addtolength{\\oddsidemargin}{-0.375in}
+\\addtolength{\\evensidemargin}{-0.375in}
+\\addtolength{\\textwidth}{1in}
+\\addtolength{\\topmargin}{-.5in}
+\\addtolength{\\textheight}{1.0in}
+
+\\urlstyle{same}
+\\raggedbottom
+\\raggedright
+\\setlength{\\tabcolsep}{0in}
+
+\\titleformat{\\section}{
+  \\vspace{-4pt}\\scshape\\raggedright\\large
+}{}{0em}{}[\\color{black}\\titlerule \\vspace{-5pt}]
+
+\\newcommand{\\resumeItem}[2]{
+  \\item\\small{
+    \\textbf{#1}{: #2 \\vspace{-2pt}}
+  }
+}
+
+\\newcommand{\\resumeSubheading}[4]{
+  \\vspace{-1pt}\\item
+    \\begin{tabular*}{0.97\\textwidth}{l@{\\extracolsep{\\fill}}r}
+      \\textbf{#1} & #2 \\\\
+      \\textit{\\small#3} & \\textit{\\small #4} \\\\
+    \\end{tabular*}\\vspace{-5pt}
+}
+
+\\newcommand{\\resumeSubItem}[2]{\\resumeItem{#1}{#2}\\vspace{-4pt}}
+\\renewcommand{\\labelitemii}{$\\circ$}
+
+\\newcommand{\\resumeSubHeadingListStart}{\\begin{itemize}[leftmargin=*]}
+\\newcommand{\\resumeSubHeadingListEnd}{\\end{itemize}}
+\\newcommand{\\resumeItemListStart}{\\begin{itemize}}
+\\newcommand{\\resumeItemListEnd}{\\end{itemize}\\vspace{-5pt}}
+
+\\begin{document}
+
+{{HEADER}}
+
+\\section{Education}
+\\resumeSubHeadingListStart
+{{EDUCATION}}
+\\resumeSubHeadingListEnd
+
+\\section{Experience}
+\\resumeSubHeadingListStart
+{{EXPERIENCE}}
+\\resumeSubHeadingListEnd
+
+{{#PROJECTS}}
+\\section{Projects}
+\\resumeSubHeadingListStart
+{{PROJECTS}}
+\\resumeSubHeadingListEnd
+{{/PROJECTS}}
+
+\\section{Skills}
+{{SKILLS}}
+
+\\end{document}`,
+    usage: "Classic proven format. Great for software engineering roles, internships, and general tech positions. ATS-friendly and widely accepted."
+  },
+
+  /**
+   * Template: Minimal Centered
+   * Clean, modern, centered header with professional summary
+   * Style: Centered header, clear sections, generous whitespace
+   */
+  minimal_centered: {
+    name: "Minimal Centered",
+    fillPercentage: 88,
+    bestFor: ["AI/ML", "senior roles", "product", "modern companies"],
+    characteristics: ["centered header", "professional summary", "clean sections", "modern feel"],
+    latexTemplate: `\\documentclass[a4paper,11pt]{article}
+
+\\usepackage{latexsym}
+\\usepackage[empty]{fullpage}
+\\usepackage{titlesec}
+\\usepackage[usenames,dvipsnames]{color}
+\\usepackage[hidelinks]{hyperref}
+\\usepackage{fancyhdr}
+\\usepackage[english]{babel}
+\\usepackage{tabularx}
+\\usepackage{ragged2e}
+\\usepackage{enumitem}
+
+\\setlength{\\tabcolsep}{0pt}
+\\addtolength{\\oddsidemargin}{-0.55in}
+\\addtolength{\\evensidemargin}{-0.55in}
+\\addtolength{\\textwidth}{1.1in}
+\\addtolength{\\topmargin}{-0.58in}
+\\addtolength{\\textheight}{1.30in}
+
+\\pagestyle{fancy}
+\\fancyhf{}
+\\renewcommand{\\headrulewidth}{0pt}
+\\renewcommand{\\footrulewidth}{0pt}
+
+\\urlstyle{same}
+\\raggedbottom
+\\setlength{\\parindent}{0pt}
+\\setlength{\\parskip}{0pt}
+
+\\titleformat{\\section}{\\scshape\\large\\bfseries}{}{0em}{}[\\color{black}\\titlerule]
+\\titlespacing*{\\section}{0pt}{6pt}{4pt}
+
+\\newcommand{\\resumeSubheading}[4]{
+  \\noindent
+  \\begin{tabular*}{\\textwidth}{l@{\\extracolsep{\\fill}}r}
+    \\textbf{#1} & \\textbf{\\small #2} \\\\
+    \\textit{\\small #3} & \\textit{\\small #4} \\\\
+  \\end{tabular*}
+}
+
+\\newcommand{\\resumeItem}[1]{\\item\\small{#1}}
+
+\\newcommand{\\resumeItemListStart}{
+  \\begin{itemize}[leftmargin=0.18in, itemsep=2pt, topsep=2pt, partopsep=0pt, parsep=0pt]
+}
+\\newcommand{\\resumeItemListEnd}{
+  \\end{itemize}\\vspace{-2pt}
+}
+
+\\newcommand{\\resumeEntrySpace}{\\vspace{4pt}}
+
+\\begin{document}
+
+{{HEADER}}
+
+{{#SUMMARY}}
+\\section{Professional Summary}
+\\small{{{SUMMARY}}}
+{{/SUMMARY}}
+
+\\section{Education}
+{{EDUCATION}}
+
+\\section{Technical Skills}
+{{SKILLS}}
+
+\\section{Professional Experience}
+{{EXPERIENCE}}
+
+{{#PROJECTS}}
+\\section{Products \\& Projects}
+{{PROJECTS}}
+{{/PROJECTS}}
+
+\\end{document}`,
+    usage: "Modern minimal design with centered header. Perfect for AI/ML roles, product positions, and companies that value clean aesthetics."
+  },
+
   academic_research: {
     name: "Academic Research",
     fillPercentage: 90,
     bestFor: ["academia", "research", "PhD", "postdoc", "scientific", "publications-heavy"],
-    characteristics: ["traditional academic format", "lua scripting support", "publications section", "research-focused"],
+    characteristics: ["traditional academic format", "publications section", "research-focused", "formal styling"],
     latexTemplate: `\\documentclass[letterpaper,11pt]{article}
 
 \\usepackage{latexsym}
@@ -202,7 +455,8 @@ export const TEMPLATES = {
 \\usepackage{verbatim}
 \\usepackage{enumitem}
 \\usepackage{fancyhdr}
-\\usepackage[urw-garamond]{mathdesign}
+\\usepackage[hidelinks]{hyperref}
+\\usepackage{tabularx}
 
 \\pagestyle{fancy}
 \\fancyhf{}
@@ -211,8 +465,8 @@ export const TEMPLATES = {
 \\renewcommand{\\footrulewidth}{0pt}
 
 % Adjust margins - Academic standard
-\\addtolength{\\oddsidemargin}{-0.475in}
-\\addtolength{\\evensidemargin}{-0.375in}
+\\addtolength{\\oddsidemargin}{-0.5in}
+\\addtolength{\\evensidemargin}{-0.5in}
 \\addtolength{\\textwidth}{1in}
 \\addtolength{\\topmargin}{-.5in}
 \\addtolength{\\textheight}{1.0in}
@@ -227,42 +481,127 @@ export const TEMPLATES = {
 }{}{0em}{}[\\color{black}\\titlerule \\vspace{-5pt}]
 
 % Custom commands
-\\newcommand{\\resumeItem}[2]{
-  \\item{
-    \\textbf{#1}{: \\small #2 \\vspace{-2pt}}
-  }
+\\newcommand{\\resumeItem}[1]{
+  \\item\\small{#1 \\vspace{-2pt}}
 }
 
-\\newcommand{\\resumeEduEntry}[4]{
+\\newcommand{\\resumeSubheading}[4]{
   \\vspace{-1pt}\\item
     \\begin{tabular*}{0.97\\textwidth}{l@{\\extracolsep{\\fill}}r}
       \\textbf{#1} & #2 \\\\
-      \\textit{#3} & \\textit{#4} \\\\
+      \\textit{\\small#3} & \\textit{\\small #4} \\\\
     \\end{tabular*}\\vspace{-5pt}
 }
 
-\\newcommand{\\resumeExpEntry}[5]{
-  \\vspace{-1pt}\\item
-    \\begin{tabular*}{0.97\\textwidth}{l@{\\extracolsep{\\fill}}r}
-      \\textbf{#1} & #2 \\\\
-      \\textit{#3 $\\cdot$ #4} & \\textit{#5} \\\\
-    \\end{tabular*}\\vspace{-5pt}
+\\newcommand{\\resumePublicationItem}[1]{
+  \\item\\small{#1 \\vspace{-2pt}}
 }
 
-\\newcommand{\\resumeSubItem}[2]{\\resumeItem{#1}{#2}\\vspace{-4pt}}
+\\newcommand{\\resumeSubItem}[1]{\\resumeItem{#1}\\vspace{-4pt}}
 
 \\renewcommand{\\labelitemii}{$\\circ$}
 
 \\newcommand{\\resumeSubHeadingListStart}{\\begin{itemize}[leftmargin=*,label={}]}
 \\newcommand{\\resumeSubHeadingListEnd}{\\end{itemize}}
-\\newcommand{\\resumeItemListStart}{\\setlist{rightmargin=10pt}\\begin{itemize}}
+\\newcommand{\\resumeItemListStart}{\\begin{itemize}}
 \\newcommand{\\resumeItemListEnd}{\\end{itemize}\\vspace{-5pt}}
+\\newcommand{\\resumePublicationListStart}{\\begin{enumerate}[leftmargin=*]}
+\\newcommand{\\resumePublicationListEnd}{\\end{enumerate}}
 
 \\begin{document}
 
-% Content sections follow...
+%----------HEADING----------
+{{HEADER}}
+
+%----------SUMMARY----------
+{{#SUMMARY}}
+\\section{Research Interests}
+\\small{{{SUMMARY}}}
+{{/SUMMARY}}
+
+%-----------EDUCATION-----------
+\\section{Education}
+\\resumeSubHeadingListStart
+{{EDUCATION}}
+\\resumeSubHeadingListEnd
+
+%-----------EXPERIENCE-----------
+\\section{Research Experience}
+\\resumeSubHeadingListStart
+{{EXPERIENCE}}
+\\resumeSubHeadingListEnd
+
+%-----------PUBLICATIONS-----------
+{{#PUBLICATIONS}}
+\\section{Publications}
+\\resumePublicationListStart
+{{PUBLICATIONS}}
+\\resumePublicationListEnd
+{{/PUBLICATIONS}}
+
+%-----------SKILLS-----------
+\\section{Technical Skills}
+{{SKILLS}}
+
+%-----------PROJECTS-----------
+{{#PROJECTS}}
+\\section{Research Projects}
+\\resumeSubHeadingListStart
+{{PROJECTS}}
+\\resumeSubHeadingListEnd
+{{/PROJECTS}}
+
+%----------CERTIFICATIONS-----------
+{{#CERTIFICATIONS}}
+\\section{Awards \\& Honors}
+{{CERTIFICATIONS}}
+{{/CERTIFICATIONS}}
+
 \\end{document}`,
     usage: "Use for academic, research, or PhD roles where publications, research experience, and traditional academic format are expected."
+  }
+};
+
+/**
+ * Placeholder definitions for template filling
+ * Maps placeholder names to their rendering functions
+ */
+export const PLACEHOLDER_DEFINITIONS = {
+  HEADER: {
+    description: "Contact information header",
+    required: true
+  },
+  SUMMARY: {
+    description: "Professional summary or research interests",
+    required: false,
+    conditional: true
+  },
+  EXPERIENCE: {
+    description: "Work experience entries",
+    required: true
+  },
+  EDUCATION: {
+    description: "Education entries",
+    required: true
+  },
+  SKILLS: {
+    description: "Technical skills section",
+    required: true
+  },
+  PROJECTS: {
+    description: "Project entries",
+    required: false,
+    conditional: true
+  },
+  CERTIFICATIONS: {
+    description: "Certifications and awards",
+    required: false,
+    conditional: true
+  },
+  PUBLICATIONS: {
+    description: "Academic publications",
+    required: false,
+    conditional: true
   }
 };
 
@@ -274,7 +613,7 @@ export function getTemplateRecommendation(context) {
   const { industry, role, experienceYears, careerStage, hasPublications, companyType } = context;
 
   // Decision logic
-  if (industry === "academia" || role.includes("research") || role.includes("phd") || hasPublications) {
+  if (industry === "academia" || role?.includes("research") || role?.includes("phd") || hasPublications) {
     return {
       recommended: "academic_research",
       reason: "Academic/research role detected, publications-friendly format needed",
@@ -282,8 +621,8 @@ export function getTemplateRecommendation(context) {
     };
   }
 
-  if (["tech", "startup", "product", "engineering", "ai", "ml"].some(keyword => industry.includes(keyword)) ||
-      companyType === "startup") {
+  if (["tech", "startup", "product", "engineering", "ai", "ml"].some(keyword =>
+    industry?.toLowerCase().includes(keyword)) || companyType === "startup") {
     return {
       recommended: "modern_dense",
       reason: "Tech/startup environment, modern dense format maximizes content and keywords",
@@ -333,6 +672,7 @@ export function getTemplateById(templateId) {
 
 export default {
   TEMPLATES,
+  PLACEHOLDER_DEFINITIONS,
   getTemplateRecommendation,
   getAllTemplates,
   getTemplateById

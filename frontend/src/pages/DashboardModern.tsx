@@ -283,7 +283,7 @@ export default function DashboardModern() {
             )}
 
             {/* Profile Completion Banner - shown above job description if profile incomplete or missing */}
-            <ProfileCompletionBanner isComplete={profile?.isComplete ?? false} />
+            <ProfileCompletionBanner />
 
             <form
               onSubmit={(e) => {

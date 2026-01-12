@@ -1,5 +1,12 @@
 import { PrismaClient } from '@prisma/client';
+import dotenv from 'dotenv';
 import logger from './logger.js';
+
+// Load environment variables if not already loaded
+if (!process.env.DATABASE_URL) {
+  dotenv.config();
+  dotenv.config({ path: '.env.local' });
+}
 
 // Create a single instance of PrismaClient to be shared across the application
 const globalForPrisma = global;

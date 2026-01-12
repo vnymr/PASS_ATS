@@ -11,6 +11,7 @@ import { ProgressCard } from './happy/ProgressCard';
 import { ApplicationCard } from './happy/ApplicationCard';
 import { RoutinesPanel } from './happy/RoutinesPanel';
 import { DashboardPanel } from './happy/DashboardPanel';
+import { PromptBox } from './ui/chatgpt-prompt-input';
 
 export type ContentType = 'jobs' | 'routines' | 'progress' | 'actions' | 'applications' | 'overview' | 'resume' | 'general';
 
@@ -66,14 +67,9 @@ export default function ChatInterface({
   const [isDashboardPanelOpen, setIsDashboardPanelOpen] = useState(false);
   const [streamingMessageIndex, setStreamingMessageIndex] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const streamingContentRef = useRef<HTMLDivElement>(null);
   const accumulatedContentRef = useRef<string>('');
-
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
 
   // Debug: Log messages when they change
   useEffect(() => {
@@ -93,16 +89,6 @@ export default function ChatInterface({
     }
   }, [messages, isLoading, currentProcessing]);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setInput(value);
-    if (value.length > 0 && !isTyping) {
-      setIsTyping(true);
-    } else if (value.length === 0) {
-      setIsTyping(false);
-    }
-  };
-
   const simulateProcessing = async (steps: string[]) => {
     for (let i = 0; i < steps.length; i++) {
       await new Promise(resolve => setTimeout(resolve, 400));
@@ -116,17 +102,26 @@ export default function ChatInterface({
     setCurrentProcessing(prev => prev.map(p => ({ ...p, status: 'complete' as const })));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (isDev) {
-      console.log('[ChatInterface] handleSubmit called, input:', input, 'isLoading:', isLoading);
-    }
-    if (!input.trim() || isLoading) return;
 
-    const userMessage: Message = { type: 'user', content: input };
-    const userQuery = input;
+    // Get the message from form data (for the new ChatGPT-style PromptBox)
+    const formData = new FormData(e.currentTarget);
+    const formMessage = formData.get('message') as string || '';
+    const messageContent = formMessage.trim() || input.trim();
+
+    if (isDev) {
+      console.log('[ChatInterface] handleSubmit called, input:', messageContent, 'isLoading:', isLoading);
+    }
+    if (!messageContent || isLoading) return;
+
+    const userMessage: Message = { type: 'user', content: messageContent };
+    const userQuery = messageContent;
     setInput('');
     setIsTyping(false);
+
+    // Reset the form (clears the PromptBox internal state)
+    e.currentTarget.reset();
     setIsLoading(true);
     setCurrentProcessing([]);
     setError(null);
@@ -317,10 +312,6 @@ export default function ChatInterface({
     }
   };
 
-  const handleContainerClick = () => {
-    inputRef.current?.focus();
-  };
-
   return (
     <>
       {/* Top Right - User Button and Panel Buttons */}
@@ -388,8 +379,7 @@ export default function ChatInterface({
 
       <div
         ref={containerRef}
-        onClick={handleContainerClick}
-        className="min-h-screen bg-background cursor-text"
+        className="min-h-screen bg-background"
       >
         <div className="max-w-[780px] mx-auto px-4 sm:px-8 py-8 sm:py-16">
           <motion.div
@@ -634,40 +624,13 @@ export default function ChatInterface({
             </motion.div>
           )}
 
-          <form onSubmit={handleSubmit}>
-            <div className="relative">
-              <input
-                ref={inputRef}
-                type="text"
-                value={input}
-                onChange={handleInputChange}
-                disabled={isLoading}
-                className="w-full bg-transparent border-none outline-none text-foreground disabled:opacity-50"
-                style={{
-                  fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif',
-                  caretColor: 'var(--text-900)',
-                  fontSize: '16px',
-                  lineHeight: '1.5',
-                }}
-                autoComplete="off"
-                spellCheck="false"
-                placeholder={placeholder}
-              />
-              {!input && !isTyping && messages.length === 0 && !placeholder && (
-                <motion.div
-                  animate={{ opacity: [1, 0] }}
-                  transition={{ duration: 1, repeat: Infinity, repeatType: 'reverse' }}
-                  className="absolute left-0 top-0 text-foreground pointer-events-none"
-                  style={{
-                    fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif',
-                    fontSize: '16px',
-                    lineHeight: '1.5',
-                  }}
-                >
-                  |
-                </motion.div>
-              )}
-            </div>
+          <form onSubmit={handleSubmit} className="w-full">
+            <PromptBox
+              name="message"
+              placeholder={placeholder || "Message Resume Tailor..."}
+              disabled={isLoading}
+              className="w-full"
+            />
           </form>
         </div>
       </div>

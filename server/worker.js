@@ -143,3 +143,13 @@ logger.info('🔄 Auto-retry: Up to 3 attempts on failure');
 logger.info('🚨 Stall detection: Jobs hanging >5min will be auto-retried once');
 logger.info('🚀 Throughput: Up to 100 jobs/second');
 logger.info('\n✅ Ready to process jobs...\n');
+
+// Keep Redis connection alive with periodic ping (Railway proxy timeout workaround)
+const PING_INTERVAL = 30000; // 30 seconds
+setInterval(async () => {
+  try {
+    await connection.ping();
+  } catch (err) {
+    logger.warn({ error: err.message }, 'Redis ping failed, connection may be recovering');
+  }
+}, PING_INTERVAL);

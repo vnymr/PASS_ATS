@@ -27,7 +27,7 @@ export default function Landing() {
   useEffect(() => {
     async function fetchResumeCount() {
       try {
-        const apiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:3000').trim();
+        const apiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:8080').trim();
         const response = await fetch(`${apiUrl}/api/stats/resumes`);
         const data = await response.json();
         setResumeCount(data.totalResumes);

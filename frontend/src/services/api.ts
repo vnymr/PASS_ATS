@@ -4,7 +4,7 @@
  */
 
 // Use empty string for development to leverage Vite proxy, or explicit URL for production
-const API_BASE_URL = (import.meta.env.VITE_API_URL || '').trim();
+const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8080').trim();
 
 interface ApiResponse<T> {
   success: boolean;

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '@clerk/clerk-react';
-import { api, type ResumeEntry } from '../api-clerk';
+import { api, type ResumeEntry, type Profile } from '../api-clerk';
 import Icons from '../components/ui/icons';
 import logger from '../utils/logger';
 import MinimalTextArea from '../components/MinimalTextArea';
@@ -10,11 +10,12 @@ import { SectionHeader } from '../ui/SectionHeader';
 import Card, { CardContent } from '../ui/Card';
 import { Input } from '../ui/Input';
 import { Button } from '../ui/Button';
+import { Layout } from 'lucide-react';
 
 export default function GenerateResume() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { getToken } = useAuth();
+  const { getToken, isLoaded, isSignedIn } = useAuth();
   const [resumeText, setResumeText] = useState('');
   const [jobDescription, setJobDescription] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -41,16 +42,24 @@ export default function GenerateResume() {
     }
   }, [location]);
 
-  // Load user's resume text from profile
+  // Load user's resume text from profile - wait for Clerk to be loaded
   useEffect(() => {
-    loadProfile();
-    loadResumes();
-  }, []);
+    if (isLoaded && isSignedIn) {
+      loadProfile();
+      loadResumes();
+    }
+  }, [isLoaded, isSignedIn]);
 
   const loadProfile = async () => {
     try {
       const token = await getToken();
+      logger.info('Loading profile for generate page', { hasToken: !!token });
       const profile = await api.getProfile(token || undefined);
+      logger.info('Profile response', {
+        hasProfile: !!profile,
+        resumeTextLength: profile?.resumeText?.length || 0,
+        keys: profile ? Object.keys(profile) : []
+      });
       if (profile?.resumeText) {
         setResumeText(profile.resumeText);
       }
@@ -167,7 +176,7 @@ export default function GenerateResume() {
       // Poll for job completion
       let jobCompleted = false;
       let pollCount = 0;
-      const maxPolls = 60; // Max 60 seconds
+      const maxPolls = 180; // Max 3 minutes (resume gen takes ~45-60 seconds)
 
       while (!jobCompleted && pollCount < maxPolls) {
         await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
@@ -232,6 +241,30 @@ export default function GenerateResume() {
 
       {/* Content Area */}
       <div className="max-w-7xl mx-auto px-4 sm:px-8 pb-8">
+        {/* Template Customization Banner */}
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3"
+        >
+          <div className="flex items-center gap-3">
+            <div className="h-8 w-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+              <Layout size={16} />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-neutral-800">Customize Your Resume Template</p>
+              <p className="text-xs text-neutral-500">AI uses your template when generating resumes</p>
+            </div>
+          </div>
+          <Link
+            to="/templates"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-primary hover:text-primary-700 bg-white border border-primary/30 rounded-lg hover:bg-primary/5 transition-colors"
+          >
+            <Layout size={14} />
+            Customize
+          </Link>
+        </motion.div>
+
         {/* Resume Profile Status */}
         <AnimatePresence>
           {!resumeText && (

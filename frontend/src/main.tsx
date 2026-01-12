@@ -9,12 +9,98 @@ import logger from './utils/logger';
 
 const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY || 'pk_test_placeholder';
 
-// Only throw error if we're in production and still using placeholder
-if (PUBLISHABLE_KEY === 'pk_test_placeholder' && import.meta.env.PROD) {
-  logger.warn('Using placeholder Clerk key. Authentication may not work properly.');
+// Warn if using placeholder key
+if (PUBLISHABLE_KEY === 'pk_test_placeholder') {
+  logger.warn('Using placeholder Clerk key. Authentication will not work!');
+  console.error('[FATAL] Clerk publishable key is placeholder. Check your .env.local file.');
+}
+
+// Global Error Boundary to catch any React errors
+class GlobalErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error: Error | null }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    logger.error('React Error Boundary caught error', { error: error.message, stack: errorInfo.componentStack });
+    console.error('React Error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gray-100 p-5">
+          <div className="bg-white rounded-2xl max-w-lg w-full shadow-xl p-8 text-center">
+            <h1 className="text-2xl font-bold text-red-600 mb-4">Something went wrong</h1>
+            <p className="text-gray-600 mb-4">
+              {this.state.error?.message || 'An unexpected error occurred'}
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium"
+            >
+              Reload Page
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
 }
 
 function AppLoading() {
+  const [showTimeout, setShowTimeout] = React.useState(false);
+
+  React.useEffect(() => {
+    // Show timeout message after 10 seconds of loading
+    const timer = setTimeout(() => {
+      setShowTimeout(true);
+      logger.warn('Clerk loading timeout - taking longer than expected');
+    }, 10000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (showTimeout) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-5">
+        <div className="bg-white rounded-2xl max-w-lg w-full shadow-xl p-8 text-center">
+          <h1 className="text-xl font-bold text-orange-600 mb-4">Loading is taking longer than expected</h1>
+          <p className="text-gray-600 mb-4">
+            This could be caused by:
+          </p>
+          <ul className="text-gray-600 text-left list-disc pl-6 mb-6">
+            <li>Ad blocker blocking Clerk authentication</li>
+            <li>Network connectivity issues</li>
+            <li>Invalid Clerk API key</li>
+          </ul>
+          <div className="flex gap-3 justify-center">
+            <button
+              onClick={() => window.location.reload()}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium"
+            >
+              Reload Page
+            </button>
+            <button
+              onClick={() => setShowTimeout(false)}
+              className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-6 py-2 rounded-lg font-medium"
+            >
+              Keep Waiting
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
       <div className="flex items-center gap-2">
@@ -86,19 +172,21 @@ function ClerkErrorBoundary({ children }: { children: React.ReactNode }) {
 
 createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <ClerkErrorBoundary>
-      <ThemeProvider attribute="class" defaultTheme="light">
-        <ClerkProvider publishableKey={PUBLISHABLE_KEY} afterSignOutUrl="/">
-          <ClerkLoading>
-            <AppLoading />
-          </ClerkLoading>
-          <ClerkLoaded>
-            <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-              <App />
-            </BrowserRouter>
-          </ClerkLoaded>
-        </ClerkProvider>
-      </ThemeProvider>
-    </ClerkErrorBoundary>
+    <GlobalErrorBoundary>
+      <ClerkErrorBoundary>
+        <ThemeProvider attribute="class" defaultTheme="light">
+          <ClerkProvider publishableKey={PUBLISHABLE_KEY} afterSignOutUrl="/">
+            <ClerkLoading>
+              <AppLoading />
+            </ClerkLoading>
+            <ClerkLoaded>
+              <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+                <App />
+              </BrowserRouter>
+            </ClerkLoaded>
+          </ClerkProvider>
+        </ThemeProvider>
+      </ClerkErrorBoundary>
+    </GlobalErrorBoundary>
   </React.StrictMode>
 );

@@ -114,6 +114,7 @@ import { validateUploadedFile } from './lib/file-validator.js';
 import { queueResumeForParsing, getResumeParsingStatus } from './lib/resume-queue.js';
 
 // Load environment variables - .env first, then .env.local to override
+// Note: Prisma client loads dotenv internally, but we load it here for other parts of the code
 dotenv.config();
 dotenv.config({ path: '.env.local' });
 
@@ -333,6 +334,115 @@ app.get('/api/stats/resumes', async (req, res) => {
   } catch (error) {
     logger.error({ error: error.message }, 'Failed to fetch resume count');
     res.status(500).json({ error: 'Failed to fetch stats' });
+  }
+});
+
+// Public template preview endpoint - no auth required for default templates
+// Cache for compiled PDF previews
+const templatePreviewCache = new Map();
+
+app.get('/api/templates/:id/preview-image', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Only allow default templates without auth
+    if (!id.startsWith('default_')) {
+      return res.status(401).json({ error: 'Authentication required for custom templates' });
+    }
+
+    // Check cache first
+    if (templatePreviewCache.has(id)) {
+      logger.debug(`Preview cache hit for ${id}`);
+      return res.json({
+        success: true,
+        pdf: templatePreviewCache.get(id),
+        mimeType: 'application/pdf',
+        cached: true
+      });
+    }
+
+    // Get template from resume-templates
+    const { TEMPLATES } = await import('./lib/resume-templates.js');
+    const templateKey = id.replace('default_', '');
+    const template = TEMPLATES[templateKey];
+
+    if (!template) {
+      return res.status(404).json({ success: false, error: 'Template not found' });
+    }
+
+    // Fill template with sample data
+    const SAMPLE_DATA = {
+      header: `\\begin{center}
+    \\textbf{\\Huge John Smith} \\\\[3pt]
+    \\small San Francisco, CA $|$ john.smith@email.com $|$ (555) 123-4567 $|$ linkedin.com/in/johnsmith
+\\end{center}`,
+      summary: `Results-driven software engineer with 5+ years of experience building scalable web applications.`,
+      experience: `\\resumeSubheading
+  {Senior Software Engineer}{Jan 2022 -- Present}
+  {Tech Company Inc.}{San Francisco, CA}
+  \\resumeItemListStart
+    \\resumeItem{Led development of microservices architecture serving 1M+ daily active users}
+    \\resumeItem{Reduced API response times by 40\\% through optimization and caching strategies}
+  \\resumeItemListEnd
+
+\\resumeSubheading
+  {Software Engineer}{Jun 2019 -- Dec 2021}
+  {Startup Co.}{New York, NY}
+  \\resumeItemListStart
+    \\resumeItem{Built real-time collaboration features using WebSocket and Redis}
+  \\resumeItemListEnd`,
+      projects: `\\resumeProjectHeading
+  {\\textbf{Open Source Project} $|$ \\emph{TypeScript, React}}{2023}
+  \\resumeItemListStart
+    \\resumeItem{Created developer tool with 500+ GitHub stars}
+  \\resumeItemListEnd`,
+      skills: `\\begin{itemize}[leftmargin=0.15in, label={}]
+  \\small{\\item{
+   \\textbf{Languages}{: JavaScript, TypeScript, Python, Go} \\\\
+   \\textbf{Frameworks}{: React, Node.js, Next.js, Express}
+  }}
+\\end{itemize}`,
+      education: `\\resumeSubheading
+  {University of California, Berkeley}{2015 -- 2019}
+  {Bachelor of Science in Computer Science}{Berkeley, CA}`
+    };
+
+    let filledLatex = template.latexTemplate;
+    filledLatex = filledLatex.replace(/\{\{HEADER\}\}/g, SAMPLE_DATA.header);
+    filledLatex = filledLatex.replace(/\{\{EXPERIENCE\}\}/g, SAMPLE_DATA.experience);
+    filledLatex = filledLatex.replace(/\{\{SKILLS\}\}/g, SAMPLE_DATA.skills);
+    filledLatex = filledLatex.replace(/\{\{EDUCATION\}\}/g, SAMPLE_DATA.education);
+    filledLatex = filledLatex.replace(/\{\{#SUMMARY\}\}([\s\S]*?)\{\{\/SUMMARY\}\}/g, (match, content) => {
+      return content.replace(/\{\{SUMMARY\}\}/g, SAMPLE_DATA.summary);
+    });
+    filledLatex = filledLatex.replace(/\{\{#PROJECTS\}\}([\s\S]*?)\{\{\/PROJECTS\}\}/g, (match, content) => {
+      return content.replace(/\{\{PROJECTS\}\}/g, SAMPLE_DATA.projects);
+    });
+    filledLatex = filledLatex.replace(/\{\{#\w+\}\}[\s\S]*?\{\{\/\w+\}\}/g, '');
+    filledLatex = filledLatex.replace(/\{\{\w+\}\}/g, '');
+
+    // Compile to PDF
+    const { compileLatex } = await import('./lib/latex-compiler.js');
+    const pdfBuffer = await compileLatex(filledLatex);
+    const pdfBase64 = pdfBuffer.toString('base64');
+
+    // Cache the result
+    templatePreviewCache.set(id, pdfBase64);
+    logger.info(`Cached preview for ${id}`);
+
+    res.json({
+      success: true,
+      pdf: pdfBase64,
+      mimeType: 'application/pdf',
+      cached: false
+    });
+
+  } catch (error) {
+    logger.error({ error: error.message, templateId: req.params.id }, 'Failed to generate preview image');
+    res.status(500).json({
+      success: false,
+      error: 'Failed to generate preview: ' + error.message
+    });
   }
 });
 
@@ -2845,6 +2955,7 @@ import conversationsRouter from './routes/conversations.js';
 import routinesRouter from './routes/routines.js';
 import gmailRouter from './routes/gmail.js';
 import workerRouter from './routes/worker.js';
+import templatesRouter from './routes/templates.js';
 import { workerWebSocket } from './lib/worker-websocket.js';
 
 app.post('/api/generate-ai', authenticateToken, generateResumeEndpoint);
@@ -3034,6 +3145,7 @@ apiRouter.use(goalsRouter);
 apiRouter.use(conversationsRouter);
 apiRouter.use(routinesRouter);
 apiRouter.use(gmailRouter);
+apiRouter.use(templatesRouter);
 
 // Mount the API router
 app.use('/api', apiRouter);

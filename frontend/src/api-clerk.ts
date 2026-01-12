@@ -67,7 +67,7 @@ export type Profile = {
 };
 
 // Use relative paths in development to leverage Vite proxy
-const API_URL = (import.meta.env.VITE_API_URL || '').trim();
+const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8080').trim();
 
 function authHeaders(token?: string): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {};
@@ -166,5 +166,111 @@ export const api = {
   async health() {
     const r = await fetch(`${API_URL}/api/health`);
     return handle<{ status: string }>(r);
+  },
+
+  // Template methods
+  async getTemplates(token?: string) {
+    const r = await fetch(`${API_URL}/api/templates`, { headers: { ...authHeaders(token) } });
+    return handle<{
+      success: boolean;
+      templates: {
+        user: Array<{
+          id: string;
+          name: string;
+          isDefault: boolean;
+          createdAt: string;
+          updatedAt: string;
+        }>;
+        defaults: Array<{
+          id: string;
+          name: string;
+          isSystemDefault: boolean;
+          fillPercentage: number;
+          bestFor: string[];
+          characteristics: string[];
+          usage: string;
+        }>;
+      };
+    }>(r);
+  },
+
+  async getTemplate(id: string, token?: string) {
+    const r = await fetch(`${API_URL}/api/templates/${id}`, { headers: { ...authHeaders(token) } });
+    return handle<{
+      success: boolean;
+      template: {
+        id: string;
+        name: string;
+        latex: string;
+        isSystemDefault?: boolean;
+        isDefault?: boolean;
+      };
+    }>(r);
+  },
+
+  async getDefaultTemplate(token?: string) {
+    const r = await fetch(`${API_URL}/api/templates/default`, { headers: { ...authHeaders(token) } });
+    return handle<{
+      success: boolean;
+      template: {
+        id: string;
+        name: string;
+        latex: string;
+        isSystemDefault?: boolean;
+      };
+    }>(r);
+  },
+
+  async saveTemplate(name: string, latex: string, isDefault: boolean, token?: string) {
+    const r = await fetch(`${API_URL}/api/templates`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
+      body: JSON.stringify({ name, latex, isDefault })
+    });
+    return handle<{ success: boolean; template: any }>(r);
+  },
+
+  async updateTemplate(id: string, data: { name?: string; latex?: string; isDefault?: boolean }, token?: string) {
+    const r = await fetch(`${API_URL}/api/templates/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
+      body: JSON.stringify(data)
+    });
+    return handle<{ success: boolean; template: any }>(r);
+  },
+
+  async deleteTemplate(id: string, token?: string) {
+    const r = await fetch(`${API_URL}/api/templates/${id}`, {
+      method: 'DELETE',
+      headers: authHeaders(token)
+    });
+    return handle<{ success: boolean }>(r);
+  },
+
+  async copyTemplate(sourceId: string, name: string, token?: string) {
+    const r = await fetch(`${API_URL}/api/templates/copy`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
+      body: JSON.stringify({ sourceId, name })
+    });
+    return handle<{ success: boolean; template: any }>(r);
+  },
+
+  async previewTemplate(latex: string, token?: string) {
+    const r = await fetch(`${API_URL}/api/templates/preview`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
+      body: JSON.stringify({ latex })
+    });
+    return handle<{ success: boolean; pdf: string; mimeType: string }>(r);
+  },
+
+  async chatWithTemplate(templateId: string, message: string, currentLatex?: string, token?: string) {
+    const r = await fetch(`${API_URL}/api/templates/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
+      body: JSON.stringify({ templateId, message, currentLatex })
+    });
+    return handle<{ success: boolean; latex: string; explanation: string; changes: string[] }>(r);
   }
 };

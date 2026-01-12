@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, useNavigate } from 'react-router-dom';
 import { SignInButton, SignUpButton, useAuth, useUser } from '@clerk/clerk-react';
 import { useEffect } from 'react';
 import { authLogger } from './utils/logger';
@@ -21,13 +21,39 @@ import FindJob from './pages/FindJob';
 import JobApplicationQuestions from './components/JobApplicationQuestions';
 import Happy from './pages/Happy';
 import Applications from './pages/Applications';
+import Onboarding from './pages/Onboarding';
+import Templates from './pages/Templates';
 
 // Layout components
 import ProtectedRoute from './layouts/ProtectedRoute';
 import ModernLayout from './layouts/ModernLayout';
+import ErrorBoundary from './components/ErrorBoundary';
 
-// Simple auth page component
+// Simple auth page component - redirects signed-in users
 function AuthPage() {
+  const { isSignedIn, isLoaded } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (isLoaded && isSignedIn) {
+      navigate('/happy', { replace: true });
+    }
+  }, [isLoaded, isSignedIn, navigate]);
+
+  // Show loading while checking auth
+  if (!isLoaded) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[var(--background)]">
+        <div className="w-6 h-6 border-2 border-neutral-300 border-t-neutral-600 rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  // If signed in, don't render (will redirect)
+  if (isSignedIn) {
+    return null;
+  }
+
   return (
     <div className="auth-container">
       <div className="geometric-bg">
@@ -120,79 +146,112 @@ export default function App() {
       <Route path="/extension" element={<Extension />} />
       <Route path="/pricing" element={<Pricing />} />
       <Route path="/auth" element={<AuthPage />} />
+      <Route path="/support" element={<Support />} />
+      <Route path="/privacy" element={<Privacy />} />
+
+      {/* Onboarding - no layout, full screen experience */}
+      <Route path="/onboarding" element={
+        <ProtectedRoute>
+          <ErrorBoundary>
+            <Onboarding />
+          </ErrorBoundary>
+        </ProtectedRoute>
+      } />
+
+      {/* Protected routes with layout and error boundary */}
       <Route path="/profile" element={
         <ProtectedRoute>
-          <ModernLayout>
-            <MemoryProfile />
-          </ModernLayout>
+          <ErrorBoundary>
+            <ModernLayout>
+              <MemoryProfile />
+            </ModernLayout>
+          </ErrorBoundary>
         </ProtectedRoute>
       } />
       <Route path="/application-questions" element={
         <ProtectedRoute>
-          <ModernLayout>
-            <JobApplicationQuestions />
-          </ModernLayout>
+          <ErrorBoundary>
+            <ModernLayout>
+              <JobApplicationQuestions />
+            </ModernLayout>
+          </ErrorBoundary>
         </ProtectedRoute>
       } />
       <Route path="/generate" element={
         <ProtectedRoute>
-          <ModernLayout>
-            <GenerateResume />
-          </ModernLayout>
+          <ErrorBoundary>
+            <ModernLayout>
+              <GenerateResume />
+            </ModernLayout>
+          </ErrorBoundary>
+        </ProtectedRoute>
+      } />
+      <Route path="/templates" element={
+        <ProtectedRoute>
+          <ErrorBoundary>
+            <ModernLayout>
+              <Templates />
+            </ModernLayout>
+          </ErrorBoundary>
         </ProtectedRoute>
       } />
       <Route path="/history" element={
         <ProtectedRoute>
-          <ModernLayout>
-            <History />
-          </ModernLayout>
+          <ErrorBoundary>
+            <ModernLayout>
+              <History />
+            </ModernLayout>
+          </ErrorBoundary>
         </ProtectedRoute>
       } />
       <Route path="/find-jobs" element={
         <ProtectedRoute>
-          <ModernLayout>
-            <FindJob />
-          </ModernLayout>
+          <ErrorBoundary>
+            <ModernLayout>
+              <FindJob />
+            </ModernLayout>
+          </ErrorBoundary>
         </ProtectedRoute>
       } />
       <Route path="/applications" element={
         <ProtectedRoute>
-          <ModernLayout>
-            <Applications />
-          </ModernLayout>
+          <ErrorBoundary>
+            <ModernLayout>
+              <Applications />
+            </ModernLayout>
+          </ErrorBoundary>
         </ProtectedRoute>
       } />
       <Route path="/billing" element={
         <ProtectedRoute>
-          <ModernLayout>
-            <Billing />
-          </ModernLayout>
-        </ProtectedRoute>
-      } />
-      <Route path="/pricing" element={
-        <ProtectedRoute>
-          <ModernLayout>
-            <Billing />
-          </ModernLayout>
+          <ErrorBoundary>
+            <ModernLayout>
+              <Billing />
+            </ModernLayout>
+          </ErrorBoundary>
         </ProtectedRoute>
       } />
       <Route path="/checkout/success" element={
         <ProtectedRoute>
-          <CheckoutSuccess />
+          <ErrorBoundary>
+            <CheckoutSuccess />
+          </ErrorBoundary>
         </ProtectedRoute>
       } />
       <Route path="/checkout/cancel" element={
         <ProtectedRoute>
-          <CheckoutCancel />
+          <ErrorBoundary>
+            <CheckoutCancel />
+          </ErrorBoundary>
         </ProtectedRoute>
       } />
-      <Route path="/support" element={<Support />} />
-      <Route path="/privacy" element={<Privacy />} />
       <Route path="/happy" element={
         <ProtectedRoute>
-          <ModernLayout>
-            <Happy />
-          </ModernLayout>
+          <ErrorBoundary>
+            <ModernLayout>
+              <Happy />
+            </ModernLayout>
+          </ErrorBoundary>
         </ProtectedRoute>
       } />
     </Routes>

@@ -1,8 +1,10 @@
 /**
  * Resume Generation Job Processor
  *
- * Simplified processor using the new Gemini-based AIResumeGenerator
- * with Spotlight Strategy for heavy profiles and Google Search grounding.
+ * Uses simple basic LaTeX generation:
+ * 1. AI generates clean LaTeX using basic commands only
+ * 2. No custom macros or templates - just article, geometry, enumitem, hyperref
+ * 3. Compiles to PDF with tectonic
  *
  * CONCURRENCY SAFETY:
  * BullMQ provides built-in distributed locking via Redis to prevent duplicate processing.
@@ -30,7 +32,7 @@ import { extractCompanyName, extractJobTitle } from './resume-prompts.js';
  * @returns {Promise<void>}
  */
 export async function processResumeJob(jobData, onProgress = null) {
-  const { jobId, profileData, jobDescription } = jobData;
+  const { jobId, profileData, jobDescription, userId } = jobData;
   const startTime = Date.now();
 
   try {
@@ -41,7 +43,7 @@ export async function processResumeJob(jobData, onProgress = null) {
     });
 
     if (onProgress) onProgress(5);
-    logger.info({ jobId }, '🚀 Starting resume generation with AIResumeGenerator');
+    logger.info({ jobId }, '🚀 Starting template-based resume generation');
 
     // Extract company and role for job record
     const company = extractCompanyName(jobDescription) || 'Unknown Company';
@@ -52,9 +54,9 @@ export async function processResumeJob(jobData, onProgress = null) {
       data: { company, role }
     });
 
-    if (onProgress) onProgress(10);
+    if (onProgress) onProgress(15);
 
-    // Step 2: Generate resume using new AIResumeGenerator
+    // Step 3: Generate resume using simple basic LaTeX approach
     const generator = new AIResumeGenerator();
 
     if (onProgress) onProgress(20);

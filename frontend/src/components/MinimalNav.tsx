@@ -8,6 +8,7 @@ import {
   ListChecks,
   ChevronLeft,
   ChevronRight,
+  Layout,
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
@@ -25,6 +26,7 @@ export default function MinimalNav() {
 
   const navItems: NavItem[] = [
     { id: 'resume', label: 'Resume', icon: FileText, path: '/generate' },
+    { id: 'templates', label: 'Templates', icon: Layout, path: '/templates' },
     { id: 'chat', label: 'AI Coach', icon: MessageSquare, path: '/happy' },
     { id: 'applications', label: 'Applications', icon: ListChecks, path: '/applications' },
     { id: 'profile', label: 'Profile', icon: User, path: '/profile' },

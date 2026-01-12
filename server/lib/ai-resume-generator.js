@@ -17,6 +17,7 @@ import {
   extractCompanyName,
   extractJobTitle
 } from './resume-prompts.js';
+import { TEMPLATES } from './resume-templates.js';
 import logger from './logger.js';
 
 class AIResumeGenerator {
@@ -38,8 +39,8 @@ class AIResumeGenerator {
     }
 
     this.genAI = new GoogleGenerativeAI(key);
-    this.model = 'gemini-2.5-flash';
-    logger.info('AIResumeGenerator initialized with Gemini 2.5 Flash');
+    this.model = 'gemini-3-flash-preview';
+    logger.info('AIResumeGenerator initialized with Gemini 3 Flash');
   }
 
   /**
@@ -196,6 +197,22 @@ class AIResumeGenerator {
       .replace(/'/g, "'")
       .replace(/'/g, "'");
 
+    // Fix common LLM typos in LaTeX commands
+    cleaned = cleaned
+      .replace(/\\titrule/g, '\\titlerule')           // Missing 'le'
+      .replace(/\\titerule/g, '\\titlerule')          // Typo variant
+      .replace(/\\titlerul(?![e])/g, '\\titlerule')   // Missing 'e'
+      .replace(/\\textbf\s*{/g, '\\textbf{')          // Remove space before brace
+      .replace(/\\textit\s*{/g, '\\textit{')
+      .replace(/\\href\s*{/g, '\\href{')
+      .replace(/\\section\s*{/g, '\\section{')
+      .replace(/\\subsection\s*{/g, '\\subsection{');
+
+    // Remove tectonic-incompatible commands
+    cleaned = cleaned
+      .replace(/\\input{glyphtounicode}/g, '% glyphtounicode removed')
+      .replace(/\\pdfglyphtounicode[^\n]*/g, '% pdfglyphtounicode removed');
+
     // Escape unescaped special characters (safety net)
     cleaned = cleaned.replace(/(?<!\\)&/g, '\\&');
 
@@ -241,21 +258,14 @@ class AIResumeGenerator {
       }
     });
 
-    const fixPrompt = `Fix this LaTeX compilation error. Return ONLY the fixed LaTeX code.
+    const fixPrompt = `Fix this LaTeX error. Output ONLY the corrected LaTeX code.
 
-ERROR:
-${errorMessage.substring(0, 500)}
+ERROR: ${errorMessage.substring(0, 300)}
 
-COMMON FIXES:
-- Escape special chars: & → \\&, % → \\%, # → \\#, _ → \\_
-- Close all environments: \\begin{X} needs \\end{X}
-- \\item must be inside itemize/enumerate
-- No unicode characters
-
-LATEX TO FIX:
+BROKEN LATEX:
 ${brokenLatex}
 
-Return complete fixed LaTeX from \\documentclass to \\end{document}:`;
+Fix and return complete LaTeX:`;
 
     const result = await model.generateContent(fixPrompt);
     let fixedLatex = result.response.text();
@@ -338,6 +348,136 @@ Return ONLY the LaTeX code for the ${sectionName} section.`;
     const result = await model.generateContent(prompt);
     return this.cleanLatex(result.response.text());
   }
+
+  /**
+   * Template rewrite method - SIMPLE AND RELIABLE
+   *
+   * The LLM directly rewrites the content in the user's template.
+   * No JSON intermediary, no template filling, no escaping issues.
+   *
+   * Flow:
+   * 1. Take user's existing template (valid LaTeX)
+   * 2. LLM rewrites the content to match the job
+   * 3. Compile to PDF
+   *
+   * @param {string} templateLatex - User's existing LaTeX template
+   * @param {Object} userData - User profile data
+   * @param {string} jobDescription - Target job description
+   * @param {Object} options - Generation options
+   * @returns {Promise<{latex: string, pdf: Buffer, metadata: Object}>}
+   */
+  async generateWithTemplate(templateLatex, userData, jobDescription, options = {}) {
+    const startTime = Date.now();
+
+    logger.info({
+      profileSize: JSON.stringify(userData).length,
+      hasTemplate: !!templateLatex,
+      enableSearch: options.enableSearch !== false
+    }, '🚀 Starting template rewrite');
+
+    try {
+      // Resolve template if ID was passed (for default templates)
+      let template = templateLatex;
+      if (typeof templateLatex === 'string' && TEMPLATES[templateLatex]) {
+        template = TEMPLATES[templateLatex].latexTemplate;
+        logger.info({ templateId: templateLatex }, 'Using built-in template');
+      } else if (typeof templateLatex === 'string' && templateLatex.startsWith('default_')) {
+        const templateKey = templateLatex.replace('default_', '');
+        if (TEMPLATES[templateKey]) {
+          template = TEMPLATES[templateKey].latexTemplate;
+        }
+      }
+
+      // Company research (optional)
+      let companyInsights = null;
+      const companyName = extractCompanyName(jobDescription);
+      const jobTitle = extractJobTitle(jobDescription);
+
+      if (companyName && options.enableSearch !== false) {
+        companyInsights = await this.researchCompany(companyName, jobTitle);
+      }
+
+      // SIMPLE: LLM directly rewrites the template content
+      logger.info('✍️ Rewriting template content...');
+      const latex = await this.rewriteTemplateContent(template, userData, jobDescription, companyInsights);
+      logger.info({ latexLength: latex.length }, '✅ Template rewritten');
+
+      // Compile to PDF
+      logger.info('⚙️ Compiling PDF...');
+      let pdf;
+      try {
+        pdf = await compileLatex(latex);
+        logger.info('✅ PDF compiled successfully');
+      } catch (compileError) {
+        logger.warn({ error: compileError.message }, 'First compilation failed, attempting fix...');
+        const fixedLatex = await this.fixLatexErrors(latex, compileError.message);
+        pdf = await compileLatex(fixedLatex);
+        logger.info('✅ PDF compiled after fix');
+      }
+
+      const totalTime = Date.now() - startTime;
+      logger.info({ totalTime }, `✅ Resume generated in ${(totalTime / 1000).toFixed(2)}s`);
+
+      return {
+        latex,
+        pdf,
+        metadata: {
+          generatedAt: new Date().toISOString(),
+          model: this.model,
+          generationTime: totalTime,
+          company: companyName,
+          jobTitle,
+          usedCompanyResearch: !!companyInsights,
+          approach: 'template-rewrite'
+        }
+      };
+
+    } catch (error) {
+      logger.error({ error: error.message }, '❌ Resume generation failed');
+      throw new Error(`Resume generation failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Rewrite template content using LLM
+   *
+   * LLM has full flexibility to optimize the resume for the job
+   */
+  async rewriteTemplateContent(template, userData, jobDescription, companyInsights) {
+    const model = this.genAI.getGenerativeModel({
+      model: this.model,
+      generationConfig: {
+        temperature: 0.4,  // Slightly higher for creativity
+        maxOutputTokens: 12000,
+      }
+    });
+
+    const prompt = `Generate a one-page LaTeX resume optimized for ATS.
+
+RULES:
+- Basic LaTeX only: article, geometry, enumitem, hyperref
+- Use section*, textbf, itemize - no custom commands
+- Escape: & -> \\&, % -> \\%, $ -> \\$, # -> \\#, _ -> \\_
+- Output raw LaTeX only, no markdown
+
+PROFILE:
+${JSON.stringify(userData, null, 2)}
+
+JOB:
+${jobDescription}
+${companyInsights ? `\nCOMPANY INFO:\n${companyInsights}` : ''}
+Generate:`;
+
+    const result = await model.generateContent(prompt);
+    let latex = result.response.text();
+
+    // Clean up the output
+    latex = this.cleanLatex(latex);
+    this.validateLatex(latex);
+
+    return latex;
+  }
+
 }
 
 export default AIResumeGenerator;

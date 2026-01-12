@@ -2,6 +2,7 @@ import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { UserButton } from '@clerk/clerk-react';
 import MinimalNav from '../components/MinimalNav';
+import ProfileCompletionBanner from '../components/ProfileCompletionBanner';
 import { motion } from 'framer-motion';
 import {
   Briefcase,
@@ -9,6 +10,7 @@ import {
   User,
   MessageSquare,
   ListChecks,
+  Layout,
 } from 'lucide-react';
 
 interface ModernLayoutProps {
@@ -28,10 +30,10 @@ export default function ModernLayout({ children }: ModernLayoutProps) {
 
   const navItems: NavItem[] = [
     { id: 'resume', label: 'Resume', icon: FileText, path: '/generate' },
-    { id: 'chat', label: 'AI Coach', icon: MessageSquare, path: '/happy' },
+    { id: 'templates', label: 'Templates', icon: Layout, path: '/templates' },
+    { id: 'chat', label: 'Coach', icon: MessageSquare, path: '/happy' },
     { id: 'applications', label: 'Apps', icon: ListChecks, path: '/applications' },
     { id: 'profile', label: 'Profile', icon: User, path: '/profile' },
-    { id: 'jobs', label: 'Jobs', icon: Briefcase, path: '/find-jobs' },
   ];
 
   return (
@@ -41,6 +43,9 @@ export default function ModernLayout({ children }: ModernLayoutProps) {
 
       {/* Main Content Column */}
       <div className="flex-1 flex flex-col min-w-0">
+        {/* Profile Completion Banner */}
+        <ProfileCompletionBanner />
+
         {/* User Button - Top Right within content area (hidden on mobile) */}
         <motion.div
           initial={{ opacity: 0, y: -10 }}

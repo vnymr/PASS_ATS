@@ -10,7 +10,7 @@ import JobFilterPanel, { type JobFilters } from '../components/JobFilterPanel';
 import { api } from '../api-clerk';
 import { Search } from 'lucide-react';
 
-const API_BASE_URL = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '').trim();
+const API_BASE_URL = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080').trim();
 const PAGE_SIZE = 25; // PERFORMANCE: Reduced from 100 to 25 for faster initial load
 
 type JobWithExtras = JobType & {
