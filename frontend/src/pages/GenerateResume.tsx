@@ -4,7 +4,7 @@ import { useAuth } from '@clerk/clerk-react';
 import { api, type ResumeEntry, type Profile } from '../api-clerk';
 import Icons from '../components/ui/icons';
 import logger from '../utils/logger';
-import MinimalTextArea from '../components/MinimalTextArea';
+import { PromptBox } from '../components/ui/chatgpt-prompt-input';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SectionHeader } from '../ui/SectionHeader';
 import Card, { CardContent } from '../ui/Card';
@@ -143,12 +143,14 @@ export default function GenerateResume() {
     return date.toLocaleDateString();
   };
 
-  const handleGenerate = async () => {
+  const handleGenerate = async (jobDescriptionOverride?: string) => {
+    const jobDesc = jobDescriptionOverride || jobDescription;
+
     if (!resumeText) {
       setError('Please set up your resume text in your profile first');
       return;
     }
-    if (!jobDescription) {
+    if (!jobDesc) {
       setError('Please provide a job description');
       return;
     }
@@ -162,7 +164,7 @@ export default function GenerateResume() {
       const token = await getToken();
 
       // Start job processing
-      const { jobId } = await api.processJob(jobDescription, 'claude', 'Standard', token || undefined);
+      const { jobId } = await api.processJob(jobDesc, 'claude', 'Standard', token || undefined);
       logger.info('Job started', { jobId });
 
       // Poll for job completion
@@ -210,17 +212,50 @@ export default function GenerateResume() {
     }
   };
 
+  const handleFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const message = formData.get('message') as string || '';
+    if (message.trim()) {
+      const trimmedMessage = message.trim();
+      setJobDescription(trimmedMessage);
+      handleGenerate(trimmedMessage);
+    }
+  };
+
   return (
     <div className="flex-1 w-full bg-background min-h-screen text-text font-sans">
-      {/* Minimal Text Area Input */}
-      <MinimalTextArea
-        value={jobDescription}
-        onChange={setJobDescription}
-        onSubmit={handleGenerate}
-        title="Generate your perfect resume"
-        placeholder="Paste the job description here..."
-        disabled={isGenerating}
-      />
+      {/* ChatGPT-style Input */}
+      <div className="max-w-[780px] mx-auto px-4 sm:px-8 py-8 sm:py-16">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.6 }}
+          className="mb-6"
+        >
+          <motion.h1
+            style={{
+              fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif',
+              fontWeight: 500,
+              fontSize: '24px',
+              color: 'var(--text-900)',
+              letterSpacing: '-0.01em',
+              marginBottom: '8px',
+            }}
+          >
+            Generate your perfect resume
+          </motion.h1>
+        </motion.div>
+
+        <form onSubmit={handleFormSubmit} className="w-full">
+          <PromptBox
+            name="message"
+            placeholder="Paste the job description here..."
+            disabled={isGenerating}
+            className="w-full"
+          />
+        </form>
+      </div>
 
       {/* Content Area */}
       <div className="max-w-7xl mx-auto px-4 sm:px-8 pb-8">
