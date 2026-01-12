@@ -396,7 +396,7 @@ export default function GenerateResume() {
                 <button
                   onClick={() => {
                     if (jobId) {
-                      window.open(`${api.base}/api/job/${jobId}/download/pdf`, '_blank');
+                      downloadResume(`resume_${jobId}.pdf`);
                     }
                   }}
                   className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl font-semibold h-11 px-6 transition-all duration-200"

@@ -3,6 +3,7 @@ import { MapPin, Bookmark, Sparkles, ExternalLink, Loader2, Download, Zap, Clock
 import { Job } from '../services/api';
 import CompanyLogo from './CompanyLogo';
 import { api } from '../api-clerk';
+import { useAuth } from '@clerk/clerk-react';
 
 interface JobCardSimpleProps {
   job: Job;
@@ -29,6 +30,24 @@ export default function JobCardSimple({
   isGenerating = false,
   resumeJobId,
 }: JobCardSimpleProps) {
+  const { getToken } = useAuth();
+
+  const handleDownloadResume = async (jobId: string) => {
+    try {
+      const token = await getToken();
+      const blob = await api.downloadResume(`resume_${jobId}.pdf`, token || undefined);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `resume_${jobId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err) {
+      console.error('Failed to download resume', err);
+    }
+  };
 
   const formatDate = (dateString: string | null | undefined) => {
     if (!dateString) return 'Recently';
@@ -153,7 +172,7 @@ export default function JobCardSimple({
                 onClick={(e) => {
                   e.stopPropagation();
                   if (resumeJobId) {
-                    window.open(`${api.base}/api/job/${resumeJobId}/download/pdf`, '_blank');
+                    handleDownloadResume(resumeJobId);
                   } else if (!isGenerating) {
                     onGenerateResume(job);
                   }
