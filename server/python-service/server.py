@@ -119,6 +119,9 @@ camoufox_pool_size {POOL_SIZE}
 
     def _handle_browsers(self):
         """List all browser endpoints"""
+        # Log when main server requests browser list
+        print(f"📡 Browser endpoints requested from {self.client_address[0]}", flush=True)
+
         self.send_response(200)
         self.send_header('Content-Type', 'application/json')
         self.end_headers()
