@@ -162,12 +162,8 @@ export default function GenerateResume() {
     try {
       const token = await getToken();
 
-      // Show initial tailoring steps
-      setTailoringDetails([
-        'Analyzing job requirements and key skills',
-        'Matching your experience to job description',
-        'Optimizing keywords for ATS compatibility'
-      ]);
+      // Clear tailoring details
+      setTailoringDetails([]);
 
       // Start job processing
       const { jobId } = await api.processJob(jobDescription, 'claude', 'Standard', token || undefined);
@@ -325,55 +321,19 @@ export default function GenerateResume() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 10 }}
-              className="rounded-[12px] p-4 mb-6"
+              className="rounded-[12px] p-6 mb-6"
               style={{ backgroundColor: 'var(--background-50)' }}
             >
-              <div className="flex items-start gap-3">
-                <div className="h-9 w-9 rounded-lg bg-[var(--primary-50)] text-[var(--primary)] flex items-center justify-center">
-                  <Icons.loader className="animate-spin" size={18} />
+              <div className="flex flex-col items-center justify-center py-4">
+                <div className="h-12 w-12 rounded-full bg-[var(--primary-50)] text-[var(--primary)] flex items-center justify-center mb-4">
+                  <Icons.loader className="animate-spin" size={24} />
                 </div>
-                <div className="flex-1">
-                  <h4 className="text-sm font-semibold" style={{ color: 'var(--text-900)' }}>
-                    AI is working its magic…
-                  </h4>
-                  <p className="text-xs mb-3" style={{ color: 'var(--text-600)' }}>
-                    Analyzing job requirements and tailoring your resume
-                  </p>
-
-                  {/* Tailoring Details */}
-                  {tailoringDetails.length > 0 && (
-                    <div className="mb-3 space-y-1.5">
-                      {tailoringDetails.map((detail, index) => (
-                        <motion.div
-                          key={index}
-                          initial={{ opacity: 0, x: -10 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: index * 0.2 }}
-                          className="flex items-center gap-2 text-xs"
-                          style={{ color: 'var(--text-700)' }}
-                        >
-                          <div className="h-1.5 w-1.5 rounded-full bg-primary" />
-                          {detail}
-                        </motion.div>
-                      ))}
-                    </div>
-                  )}
-
-                  <div className="mt-3">
-                    <div className="h-2 w-full rounded-full overflow-hidden" style={{ backgroundColor: 'var(--background-100)' }}>
-                      <motion.div
-                        initial={{ width: '0%' }}
-                        animate={{ width: '100%' }}
-                        transition={{ duration: 10, ease: 'linear' }}
-                        className="h-full rounded-full"
-                        style={{ backgroundColor: 'var(--primary-600)' }}
-                      />
-                    </div>
-                    <span className="mt-2 block text-[11px]" style={{ color: 'var(--text-600)' }}>
-                      This usually takes less than 10 seconds
-                    </span>
-                  </div>
-                </div>
+                <h4 className="text-base font-semibold mb-1" style={{ color: 'var(--text-900)' }}>
+                  Generating your resume...
+                </h4>
+                <p className="text-sm" style={{ color: 'var(--text-600)' }}>
+                  This usually takes about 10 seconds
+                </p>
               </div>
             </motion.div>
           )}
