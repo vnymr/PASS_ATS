@@ -222,7 +222,7 @@ export default function Templates() {
                   loadErrors[t.id] = 'Template content is empty';
                 }
               } else {
-                loadErrors[t.id] = tRes.error || 'Missing template content';
+                loadErrors[t.id] = (tRes as any).error || 'Missing template content';
               }
             } catch (e: any) {
               loadErrors[t.id] = e.message || 'Failed to load template';
