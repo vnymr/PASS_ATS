@@ -262,9 +262,11 @@ def launch_browser_instance(browser_id: str, port: int, headless: bool = True) -
     import orjson
     import hashlib
 
-    # Build launch arguments
+    # Build launch arguments with maximum stealth options
     launch_args = {
         'headless': headless,
+        'humanize': True,  # Natural mouse movements & human-like behavior
+        'geoip': True,     # Match browser locale/timezone to proxy IP location
     }
 
     # Configure proxy if provided
@@ -300,10 +302,8 @@ def launch_browser_instance(browser_id: str, port: int, headless: bool = True) -
             proxy_config['password'] = sticky_password
         launch_args['proxy'] = proxy_config
 
-        if os.getenv('CAMOUFOX_GEOIP', 'false').lower() == 'true':
-            launch_args['geoip'] = True
-
         print(f"[{browser_id}] Proxy configured: {proxy_server} (country: {proxy_country})", flush=True)
+        print(f"[{browser_id}] Stealth options: humanize=True, geoip=True", flush=True)
 
     try:
         config = launch_options(**launch_args)
