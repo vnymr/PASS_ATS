@@ -44,13 +44,18 @@ class AIResumeGenerator {
    */
   async generateAndCompile(userData, jobDescription, options = {}) {
     const startTime = Date.now();
-    const templateId = options.templateId || 'modern_dense';
+    const templateId = options.templateId || 'jakes_resume';
 
     logger.info({
       profileSize: JSON.stringify(userData).length,
       templateId,
       enableSearch: options.enableSearch !== false
     }, 'Starting HTML Resume Generation');
+
+    // Validate user data has minimum required fields
+    if (!userData || Object.keys(userData).length === 0) {
+      throw new Error('User data is required for resume generation');
+    }
 
     try {
       // Phase 1: Company Research (optional but recommended)
@@ -260,31 +265,75 @@ Return ONLY valid JSON. Include only sections with content.`;
     } catch (parseError) {
       logger.warn({ error: parseError.message }, 'Failed to parse AI response, using fallback');
       // Fallback: use original user data with basic normalization
-      return this.normalizeUserData(userData);
+      const normalized = this.normalizeUserData(userData);
+
+      // Validate normalized data has minimum required content
+      if (!normalized.name && !normalized.email) {
+        logger.error('Fallback normalization produced empty resume - missing name and email');
+        throw new Error('Unable to generate resume: profile missing name and email');
+      }
+
+      if ((!normalized.experience || normalized.experience.length === 0) &&
+          (!normalized.education || normalized.education.length === 0)) {
+        logger.warn('Resume has no experience or education - may appear sparse');
+      }
+
+      return normalized;
     }
   }
 
   /**
    * Normalize user data to expected format (fallback)
+   * Handles various data structures from different sources
    */
   normalizeUserData(userData) {
-    const personalInfo = userData.personalInfo || userData.personal || userData.contact || {};
+    // Handle nested applicationData structure
+    const appData = userData.applicationData || {};
+    const personalInfo = appData.personalInfo || userData.personalInfo || userData.personal || userData.contact || {};
 
-    return {
-      name: personalInfo.name || userData.name || userData.fullName || '',
+    // Extract name from various possible fields
+    const name = personalInfo.fullName || personalInfo.name || userData.name || userData.fullName ||
+                 `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || '';
+
+    // Extract experience from various possible fields
+    const experience = appData.experience || userData.experience || userData.workExperience ||
+                       userData.experiences || [];
+
+    // Extract education
+    const education = appData.education || userData.education || [];
+
+    // Extract skills - handle various formats
+    let skills = appData.skills || userData.skills || {};
+    if (Array.isArray(skills) && skills.length > 0 && typeof skills[0] === 'string') {
+      // Convert simple string array to categorized format
+      skills = [{ category: 'Skills', items: skills }];
+    }
+
+    const normalized = {
+      name,
       email: personalInfo.email || userData.email || '',
       phone: personalInfo.phone || userData.phone || '',
       location: personalInfo.location || userData.location || '',
       linkedin: personalInfo.linkedin || userData.linkedin || '',
       github: personalInfo.github || userData.github || '',
-      portfolio: personalInfo.portfolio || userData.website || '',
-      summary: userData.summary || userData.objective || '',
-      experience: userData.experience || userData.workExperience || [],
-      education: userData.education || [],
-      skills: userData.skills || {},
-      projects: userData.projects || [],
-      certifications: userData.certifications || []
+      portfolio: personalInfo.portfolio || personalInfo.website || userData.website || '',
+      summary: userData.summary || userData.objective || personalInfo.summary || '',
+      experience,
+      education,
+      skills,
+      projects: appData.projects || userData.projects || [],
+      certifications: appData.certifications || userData.certifications || []
     };
+
+    logger.info({
+      hasName: !!normalized.name,
+      hasEmail: !!normalized.email,
+      experienceCount: normalized.experience?.length || 0,
+      educationCount: normalized.education?.length || 0,
+      hasSkills: Object.keys(normalized.skills || {}).length > 0 || (Array.isArray(normalized.skills) && normalized.skills.length > 0)
+    }, 'Normalized user data for resume');
+
+    return normalized;
   }
 
   /**
@@ -293,7 +342,7 @@ Return ONLY valid JSON. Include only sections with content.`;
    */
   async generateResume(userData, jobDescription, options = {}) {
     const startTime = Date.now();
-    const templateId = options.templateId || 'modern_dense';
+    const templateId = options.templateId || 'jakes_resume';
 
     let companyInsights = null;
     const companyName = extractCompanyName(jobDescription);
@@ -403,7 +452,7 @@ Return as JSON array with the improved section content.`;
    * Quick generate from profile data
    * Simplified method for common use case
    */
-  async quickGenerate(profileData, jobDescription, templateId = 'modern_dense') {
+  async quickGenerate(profileData, jobDescription, templateId = 'jakes_resume') {
     return this.generateAndCompile(profileData, jobDescription, {
       templateId,
       enableSearch: true

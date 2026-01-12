@@ -173,6 +173,9 @@ async function generatePDF(html, options = {}) {
     useCache = true
   } = options;
 
+  // Validate HTML before processing
+  validateHTML(html);
+
   // Generate hash for caching
   const htmlHash = crypto.createHash('sha256').update(html).digest('hex');
 
@@ -210,6 +213,9 @@ async function generatePDF(html, options = {}) {
       printBackground,
       preferCSSPageSize: false
     });
+
+    // Validate PDF is not blank
+    validatePDF(pdfBuffer);
 
     // Cache the PDF
     if (useCache) {
@@ -326,7 +332,8 @@ async function generatePreviewImage(html, options = {}) {
 }
 
 /**
- * Validate HTML structure
+ * Validate HTML structure and content
+ * Ensures HTML has enough content to generate a meaningful resume
  */
 function validateHTML(html) {
   if (!html || typeof html !== 'string') {
@@ -341,6 +348,44 @@ function validateHTML(html) {
     throw new Error('Invalid HTML: missing body tag');
   }
 
+  // Check for minimum content length (a blank template would still have ~500 chars of CSS/structure)
+  // A real resume should have at least 1000 chars including the content
+  if (html.length < 1000) {
+    logger.warn({ htmlLength: html.length }, 'HTML content appears too short for a resume');
+  }
+
+  // Check for resume content markers (at least header should exist)
+  if (!html.includes('class="resume"') && !html.includes('class="header"')) {
+    logger.warn('HTML missing expected resume structure classes');
+  }
+
+  return true;
+}
+
+/**
+ * Validate PDF output
+ * Ensures the generated PDF is valid and has content
+ */
+function validatePDF(pdfBuffer) {
+  if (!pdfBuffer || !Buffer.isBuffer(pdfBuffer)) {
+    throw new Error('Invalid PDF: buffer is empty or not a Buffer');
+  }
+
+  // Check minimum size (a blank PDF is typically ~500-1000 bytes, real resume should be 10KB+)
+  const MIN_PDF_SIZE = 5000; // 5KB minimum
+  if (pdfBuffer.length < MIN_PDF_SIZE) {
+    logger.error({ pdfSize: pdfBuffer.length, minExpected: MIN_PDF_SIZE },
+      'Generated PDF is too small - likely blank or corrupt');
+    throw new Error(`Generated PDF is too small (${pdfBuffer.length} bytes) - resume may be blank`);
+  }
+
+  // Check PDF header
+  const header = pdfBuffer.slice(0, 5).toString('ascii');
+  if (header !== '%PDF-') {
+    throw new Error('Invalid PDF: missing PDF header');
+  }
+
+  logger.debug({ pdfSize: pdfBuffer.length }, 'PDF validation passed');
   return true;
 }
 
@@ -399,6 +444,7 @@ export {
   generatePDFWithRetry,
   generatePreviewImage,
   validateHTML,
+  validatePDF,
   closeBrowser,
   clearCache,
   getCacheStats
@@ -409,6 +455,7 @@ export default {
   generatePDFWithRetry,
   generatePreviewImage,
   validateHTML,
+  validatePDF,
   closeBrowser,
   clearCache,
   getCacheStats

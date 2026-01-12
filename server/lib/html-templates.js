@@ -1,15 +1,24 @@
 /**
- * HTML/CSS Resume Templates
+ * Professional Resume Templates
  *
- * ATS-Optimized, Single-Column, Clean Templates
- * Uses standard web fonts and simple structure for maximum compatibility
+ * Based on industry-leading templates:
+ * - Jake's Resume (famous LaTeX template)
+ * - Harvard Resume Format
+ * - Modern Executive styles
+ *
+ * These templates are designed to look like professional Word/DOCX resumes,
+ * not basic HTML pages.
  */
 
 /**
- * Base CSS shared by all templates
- * Ensures ATS compatibility and clean rendering
+ * Base CSS - Professional document styling
  */
 const BASE_CSS = `
+  @page {
+    size: letter;
+    margin: 0;
+  }
+
   * {
     margin: 0;
     padding: 0;
@@ -22,87 +31,38 @@ const BASE_CSS = `
   }
 
   body {
-    font-size: 11pt;
-    line-height: 1.4;
+    font-size: 10pt;
+    line-height: 1.15;
     color: #000;
     background: #fff;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   .resume {
     max-width: 8.5in;
+    min-height: 11in;
     margin: 0 auto;
-    padding: 0.5in 0.6in;
+    padding: 0.5in 0.5in;
   }
 
   a {
-    color: inherit;
+    color: #000;
     text-decoration: none;
   }
 
+  a:hover {
+    text-decoration: underline;
+  }
+
   ul {
-    list-style-position: outside;
-    margin-left: 1.2em;
+    list-style: none;
+    margin: 0;
+    padding: 0;
   }
 
-  li {
-    margin-bottom: 3px;
-  }
-
-  .section {
-    margin-bottom: 12px;
-  }
-
-  .section-title {
-    font-size: 12pt;
-    font-weight: bold;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    border-bottom: 1px solid #000;
-    padding-bottom: 3px;
-    margin-bottom: 8px;
-  }
-
-  .entry {
-    margin-bottom: 10px;
-  }
-
-  .entry-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    flex-wrap: wrap;
-  }
-
-  .entry-title {
-    font-weight: bold;
-  }
-
-  .entry-subtitle {
-    font-style: italic;
-  }
-
-  .entry-date {
-    font-size: 10pt;
-    color: #333;
-  }
-
-  .entry-location {
-    font-size: 10pt;
-    color: #333;
-  }
-
-  .skills-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px 16px;
-  }
-
-  .skill-category {
-    margin-bottom: 4px;
-  }
-
-  .skill-category strong {
-    font-weight: 600;
+  p {
+    margin: 0;
   }
 
   @media print {
@@ -111,7 +71,8 @@ const BASE_CSS = `
       print-color-adjust: exact;
     }
     .resume {
-      padding: 0;
+      padding: 0.5in;
+      min-height: auto;
     }
   }
 `;
@@ -121,99 +82,554 @@ const BASE_CSS = `
  */
 export const TEMPLATES = {
   /**
-   * Classic Professional
-   * Best for: Finance, Legal, Healthcare, Government, Senior Executives
+   * Jake's Resume
+   * The famous LaTeX template used by thousands of software engineers
+   * Source: https://github.com/jakegut/resume
    */
-  classic_professional: {
-    id: 'classic_professional',
-    name: 'Classic Professional',
-    description: 'Traditional format with centered header, conservative spacing',
-    bestFor: ['finance', 'consulting', 'legal', 'healthcare', 'government', 'senior executives'],
-    previewImage: '/templates/classic.png',
+  jakes_resume: {
+    id: 'jakes_resume',
+    name: "Jake's Resume",
+    description: 'The famous LaTeX template - clean, ATS-optimized, industry standard',
+    bestFor: ['software engineering', 'tech', 'startups', 'new grads', 'internships'],
+    previewImage: '/templates/jakes.png',
     css: `
       ${BASE_CSS}
 
       body {
-        font-family: Georgia, 'Times New Roman', serif;
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        font-size: 10pt;
+        line-height: 1.2;
       }
 
+      .resume {
+        padding: 0.3in 0.4in;
+      }
+
+      /* Header - Centered name with contact info */
       .header {
         text-align: center;
-        margin-bottom: 16px;
+        margin-bottom: 4px;
       }
 
       .header-name {
-        font-size: 20pt;
-        font-weight: bold;
-        margin-bottom: 6px;
-        text-transform: uppercase;
-        letter-spacing: 1px;
+        font-size: 24pt;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        margin-bottom: 4px;
       }
 
       .header-contact {
-        font-size: 10pt;
-        color: #333;
+        font-size: 9pt;
+        line-height: 1.4;
       }
 
-      .header-contact span {
-        margin: 0 8px;
+      .header-contact a {
+        color: #0066cc;
       }
 
-      .header-contact span:not(:last-child)::after {
-        content: '|';
-        margin-left: 16px;
-        color: #666;
+      .header-contact .separator {
+        margin: 0 4px;
+        color: #000;
+      }
+
+      /* Sections */
+      .section {
+        margin-bottom: 8px;
       }
 
       .section-title {
-        text-align: center;
-        border-bottom: 2px solid #000;
+        font-size: 10pt;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1.5px;
+        border-bottom: 1px solid #000;
+        padding-bottom: 1px;
+        margin-bottom: 6px;
       }
 
+      /* Entry items */
+      .entry {
+        margin-bottom: 6px;
+      }
+
+      .entry-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        flex-wrap: wrap;
+        margin-bottom: 2px;
+      }
+
+      .entry-left {
+        display: flex;
+        align-items: baseline;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+
+      .entry-title {
+        font-weight: 700;
+        font-size: 10pt;
+      }
+
+      .entry-subtitle {
+        font-style: italic;
+        font-size: 10pt;
+      }
+
+      .entry-right {
+        text-align: right;
+      }
+
+      .entry-date {
+        font-size: 9pt;
+        font-style: italic;
+      }
+
+      .entry-location {
+        font-size: 9pt;
+        font-style: italic;
+      }
+
+      /* Second row for company/school */
+      .entry-row-2 {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        margin-bottom: 2px;
+      }
+
+      /* Bullet points - tight and professional */
+      .bullets {
+        margin-left: 12px;
+        margin-top: 2px;
+      }
+
+      .bullets li {
+        position: relative;
+        padding-left: 10px;
+        margin-bottom: 1px;
+        font-size: 9.5pt;
+        line-height: 1.25;
+        text-align: left;
+      }
+
+      .bullets li::before {
+        content: "•";
+        position: absolute;
+        left: 0;
+        color: #000;
+      }
+
+      /* Skills section */
+      .skills-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .skill-row {
+        font-size: 9.5pt;
+        line-height: 1.3;
+      }
+
+      .skill-category {
+        font-weight: 700;
+      }
+
+      /* Summary */
       .summary {
+        font-size: 9.5pt;
+        line-height: 1.35;
         text-align: justify;
-        font-size: 10.5pt;
-        line-height: 1.5;
+      }
+
+      /* Projects inline tech stack */
+      .tech-stack {
+        font-style: italic;
+        font-size: 9pt;
       }
     `
   },
 
   /**
-   * Modern Dense
-   * Best for: Tech, Startups, Engineering, Data Science
+   * Harvard Classic
+   * Based on Harvard Office of Career Services template
+   * Education-first, conservative, professional
    */
-  modern_dense: {
-    id: 'modern_dense',
-    name: 'Modern Dense',
-    description: 'Compact layout maximizing content, modern clean look',
-    bestFor: ['tech', 'startups', 'engineering', 'data science', 'AI/ML', 'product'],
-    previewImage: '/templates/modern.png',
+  harvard_classic: {
+    id: 'harvard_classic',
+    name: 'Harvard Classic',
+    description: 'Traditional Harvard format - education-first, conservative, professional',
+    bestFor: ['finance', 'consulting', 'law', 'MBA', 'new grads', 'academia'],
+    previewImage: '/templates/harvard.png',
     css: `
       ${BASE_CSS}
 
       body {
-        font-family: Arial, Helvetica, sans-serif;
+        font-family: 'Times New Roman', Times, Georgia, serif;
         font-size: 10.5pt;
-        line-height: 1.35;
+        line-height: 1.2;
       }
 
       .resume {
-        padding: 0.4in 0.5in;
+        padding: 0.5in 0.6in;
       }
 
+      /* Header - Classic centered */
       .header {
+        text-align: center;
         margin-bottom: 12px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid #000;
       }
 
       .header-name {
         font-size: 18pt;
-        font-weight: bold;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 2px;
         margin-bottom: 4px;
       }
 
       .header-contact {
+        font-size: 10pt;
+        line-height: 1.5;
+      }
+
+      .header-contact .separator {
+        margin: 0 8px;
+        color: #666;
+      }
+
+      .header-contact a {
+        color: #000;
+      }
+
+      /* Sections */
+      .section {
+        margin-bottom: 10px;
+      }
+
+      .section-title {
+        font-size: 11pt;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        border-bottom: 1.5px solid #000;
+        padding-bottom: 2px;
+        margin-bottom: 8px;
+      }
+
+      /* Entry items */
+      .entry {
+        margin-bottom: 10px;
+      }
+
+      .entry-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 2px;
+      }
+
+      .entry-left {
+        flex: 1;
+      }
+
+      .entry-title {
+        font-weight: 700;
+        font-size: 10.5pt;
+      }
+
+      .entry-subtitle {
+        font-style: italic;
+        font-size: 10.5pt;
+      }
+
+      .entry-right {
+        text-align: right;
+        white-space: nowrap;
+      }
+
+      .entry-date {
+        font-size: 10pt;
+      }
+
+      .entry-location {
+        font-size: 10pt;
+      }
+
+      .entry-row-2 {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        font-style: italic;
+        margin-bottom: 3px;
+      }
+
+      /* Bullet points */
+      .bullets {
+        margin-left: 16px;
+        margin-top: 3px;
+      }
+
+      .bullets li {
+        position: relative;
+        padding-left: 12px;
+        margin-bottom: 2px;
+        font-size: 10pt;
+        line-height: 1.3;
+      }
+
+      .bullets li::before {
+        content: "•";
+        position: absolute;
+        left: 0;
+      }
+
+      /* Skills */
+      .skills-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+      }
+
+      .skill-row {
+        font-size: 10pt;
+        line-height: 1.4;
+      }
+
+      .skill-category {
+        font-weight: 700;
+      }
+
+      /* Summary */
+      .summary {
+        font-size: 10pt;
+        line-height: 1.4;
+        text-align: justify;
+      }
+
+      .tech-stack {
+        font-style: italic;
         font-size: 9.5pt;
+      }
+    `
+  },
+
+  /**
+   * Modern Executive
+   * Clean, sophisticated design for senior professionals
+   */
+  modern_executive: {
+    id: 'modern_executive',
+    name: 'Modern Executive',
+    description: 'Sophisticated design for senior roles and executives',
+    bestFor: ['executives', 'directors', 'senior managers', 'VP', 'C-level'],
+    previewImage: '/templates/executive.png',
+    css: `
+      ${BASE_CSS}
+
+      body {
+        font-family: 'Garamond', 'Georgia', 'Times New Roman', serif;
+        font-size: 10.5pt;
+        line-height: 1.25;
+      }
+
+      .resume {
+        padding: 0.5in 0.55in;
+      }
+
+      /* Header - Elegant centered */
+      .header {
+        text-align: center;
+        margin-bottom: 14px;
+        padding-bottom: 10px;
+        border-bottom: 2px solid #2c3e50;
+      }
+
+      .header-name {
+        font-size: 22pt;
+        font-weight: 400;
+        letter-spacing: 3px;
+        text-transform: uppercase;
+        margin-bottom: 6px;
+        color: #2c3e50;
+      }
+
+      .header-contact {
+        font-size: 9.5pt;
+        color: #444;
+        letter-spacing: 0.5px;
+      }
+
+      .header-contact .separator {
+        margin: 0 10px;
+        color: #999;
+      }
+
+      .header-contact a {
+        color: #2c3e50;
+      }
+
+      /* Sections */
+      .section {
+        margin-bottom: 12px;
+      }
+
+      .section-title {
+        font-size: 10pt;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+        color: #2c3e50;
+        border-bottom: 1px solid #bdc3c7;
+        padding-bottom: 3px;
+        margin-bottom: 8px;
+      }
+
+      /* Entry items */
+      .entry {
+        margin-bottom: 10px;
+      }
+
+      .entry-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        margin-bottom: 2px;
+      }
+
+      .entry-left {
+        flex: 1;
+      }
+
+      .entry-title {
+        font-weight: 700;
+        font-size: 10.5pt;
+        color: #2c3e50;
+      }
+
+      .entry-subtitle {
+        font-style: italic;
+        font-size: 10pt;
+        color: #555;
+      }
+
+      .entry-right {
+        text-align: right;
+      }
+
+      .entry-date {
+        font-size: 9.5pt;
+        color: #666;
+      }
+
+      .entry-location {
+        font-size: 9.5pt;
+        color: #666;
+      }
+
+      .entry-row-2 {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        margin-bottom: 3px;
+      }
+
+      /* Bullet points */
+      .bullets {
+        margin-left: 14px;
+        margin-top: 3px;
+      }
+
+      .bullets li {
+        position: relative;
+        padding-left: 12px;
+        margin-bottom: 2px;
+        font-size: 10pt;
+        line-height: 1.35;
+      }
+
+      .bullets li::before {
+        content: "▪";
+        position: absolute;
+        left: 0;
+        color: #2c3e50;
+        font-size: 8pt;
+      }
+
+      /* Skills */
+      .skills-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+      }
+
+      .skill-row {
+        font-size: 10pt;
+        line-height: 1.35;
+      }
+
+      .skill-category {
+        font-weight: 600;
+        color: #2c3e50;
+      }
+
+      /* Summary */
+      .summary {
+        font-size: 10pt;
+        line-height: 1.45;
         color: #333;
+      }
+
+      .tech-stack {
+        font-style: italic;
+        font-size: 9.5pt;
+        color: #666;
+      }
+    `
+  },
+
+  /**
+   * Minimal Tech
+   * Dense, ATS-optimized for maximum content
+   */
+  minimal_tech: {
+    id: 'minimal_tech',
+    name: 'Minimal Tech',
+    description: 'Dense layout - maximizes content for tech roles',
+    bestFor: ['software engineering', 'data science', 'AI/ML', 'DevOps', 'tech'],
+    previewImage: '/templates/minimal.png',
+    css: `
+      ${BASE_CSS}
+
+      body {
+        font-family: 'Roboto', 'Segoe UI', 'Arial', sans-serif;
+        font-size: 9.5pt;
+        line-height: 1.15;
+      }
+
+      .resume {
+        padding: 0.3in 0.4in;
+      }
+
+      /* Header - Compact left-aligned */
+      .header {
+        margin-bottom: 6px;
+        padding-bottom: 6px;
+        border-bottom: 1.5px solid #333;
+      }
+
+      .header-name {
+        font-size: 20pt;
+        font-weight: 700;
+        margin-bottom: 2px;
+      }
+
+      .header-contact {
+        font-size: 9pt;
         display: flex;
         flex-wrap: wrap;
         gap: 4px 12px;
@@ -223,239 +639,263 @@ export const TEMPLATES = {
         color: #0066cc;
       }
 
+      .header-contact .separator {
+        display: none;
+      }
+
+      /* Sections */
       .section {
-        margin-bottom: 10px;
-      }
-
-      .section-title {
-        font-size: 11pt;
-        border-bottom-width: 1.5px;
         margin-bottom: 6px;
       }
 
-      .entry {
-        margin-bottom: 8px;
-      }
-
-      li {
-        margin-bottom: 2px;
-        font-size: 10pt;
-      }
-
-      .skills-inline {
-        font-size: 10pt;
-      }
-    `
-  },
-
-  /**
-   * Jake's Resume (Classic Tech)
-   * Best for: Software Engineering, Tech roles, Internships
-   */
-  jakes_resume: {
-    id: 'jakes_resume',
-    name: "Jake's Resume",
-    description: 'Popular proven format, clean and ATS-optimized',
-    bestFor: ['software engineering', 'tech', 'internships', 'new grads'],
-    previewImage: '/templates/jakes.png',
-    css: `
-      ${BASE_CSS}
-
-      body {
-        font-family: 'Helvetica Neue', Arial, sans-serif;
-        font-size: 10.5pt;
-      }
-
-      .resume {
-        padding: 0.5in 0.55in;
-      }
-
-      .header {
-        text-align: center;
-        margin-bottom: 10px;
-      }
-
-      .header-name {
-        font-size: 22pt;
-        font-weight: bold;
-        margin-bottom: 4px;
-      }
-
-      .header-contact {
-        font-size: 10pt;
-      }
-
-      .header-contact span {
-        margin: 0 4px;
-      }
-
-      .header-contact a {
-        color: #0066cc;
-      }
-
       .section-title {
-        font-size: 11pt;
+        font-size: 9.5pt;
+        font-weight: 700;
+        text-transform: uppercase;
         letter-spacing: 1px;
-        border-bottom: 1px solid #000;
-        padding-bottom: 2px;
-        margin-bottom: 6px;
+        background: #f5f5f5;
+        padding: 2px 4px;
+        margin-bottom: 4px;
+        border-left: 3px solid #333;
       }
 
+      /* Entry items */
       .entry {
-        margin-bottom: 8px;
+        margin-bottom: 5px;
       }
 
       .entry-header {
-        margin-bottom: 2px;
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        margin-bottom: 1px;
+      }
+
+      .entry-left {
+        display: flex;
+        align-items: baseline;
+        gap: 4px;
       }
 
       .entry-title {
-        font-size: 10.5pt;
+        font-weight: 700;
+        font-size: 9.5pt;
       }
 
       .entry-subtitle {
-        font-size: 10pt;
+        font-size: 9pt;
+        color: #555;
       }
 
-      li {
-        font-size: 10pt;
+      .entry-right {
+        text-align: right;
+      }
+
+      .entry-date {
+        font-size: 8.5pt;
+        color: #666;
+      }
+
+      .entry-location {
+        font-size: 8.5pt;
+        color: #666;
+      }
+
+      .entry-row-2 {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
         margin-bottom: 1px;
-      }
-    `
-  },
-
-  /**
-   * Minimal Centered
-   * Best for: AI/ML, Senior roles, Product, Design
-   */
-  minimal_centered: {
-    id: 'minimal_centered',
-    name: 'Minimal Centered',
-    description: 'Clean modern design with balanced whitespace',
-    bestFor: ['AI/ML', 'senior roles', 'product', 'design', 'modern companies'],
-    previewImage: '/templates/minimal.png',
-    css: `
-      ${BASE_CSS}
-
-      body {
-        font-family: 'Segoe UI', Roboto, Arial, sans-serif;
-        font-size: 10.5pt;
-        line-height: 1.45;
+        font-size: 9pt;
       }
 
-      .resume {
-        padding: 0.55in 0.65in;
+      /* Bullet points - very tight */
+      .bullets {
+        margin-left: 10px;
+        margin-top: 1px;
       }
 
-      .header {
-        text-align: center;
-        margin-bottom: 18px;
-        padding-bottom: 12px;
-        border-bottom: 2px solid #333;
+      .bullets li {
+        position: relative;
+        padding-left: 8px;
+        margin-bottom: 0;
+        font-size: 9pt;
+        line-height: 1.2;
       }
 
-      .header-name {
-        font-size: 24pt;
-        font-weight: 300;
-        letter-spacing: 2px;
-        margin-bottom: 8px;
-        text-transform: uppercase;
+      .bullets li::before {
+        content: "–";
+        position: absolute;
+        left: 0;
+        color: #666;
       }
 
-      .header-contact {
-        font-size: 10pt;
-        color: #444;
-        letter-spacing: 0.5px;
+      /* Skills - inline style */
+      .skills-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
       }
 
-      .header-contact span {
-        margin: 0 10px;
+      .skill-row {
+        font-size: 9pt;
+        line-height: 1.25;
       }
 
-      .section {
-        margin-bottom: 14px;
+      .skill-category {
+        font-weight: 700;
       }
 
-      .section-title {
-        font-size: 10pt;
-        font-weight: 600;
-        letter-spacing: 2px;
-        border-bottom: 1px solid #999;
-        padding-bottom: 4px;
-        margin-bottom: 10px;
-        color: #333;
-      }
-
+      /* Summary */
       .summary {
-        font-size: 10.5pt;
-        color: #333;
-        line-height: 1.6;
+        font-size: 9pt;
+        line-height: 1.3;
       }
 
-      .entry {
-        margin-bottom: 12px;
+      .tech-stack {
+        font-size: 8.5pt;
+        color: #666;
       }
     `
   },
 
   /**
-   * Academic Research
-   * Best for: PhD, Research, Academia, Publications
+   * Academic CV
+   * Traditional academic format with publications support
    */
-  academic_research: {
-    id: 'academic_research',
-    name: 'Academic Research',
+  academic_cv: {
+    id: 'academic_cv',
+    name: 'Academic CV',
     description: 'Traditional academic format with publications section',
-    bestFor: ['academia', 'research', 'PhD', 'postdoc', 'scientific'],
+    bestFor: ['academia', 'research', 'PhD', 'postdoc', 'professors', 'scientists'],
     previewImage: '/templates/academic.png',
     css: `
       ${BASE_CSS}
 
       body {
-        font-family: 'Times New Roman', Georgia, serif;
+        font-family: 'Times New Roman', 'Times', Georgia, serif;
         font-size: 11pt;
-        line-height: 1.4;
+        line-height: 1.25;
       }
 
       .resume {
-        padding: 0.5in 0.6in;
+        padding: 0.6in 0.75in;
       }
 
+      /* Header - Traditional academic */
       .header {
         text-align: center;
-        margin-bottom: 14px;
+        margin-bottom: 16px;
       }
 
       .header-name {
-        font-size: 18pt;
-        font-weight: bold;
+        font-size: 16pt;
+        font-weight: 700;
         margin-bottom: 6px;
       }
 
       .header-contact {
         font-size: 10pt;
+        line-height: 1.6;
       }
 
-      .header-contact span {
+      .header-contact .separator {
         margin: 0 6px;
+        color: #666;
+      }
+
+      .header-contact a {
+        color: #000;
+      }
+
+      /* Sections */
+      .section {
+        margin-bottom: 14px;
       }
 
       .section-title {
-        font-size: 12pt;
+        font-size: 11pt;
+        font-weight: 700;
         font-variant: small-caps;
         letter-spacing: 1px;
         border-bottom: 1px solid #000;
+        padding-bottom: 2px;
         margin-bottom: 8px;
       }
 
+      /* Entry items */
       .entry {
         margin-bottom: 10px;
       }
 
+      .entry-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 2px;
+      }
+
+      .entry-left {
+        flex: 1;
+      }
+
+      .entry-title {
+        font-weight: 700;
+        font-size: 11pt;
+      }
+
+      .entry-subtitle {
+        font-style: italic;
+        font-size: 10.5pt;
+      }
+
+      .entry-right {
+        text-align: right;
+      }
+
+      .entry-date {
+        font-size: 10pt;
+      }
+
+      .entry-location {
+        font-size: 10pt;
+      }
+
+      .entry-row-2 {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        font-style: italic;
+        margin-bottom: 3px;
+      }
+
+      /* Bullet points */
+      .bullets {
+        margin-left: 18px;
+        margin-top: 4px;
+      }
+
+      .bullets li {
+        position: relative;
+        padding-left: 12px;
+        margin-bottom: 3px;
+        font-size: 10.5pt;
+        line-height: 1.35;
+      }
+
+      .bullets li::before {
+        content: "•";
+        position: absolute;
+        left: 0;
+      }
+
+      /* Publications - special styling */
       .publication {
-        margin-bottom: 6px;
+        margin-bottom: 8px;
         padding-left: 20px;
         text-indent: -20px;
+        font-size: 10.5pt;
+        line-height: 1.4;
       }
 
       .publication-authors {
@@ -469,9 +909,43 @@ export const TEMPLATES = {
       .publication-venue {
         font-style: normal;
       }
+
+      /* Skills */
+      .skills-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .skill-row {
+        font-size: 10.5pt;
+        line-height: 1.4;
+      }
+
+      .skill-category {
+        font-weight: 700;
+      }
+
+      /* Summary */
+      .summary {
+        font-size: 10.5pt;
+        line-height: 1.45;
+        text-align: justify;
+      }
+
+      .tech-stack {
+        font-style: italic;
+        font-size: 10pt;
+      }
     `
   }
 };
+
+// Legacy aliases for backward compatibility
+TEMPLATES.modern_dense = TEMPLATES.minimal_tech;
+TEMPLATES.classic_professional = TEMPLATES.harvard_classic;
+TEMPLATES.minimal_centered = TEMPLATES.modern_executive;
+TEMPLATES.academic_research = TEMPLATES.academic_cv;
 
 /**
  * Generate HTML resume from structured data
@@ -479,8 +953,15 @@ export const TEMPLATES = {
  * @param {string} templateId - Template to use
  * @returns {string} - Complete HTML document
  */
-export function generateHTML(data, templateId = 'modern_dense') {
-  const template = TEMPLATES[templateId] || TEMPLATES.modern_dense;
+export function generateHTML(data, templateId = 'jakes_resume') {
+  // Handle legacy template IDs
+  let resolvedTemplateId = templateId;
+  if (templateId === 'modern_dense') resolvedTemplateId = 'minimal_tech';
+  if (templateId === 'classic_professional') resolvedTemplateId = 'harvard_classic';
+  if (templateId === 'minimal_centered') resolvedTemplateId = 'modern_executive';
+  if (templateId === 'academic_research') resolvedTemplateId = 'academic_cv';
+
+  const template = TEMPLATES[resolvedTemplateId] || TEMPLATES.jakes_resume;
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -513,18 +994,31 @@ export function generateHTML(data, templateId = 'modern_dense') {
 function renderHeader(data) {
   const contactParts = [];
 
-  if (data.email) contactParts.push(`<a href="mailto:${escapeHtml(data.email)}">${escapeHtml(data.email)}</a>`);
+  // Build contact items
   if (data.phone) contactParts.push(`<span>${escapeHtml(data.phone)}</span>`);
+  if (data.email) contactParts.push(`<a href="mailto:${escapeHtml(data.email)}">${escapeHtml(data.email)}</a>`);
   if (data.location) contactParts.push(`<span>${escapeHtml(data.location)}</span>`);
-  if (data.linkedin) contactParts.push(`<a href="${escapeHtml(data.linkedin)}" target="_blank">LinkedIn</a>`);
-  if (data.github) contactParts.push(`<a href="${escapeHtml(data.github)}" target="_blank">GitHub</a>`);
-  if (data.portfolio) contactParts.push(`<a href="${escapeHtml(data.portfolio)}" target="_blank">Portfolio</a>`);
+  if (data.linkedin) {
+    const linkedinDisplay = data.linkedin.replace(/^https?:\/\/(www\.)?linkedin\.com\/in\//i, 'linkedin.com/in/');
+    contactParts.push(`<a href="${escapeHtml(data.linkedin)}">${escapeHtml(linkedinDisplay)}</a>`);
+  }
+  if (data.github) {
+    const githubDisplay = data.github.replace(/^https?:\/\/(www\.)?github\.com\//i, 'github.com/');
+    contactParts.push(`<a href="${escapeHtml(data.github)}">${escapeHtml(githubDisplay)}</a>`);
+  }
+  if (data.portfolio) {
+    const portfolioDisplay = data.portfolio.replace(/^https?:\/\/(www\.)?/i, '');
+    contactParts.push(`<a href="${escapeHtml(data.portfolio)}">${escapeHtml(portfolioDisplay)}</a>`);
+  }
+
+  // Join with separators
+  const contactHtml = contactParts.join('<span class="separator"> | </span>');
 
   return `
     <header class="header">
       <h1 class="header-name">${escapeHtml(data.name || '')}</h1>
       <div class="header-contact">
-        ${contactParts.join(' ')}
+        ${contactHtml}
       </div>
     </header>
   `;
@@ -536,7 +1030,7 @@ function renderHeader(data) {
 function renderSummary(summary) {
   return `
     <section class="section">
-      <h2 class="section-title">Professional Summary</h2>
+      <h2 class="section-title">Summary</h2>
       <p class="summary">${escapeHtml(summary)}</p>
     </section>
   `;
@@ -546,25 +1040,35 @@ function renderSummary(summary) {
  * Render experience section
  */
 function renderExperience(experience) {
-  const entries = experience.map(exp => `
+  const entries = experience.map(exp => {
+    const title = exp.title || exp.position || '';
+    const company = exp.company || '';
+    const location = exp.location || '';
+    const dateRange = formatDateRange(exp.startDate, exp.endDate);
+    const bullets = exp.highlights || exp.bullets || [];
+
+    return `
     <div class="entry">
       <div class="entry-header">
-        <div>
-          <span class="entry-title">${escapeHtml(exp.title || exp.position || '')}</span>
-          ${exp.company ? ` - <span class="entry-subtitle">${escapeHtml(exp.company)}</span>` : ''}
+        <div class="entry-left">
+          <span class="entry-title">${escapeHtml(title)}</span>
         </div>
-        <div>
-          <span class="entry-date">${escapeHtml(formatDateRange(exp.startDate, exp.endDate))}</span>
-          ${exp.location ? ` | <span class="entry-location">${escapeHtml(exp.location)}</span>` : ''}
+        <div class="entry-right">
+          <span class="entry-date">${escapeHtml(dateRange)}</span>
         </div>
       </div>
-      ${exp.highlights?.length || exp.bullets?.length ? `
-        <ul>
-          ${(exp.highlights || exp.bullets || []).map(h => `<li>${escapeHtml(h)}</li>`).join('')}
+      <div class="entry-row-2">
+        <span class="entry-subtitle">${escapeHtml(company)}</span>
+        <span class="entry-location">${escapeHtml(location)}</span>
+      </div>
+      ${bullets.length ? `
+        <ul class="bullets">
+          ${bullets.map(b => `<li>${escapeHtml(b)}</li>`).join('')}
         </ul>
       ` : ''}
     </div>
-  `).join('');
+  `;
+  }).join('');
 
   return `
     <section class="section">
@@ -578,28 +1082,39 @@ function renderExperience(experience) {
  * Render education section
  */
 function renderEducation(education) {
-  const entries = education.map(edu => `
+  const entries = education.map(edu => {
+    const institution = edu.institution || edu.school || edu.university || '';
+    const degree = edu.degree || '';
+    const field = edu.field || edu.major || '';
+    const location = edu.location || '';
+    const dateRange = formatDateRange(edu.startDate, edu.endDate);
+    const gpa = edu.gpa || '';
+    const highlights = edu.highlights || [];
+
+    const degreeText = field ? `${degree} in ${field}` : degree;
+
+    return `
     <div class="entry">
       <div class="entry-header">
-        <div>
-          <span class="entry-title">${escapeHtml(edu.institution || edu.school || '')}</span>
+        <div class="entry-left">
+          <span class="entry-title">${escapeHtml(institution)}</span>
         </div>
-        <div>
-          <span class="entry-date">${escapeHtml(formatDateRange(edu.startDate, edu.endDate))}</span>
-          ${edu.location ? ` | <span class="entry-location">${escapeHtml(edu.location)}</span>` : ''}
+        <div class="entry-right">
+          <span class="entry-date">${escapeHtml(dateRange)}</span>
         </div>
       </div>
-      <div class="entry-subtitle">
-        ${escapeHtml(edu.degree || '')}${edu.field ? ` in ${escapeHtml(edu.field)}` : ''}
-        ${edu.gpa ? ` | GPA: ${escapeHtml(edu.gpa)}` : ''}
+      <div class="entry-row-2">
+        <span class="entry-subtitle">${escapeHtml(degreeText)}${gpa ? ` | GPA: ${escapeHtml(gpa)}` : ''}</span>
+        <span class="entry-location">${escapeHtml(location)}</span>
       </div>
-      ${edu.highlights?.length ? `
-        <ul>
-          ${edu.highlights.map(h => `<li>${escapeHtml(h)}</li>`).join('')}
+      ${highlights.length ? `
+        <ul class="bullets">
+          ${highlights.map(h => `<li>${escapeHtml(h)}</li>`).join('')}
         </ul>
       ` : ''}
     </div>
-  `).join('');
+  `;
+  }).join('');
 
   return `
     <section class="section">
@@ -613,56 +1128,69 @@ function renderEducation(education) {
  * Render skills section
  */
 function renderSkills(skills) {
-  // Handle different skill formats
+  // Handle string format
   if (typeof skills === 'string') {
     return `
       <section class="section">
-        <h2 class="section-title">Skills</h2>
-        <p class="skills-inline">${escapeHtml(skills)}</p>
+        <h2 class="section-title">Technical Skills</h2>
+        <div class="skills-grid">
+          <div class="skill-row">${escapeHtml(skills)}</div>
+        </div>
       </section>
     `;
   }
 
+  // Handle simple array
+  if (Array.isArray(skills) && typeof skills[0] === 'string') {
+    return `
+      <section class="section">
+        <h2 class="section-title">Technical Skills</h2>
+        <div class="skills-grid">
+          <div class="skill-row">${skills.map(s => escapeHtml(s)).join(', ')}</div>
+        </div>
+      </section>
+    `;
+  }
+
+  // Handle array of {category, items} objects
   if (Array.isArray(skills)) {
-    // Simple array of skills
-    if (typeof skills[0] === 'string') {
+    const rows = skills.map(cat => {
+      const categoryName = cat.category || cat.name || 'Skills';
+      const items = cat.items || cat.skills || [];
       return `
-        <section class="section">
-          <h2 class="section-title">Skills</h2>
-          <p class="skills-inline">${skills.map(s => escapeHtml(s)).join(', ')}</p>
-        </section>
+        <div class="skill-row">
+          <span class="skill-category">${escapeHtml(categoryName)}:</span> ${items.map(s => escapeHtml(s)).join(', ')}
+        </div>
       `;
-    }
-
-    // Array of {category, items} objects
-    const categories = skills.map(cat => `
-      <div class="skill-category">
-        <strong>${escapeHtml(cat.category || cat.name || 'Skills')}:</strong>
-        ${(cat.items || cat.skills || []).map(s => escapeHtml(s)).join(', ')}
-      </div>
-    `).join('');
+    }).join('');
 
     return `
       <section class="section">
         <h2 class="section-title">Technical Skills</h2>
-        ${categories}
+        <div class="skills-grid">
+          ${rows}
+        </div>
       </section>
     `;
   }
 
-  // Object with category keys
+  // Handle object with category keys
   if (typeof skills === 'object') {
-    const categories = Object.entries(skills).map(([category, items]) => `
-      <div class="skill-category">
-        <strong>${escapeHtml(category)}:</strong>
-        ${Array.isArray(items) ? items.map(s => escapeHtml(s)).join(', ') : escapeHtml(items)}
-      </div>
-    `).join('');
+    const rows = Object.entries(skills).map(([category, items]) => {
+      const itemsStr = Array.isArray(items) ? items.map(s => escapeHtml(s)).join(', ') : escapeHtml(items);
+      return `
+        <div class="skill-row">
+          <span class="skill-category">${escapeHtml(category)}:</span> ${itemsStr}
+        </div>
+      `;
+    }).join('');
 
     return `
       <section class="section">
         <h2 class="section-title">Technical Skills</h2>
-        ${categories}
+        <div class="skills-grid">
+          ${rows}
+        </div>
       </section>
     `;
   }
@@ -674,24 +1202,34 @@ function renderSkills(skills) {
  * Render projects section
  */
 function renderProjects(projects) {
-  const entries = projects.map(proj => `
+  const entries = projects.map(proj => {
+    const name = proj.name || proj.title || '';
+    const technologies = proj.technologies || proj.tech || [];
+    const techStr = Array.isArray(technologies) ? technologies.join(', ') : technologies;
+    const date = proj.date || proj.dates || '';
+    const description = proj.description || '';
+    const bullets = proj.highlights || proj.bullets || [];
+    const link = proj.link || proj.url || '';
+
+    return `
     <div class="entry">
       <div class="entry-header">
-        <div>
-          <span class="entry-title">${escapeHtml(proj.name || proj.title || '')}</span>
-          ${proj.technologies ? ` | <span class="entry-subtitle">${escapeHtml(Array.isArray(proj.technologies) ? proj.technologies.join(', ') : proj.technologies)}</span>` : ''}
+        <div class="entry-left">
+          <span class="entry-title">${escapeHtml(name)}</span>
+          ${techStr ? `<span class="tech-stack">| ${escapeHtml(techStr)}</span>` : ''}
         </div>
-        ${proj.date || proj.dates ? `<span class="entry-date">${escapeHtml(proj.date || proj.dates)}</span>` : ''}
+        ${date ? `<div class="entry-right"><span class="entry-date">${escapeHtml(date)}</span></div>` : ''}
       </div>
-      ${proj.description ? `<p>${escapeHtml(proj.description)}</p>` : ''}
-      ${proj.highlights?.length || proj.bullets?.length ? `
-        <ul>
-          ${(proj.highlights || proj.bullets || []).map(h => `<li>${escapeHtml(h)}</li>`).join('')}
+      ${description ? `<p style="font-size: 9.5pt; margin-bottom: 2px;">${escapeHtml(description)}</p>` : ''}
+      ${bullets.length ? `
+        <ul class="bullets">
+          ${bullets.map(b => `<li>${escapeHtml(b)}</li>`).join('')}
         </ul>
       ` : ''}
-      ${proj.link ? `<p><a href="${escapeHtml(proj.link)}" target="_blank">${escapeHtml(proj.link)}</a></p>` : ''}
+      ${link ? `<p style="font-size: 9pt;"><a href="${escapeHtml(link)}">${escapeHtml(link)}</a></p>` : ''}
     </div>
-  `).join('');
+  `;
+  }).join('');
 
   return `
     <section class="section">
@@ -705,15 +1243,23 @@ function renderProjects(projects) {
  * Render certifications section
  */
 function renderCertifications(certifications) {
-  const entries = certifications.map(cert => `
+  const entries = certifications.map(cert => {
+    const name = cert.name || cert.title || '';
+    const issuer = cert.issuer || cert.organization || '';
+    const date = cert.date || cert.year || '';
+
+    return `
     <div class="entry">
       <div class="entry-header">
-        <span class="entry-title">${escapeHtml(cert.name || cert.title || '')}</span>
-        ${cert.date || cert.year ? `<span class="entry-date">${escapeHtml(cert.date || cert.year)}</span>` : ''}
+        <div class="entry-left">
+          <span class="entry-title">${escapeHtml(name)}</span>
+          ${issuer ? `<span class="entry-subtitle">- ${escapeHtml(issuer)}</span>` : ''}
+        </div>
+        ${date ? `<div class="entry-right"><span class="entry-date">${escapeHtml(date)}</span></div>` : ''}
       </div>
-      ${cert.issuer ? `<div class="entry-subtitle">${escapeHtml(cert.issuer)}</div>` : ''}
     </div>
-  `).join('');
+  `;
+  }).join('');
 
   return `
     <section class="section">
@@ -727,15 +1273,23 @@ function renderCertifications(certifications) {
  * Render publications section (for academic template)
  */
 function renderPublications(publications) {
-  const entries = publications.map(pub => `
+  const entries = publications.map(pub => {
+    const authors = pub.authors || '';
+    const title = pub.title || '';
+    const venue = pub.venue || pub.journal || pub.conference || '';
+    const year = pub.year || '';
+    const link = pub.link || pub.url || '';
+
+    return `
     <div class="publication">
-      <span class="publication-authors">${escapeHtml(pub.authors || '')}</span>
-      ${pub.title ? ` "<span class="publication-title">${escapeHtml(pub.title)}</span>"` : ''}
-      ${pub.venue ? ` <span class="publication-venue">${escapeHtml(pub.venue)}</span>` : ''}
-      ${pub.year ? ` (${escapeHtml(pub.year)})` : ''}
-      ${pub.link ? ` <a href="${escapeHtml(pub.link)}" target="_blank">[Link]</a>` : ''}
+      <span class="publication-authors">${escapeHtml(authors)}</span>
+      ${title ? ` "<span class="publication-title">${escapeHtml(title)}</span>"` : ''}
+      ${venue ? ` <span class="publication-venue">${escapeHtml(venue)}</span>` : ''}
+      ${year ? ` (${escapeHtml(year)})` : ''}
+      ${link ? ` <a href="${escapeHtml(link)}">[Link]</a>` : ''}
     </div>
-  `).join('');
+  `;
+  }).join('');
 
   return `
     <section class="section">
@@ -751,10 +1305,10 @@ function renderPublications(publications) {
 function formatDateRange(start, end) {
   if (!start && !end) return '';
   if (!end || end.toLowerCase() === 'present' || end.toLowerCase() === 'current') {
-    return `${start || ''} - Present`;
+    return `${start || ''} – Present`;
   }
   if (!start) return end;
-  return `${start} - ${end}`;
+  return `${start} – ${end}`;
 }
 
 /**
@@ -775,13 +1329,18 @@ function escapeHtml(text) {
  * Get all available templates
  */
 export function getAllTemplates() {
-  return Object.values(TEMPLATES).map(t => ({
-    id: t.id,
-    name: t.name,
-    description: t.description,
-    bestFor: t.bestFor,
-    previewImage: t.previewImage
-  }));
+  // Only return main templates, not aliases
+  const mainTemplates = ['jakes_resume', 'harvard_classic', 'modern_executive', 'minimal_tech', 'academic_cv'];
+  return mainTemplates.map(id => {
+    const t = TEMPLATES[id];
+    return {
+      id: t.id,
+      name: t.name,
+      description: t.description,
+      bestFor: t.bestFor,
+      previewImage: t.previewImage
+    };
+  });
 }
 
 /**
@@ -797,34 +1356,47 @@ export function getTemplateById(templateId) {
 export function getTemplateRecommendation(context) {
   const { industry, role, experienceYears, careerStage, hasPublications, companyType } = context || {};
 
-  if (hasPublications || industry === 'academia' || role?.toLowerCase().includes('research')) {
+  // Academic/Research
+  if (hasPublications || industry === 'academia' || role?.toLowerCase().includes('research') || role?.toLowerCase().includes('professor')) {
     return {
-      recommended: 'academic_research',
-      reason: 'Academic/research role detected, publications-friendly format',
-      template: TEMPLATES.academic_research
+      recommended: 'academic_cv',
+      reason: 'Academic/research role - includes publications section',
+      template: TEMPLATES.academic_cv
     };
   }
 
-  if (['tech', 'startup', 'engineering', 'software'].some(k => industry?.toLowerCase().includes(k)) || companyType === 'startup') {
+  // Executive/Senior
+  if (careerStage === 'executive' || experienceYears > 15 || role?.toLowerCase().includes('director') || role?.toLowerCase().includes('vp') || role?.toLowerCase().includes('chief')) {
     return {
-      recommended: 'modern_dense',
-      reason: 'Tech/startup environment, modern dense format maximizes content',
-      template: TEMPLATES.modern_dense
+      recommended: 'modern_executive',
+      reason: 'Senior/executive role - sophisticated professional design',
+      template: TEMPLATES.modern_executive
     };
   }
 
-  if (careerStage === 'executive' || experienceYears > 15 || ['finance', 'consulting', 'legal', 'healthcare'].includes(industry?.toLowerCase())) {
+  // Finance/Consulting/Traditional
+  if (['finance', 'consulting', 'law', 'legal', 'banking', 'healthcare'].includes(industry?.toLowerCase())) {
     return {
-      recommended: 'classic_professional',
-      reason: 'Traditional industry or senior role, conservative format preferred',
-      template: TEMPLATES.classic_professional
+      recommended: 'harvard_classic',
+      reason: 'Traditional industry - conservative Harvard format',
+      template: TEMPLATES.harvard_classic
     };
   }
 
+  // Tech/Startup with lots of content
+  if (companyType === 'startup' || ['data science', 'machine learning', 'AI', 'devops'].some(k => role?.toLowerCase().includes(k))) {
+    return {
+      recommended: 'minimal_tech',
+      reason: 'Tech role with dense content needs - maximizes space',
+      template: TEMPLATES.minimal_tech
+    };
+  }
+
+  // Default - Jake's Resume (the industry standard for tech)
   return {
-    recommended: 'modern_dense',
-    reason: 'Default modern format, good balance of density and readability',
-    template: TEMPLATES.modern_dense
+    recommended: 'jakes_resume',
+    reason: "Industry-standard Jake's Resume template - clean, ATS-optimized",
+    template: TEMPLATES.jakes_resume
   };
 }
 

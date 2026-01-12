@@ -32,7 +32,7 @@ import { extractCompanyName, extractJobTitle } from './resume-prompts.js';
  * @returns {Promise<void>}
  */
 export async function processResumeJob(jobData, onProgress = null) {
-  const { jobId, profileData, jobDescription, userId } = jobData;
+  const { jobId, profileData, jobDescription, userId, templateId } = jobData;
   const startTime = Date.now();
 
   try {
@@ -56,15 +56,22 @@ export async function processResumeJob(jobData, onProgress = null) {
 
     if (onProgress) onProgress(15);
 
-    // Step 3: Generate resume using simple basic LaTeX approach
+    // Step 3: Generate resume using AI + HTML templates
     const generator = new AIResumeGenerator();
 
     if (onProgress) onProgress(20);
 
+    // Use provided template or default to jakes_resume
+    const effectiveTemplateId = templateId || 'jakes_resume';
+    logger.info({ jobId, templateId: effectiveTemplateId }, '📝 Using template for resume generation');
+
     const { latex, pdf, metadata } = await generator.generateAndCompile(
       profileData,
       jobDescription,
-      { enableSearch: true } // Enable Google Search grounding
+      {
+        enableSearch: true,
+        templateId: effectiveTemplateId
+      }
     );
 
     if (onProgress) onProgress(80);

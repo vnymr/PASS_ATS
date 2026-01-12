@@ -21,6 +21,34 @@ import {
   hasActiveGmailConnection
 } from './email-verification-checker.js';
 
+/**
+ * Get user's default template ID
+ * Falls back to 'jakes_resume' if no default is set
+ */
+async function getUserDefaultTemplate(userId) {
+  try {
+    const defaultTemplate = await prisma.resumeTemplate.findFirst({
+      where: {
+        userId,
+        isDefault: true
+      },
+      select: { id: true, name: true }
+    });
+
+    if (defaultTemplate) {
+      logger.info({ templateId: defaultTemplate.id, templateName: defaultTemplate.name }, 'Using user default template');
+      return defaultTemplate.id;
+    }
+
+    // No user default, use system default
+    logger.info('No user default template, using jakes_resume');
+    return 'jakes_resume';
+  } catch (error) {
+    logger.warn({ error: error.message }, 'Failed to fetch user default template, using jakes_resume');
+    return 'jakes_resume';
+  }
+}
+
 const aiFormFiller = new AIFormFiller();
 
 /**
@@ -31,8 +59,11 @@ const aiFormFiller = new AIFormFiller();
  * 3. Generate new tailored resume if nothing relevant exists
  * 4. Fall back to uploaded resume or latest resume if generation fails
  */
-async function getOrGenerateTailoredResume(userId, aggregatedJob, profileData) {
+async function getOrGenerateTailoredResume(userId, aggregatedJob, profileData, templateId = null) {
   const { id: jobId, company, title, description, requirements } = aggregatedJob;
+
+  // Get user's default template if not provided
+  const effectiveTemplateId = templateId || await getUserDefaultTemplate(userId);
 
   // Combine description and requirements for full job context
   const fullJobDescription = [description, requirements].filter(Boolean).join('\n\n');
@@ -107,7 +138,7 @@ async function getOrGenerateTailoredResume(userId, aggregatedJob, profileData) {
   }
 
   // Strategy 3: Generate new tailored resume for this job
-  logger.info({ jobId, company, title }, '🔄 Generating new tailored resume for job');
+  logger.info({ jobId, company, title, templateId: effectiveTemplateId }, '🔄 Generating new tailored resume for job');
 
   try {
     // Create a new resume generation job
@@ -122,16 +153,19 @@ async function getOrGenerateTailoredResume(userId, aggregatedJob, profileData) {
           aggregatedJobId: jobId,
           company,
           title,
+          templateId: effectiveTemplateId,
           autoApplyGenerated: true
         }
       }
     });
 
     // Process the resume generation (synchronously for auto-apply)
+    // Pass user's template selection
     await processResumeJob({
       jobId: newResumeJob.id,
       profileData,
-      jobDescription: fullJobDescription
+      jobDescription: fullJobDescription,
+      templateId: effectiveTemplateId
     });
 
     // Fetch the generated artifact
