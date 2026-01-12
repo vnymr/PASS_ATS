@@ -198,7 +198,7 @@ async function generateResumePreview(args, ctx = {}) {
     // Generate resume using AI (uses Gemini API)
     const generator = new AIResumeGenerator(process.env.GEMINI_API_KEY);
     const result = await generator.generateAndCompile(profile, targetJobDescription, {
-      model: 'gemini-2.5-flash'  // Fast and capable model
+      model: 'gemini-3-flash-preview'
     });
 
     // Store the generated resume (create a job entry for it)
@@ -346,7 +346,7 @@ async function prepareApplicationPreview(args, ctx = {}) {
     const generator = new AIResumeGenerator(process.env.GEMINI_API_KEY);
 
     const result = await generator.generateAndCompile(profile, jobDescription, {
-      model: 'gemini-2.5-flash'
+      model: 'gemini-3-flash-preview'
     });
 
     // Store the resume

@@ -44,7 +44,7 @@ class AIResumeGenerator {
     }
 
     this.genAI = new GoogleGenerativeAI(key);
-    this.model = 'gemini-2.0-flash';
+    this.model = 'gemini-3-flash-preview';
     logger.info('AIResumeGenerator initialized with Gemini (DOCX mode)');
   }
 

@@ -70,7 +70,7 @@ export async function generateLatexWithGemini(systemPrompt, userPrompt, onProgre
     // Get the Gemini 2.5 Flash model - optimized for speed
     // Using systemInstruction for the large LaTeX template (automatically cached by Gemini)
     const model = genAI.getGenerativeModel({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3-flash-preview',
       systemInstruction: systemPrompt, // Gemini automatically caches system instructions
       generationConfig: {
         temperature: 0.3, // Lower temperature for more consistent LaTeX generation
@@ -86,7 +86,7 @@ export async function generateLatexWithGemini(systemPrompt, userPrompt, onProgre
 
     logger.debug({
       promptLength: fullPrompt.length,
-      model: 'gemini-2.5-flash'
+      model: 'gemini-3-flash-preview'
     }, 'Starting Gemini generation');
 
     // Generate content with timeout (120 seconds max)
@@ -183,7 +183,7 @@ export async function generateLatexWithGemini(systemPrompt, userPrompt, onProgre
       latex,
       generationTime,
       usage,
-      model: 'gemini-2.5-flash'
+      model: 'gemini-3-flash-preview'
     };
   } catch (error) {
     lastError = error;
@@ -243,7 +243,7 @@ export async function fixLatexWithGemini(brokenLatex, errorMessage) {
 
   try {
     const model = genAI.getGenerativeModel({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3-flash-preview',
       generationConfig: {
         temperature: 0.3, // Lower temperature for fixing
         maxOutputTokens: 12000, // High token limit for complete fixes
@@ -306,7 +306,7 @@ export async function generateSimpleJsonWithGemini(prompt) {
   }
 
   const model = genAI.getGenerativeModel({
-    model: 'gemini-2.0-flash-exp',
+    model: 'gemini-3-flash-preview',
     generationConfig: {
       temperature: 0,
       maxOutputTokens: 1024,

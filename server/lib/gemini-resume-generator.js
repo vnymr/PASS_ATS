@@ -46,7 +46,7 @@ async function researchCompany(companyName, jobTitle) {
     const client = initializeGemini();
 
     const model = client.getGenerativeModel({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-3-flash-preview',
       generationConfig: {
         temperature: 0.3,
         maxOutputTokens: 1024,
@@ -89,7 +89,7 @@ async function generateResumeContent(profileData, jobDescription, companyInsight
   const client = initializeGemini();
 
   const model = client.getGenerativeModel({
-    model: 'gemini-2.0-flash',
+    model: 'gemini-3-flash-preview',
     generationConfig: {
       temperature: 0.3,
       maxOutputTokens: 8000,
@@ -254,7 +254,7 @@ async function generateResume(profileData, jobDescription, options = {}) {
       data: resumeData,
       metadata: {
         generatedAt: new Date().toISOString(),
-        model: 'gemini-2.0-flash',
+        model: 'gemini-3-flash-preview',
         generationTime,
         company: companyName,
         jobTitle,
@@ -309,7 +309,7 @@ async function regenerateSection(currentData, sectionName, userData, jobDescript
   const client = initializeGemini();
 
   const model = client.getGenerativeModel({
-    model: 'gemini-2.0-flash',
+    model: 'gemini-3-flash-preview',
     generationConfig: {
       temperature: 0.3,
       maxOutputTokens: 2000,

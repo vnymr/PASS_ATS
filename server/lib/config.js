@@ -12,9 +12,9 @@ export const config = {
     apiKey: process.env.GEMINI_API_KEY,
     // Text generation models - Updated to valid 2025 models
     textModels: {
-      fast: 'gemini-2.0-flash-exp',      // Latest fast model (2025)
-      quality: 'gemini-1.5-pro',         // Highest quality
-      default: 'gemini-2.0-flash-exp',   // Default to fast
+      fast: 'gemini-3-flash-preview',
+      quality: 'gemini-3-flash-preview',
+      default: 'gemini-3-flash-preview',
     },
     // Response settings - HIGH tokens for LaTeX generation
     maxTokens: parseInt(process.env.GEMINI_MAX_TOKENS || '12000'), // CRITICAL: High limit prevents truncated LaTeX

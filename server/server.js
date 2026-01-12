@@ -2580,7 +2580,7 @@ app.post('/api/generate-gemini', authenticateToken, async (req, res) => {
         status: 'COMPLETED',
         resumeText: '',
         jobDescription,
-        aiMode: 'gemini-2.5-flash',
+        aiMode: 'gemini-3-flash-preview',
         metadata: {
           ...metadata,
           generator: 'gemini-resume-generator',
