@@ -96,9 +96,12 @@ class AIFormExtractor {
       return fields;
     }
 
-    logger.info(`Found ${detectedFields.length} potential custom dropdowns`);
+    logger.info(`Found ${detectedFields.length} potential custom dropdowns (extracting options WITHOUT clicking)`);
 
-    // Try to extract options from each custom dropdown
+    let optionsExtracted = 0;
+    let markedAsDropdown = 0;
+
+    // Try to extract options from each custom dropdown WITHOUT clicking
     for (const field of detectedFields) {
       try {
         const options = await this.extractCustomDropdownOptions(page, field);
@@ -108,18 +111,33 @@ class AIFormExtractor {
           field.type = 'select';
           field.options = options;
           field.isCustomDropdown = true;
-          logger.info(`✅ Extracted ${options.length} options from custom dropdown: ${field.name}`);
+          optionsExtracted++;
+          logger.info(`✅ Extracted ${options.length} options from: ${field.name}`);
+        } else {
+          // Mark as custom dropdown but without pre-extracted options
+          // AI will need to type and interact with this field
+          field.isCustomDropdown = true;
+          field.requiresInteraction = true;
+          markedAsDropdown++;
+          logger.debug(`📝 Marked as dropdown (options not pre-rendered): ${field.name}`);
         }
       } catch (error) {
-        logger.warn(`Failed to extract options from ${field.name}: ${error.message}`);
+        logger.warn(`Failed to process ${field.name}: ${error.message}`);
+        // Still mark as dropdown for AI to handle
+        field.isCustomDropdown = true;
+        field.requiresInteraction = true;
+        markedAsDropdown++;
       }
     }
+
+    logger.info(`✅ Dropdown extraction complete: ${optionsExtracted} with options, ${markedAsDropdown} require interaction`);
 
     return fields;
   }
 
   /**
-   * Extract options from a single custom dropdown by clicking it
+   * Extract options from a single custom dropdown WITHOUT clicking
+   * Uses DOM inspection to find pre-rendered options (avoids bot detection)
    * @param {Page} page - Playwright page object
    * @param {Object} field - Field metadata
    * @returns {Array} Dropdown options
@@ -132,88 +150,115 @@ class AIFormExtractor {
       const input = document.querySelector(fieldSelector);
       if (!input) return null;
 
-      // Click the input to reveal dropdown
-      input.click();
-      input.focus();
+      // Strategy 1: Check aria-controls or aria-owns for linked listbox
+      const ariaControls = input.getAttribute('aria-controls') || input.getAttribute('aria-owns');
+      if (ariaControls) {
+        const linkedListbox = document.getElementById(ariaControls);
+        if (linkedListbox) {
+          const opts = extractOptionsFromElement(linkedListbox);
+          if (opts.length > 0) return opts;
+        }
+      }
 
-      // Wait a bit for dropdown to appear (synchronous wait in browser context)
-      const startTime = Date.now();
-      const maxWait = 1000; // 1 second
+      // Strategy 2: Look for sibling/nearby listbox elements (common in React/Vue components)
+      const parent = input.closest('[class*="select"]') || input.closest('[class*="dropdown"]') || input.parentElement;
+      if (parent) {
+        // Look for hidden listbox in parent container
+        const listboxSelectors = [
+          'ul[role="listbox"]',
+          'div[role="listbox"]',
+          '[class*="options"]',
+          '[class*="menu"]',
+          'ul[class*="select"]',
+          'div[class*="select"][class*="menu"]'
+        ];
 
-      // Look for dropdown menu that appeared
-      // Common patterns for custom dropdowns
-      const dropdownSelectors = [
-        // Greenhouse specific
-        'ul[role="listbox"]',
-        'div[role="listbox"]',
-        '.select-options',
-        '.dropdown-menu',
-        '[class*="dropdown"][class*="menu"]',
-        '[class*="select"][class*="menu"]',
-        'ul.options',
-        'div.options',
-        // Generic patterns
-        'ul[aria-expanded="true"]',
-        'div[aria-expanded="true"]'
-      ];
-
-      let dropdownMenu = null;
-      while (!dropdownMenu && (Date.now() - startTime) < maxWait) {
-        for (const selector of dropdownSelectors) {
-          const menu = document.querySelector(selector);
-          if (menu && menu.offsetParent !== null) {
-            dropdownMenu = menu;
-            break;
+        for (const selector of listboxSelectors) {
+          const listbox = parent.querySelector(selector);
+          if (listbox) {
+            const opts = extractOptionsFromElement(listbox);
+            if (opts.length > 0) return opts;
           }
         }
       }
 
-      if (!dropdownMenu) {
-        // Try to find any visible ul/div that appeared near the input
-        const parent = input.closest('div');
-        if (parent) {
-          const visibleMenus = parent.querySelectorAll('ul, div[role="listbox"]');
-          for (const menu of visibleMenus) {
-            if (menu.offsetParent !== null && menu !== input) {
-              dropdownMenu = menu;
-              break;
-            }
+      // Strategy 3: Check for data attributes with options (some frameworks)
+      const dataOptions = input.getAttribute('data-options') ||
+                         input.getAttribute('data-choices') ||
+                         parent?.getAttribute('data-options');
+      if (dataOptions) {
+        try {
+          const parsed = JSON.parse(dataOptions);
+          if (Array.isArray(parsed)) {
+            return parsed.map(opt => ({
+              value: opt.value || opt.id || opt,
+              text: opt.label || opt.text || opt.name || opt,
+              selected: false
+            })).filter(opt => opt.text);
+          }
+        } catch (e) { /* Not JSON, continue */ }
+      }
+
+      // Strategy 4: Look for option elements anywhere in the document linked by ID pattern
+      const inputId = input.id || input.name;
+      if (inputId) {
+        const possibleListboxIds = [
+          `${inputId}-listbox`,
+          `${inputId}-options`,
+          `${inputId}-menu`,
+          `${inputId}_listbox`,
+          `${inputId}_options`
+        ];
+
+        for (const listboxId of possibleListboxIds) {
+          const listbox = document.getElementById(listboxId);
+          if (listbox) {
+            const opts = extractOptionsFromElement(listbox);
+            if (opts.length > 0) return opts;
           }
         }
       }
 
-      if (!dropdownMenu) return null;
+      // Strategy 5: Greenhouse-specific - look for select__menu in the same container
+      const greenhouseContainer = input.closest('.select__control')?.parentElement;
+      if (greenhouseContainer) {
+        const menu = greenhouseContainer.querySelector('.select__menu');
+        if (menu) {
+          const opts = extractOptionsFromElement(menu);
+          if (opts.length > 0) return opts;
+        }
+      }
 
-      // Extract options from menu
-      const optionElements = Array.from(
-        dropdownMenu.querySelectorAll('li, div[role="option"], [data-option]')
-      );
+      // Helper function to extract options from a container element
+      function extractOptionsFromElement(container) {
+        const optionElements = Array.from(
+          container.querySelectorAll('li, div[role="option"], [data-option], [class*="option"]')
+        );
 
-      const extractedOptions = optionElements
-        .filter(opt => opt.offsetParent !== null) // Only visible options
-        .map(opt => {
-          const text = opt.textContent?.trim() || '';
-          const value = opt.getAttribute('data-value') ||
-                       opt.getAttribute('value') ||
-                       text;
+        return optionElements
+          .map(opt => {
+            const text = opt.textContent?.trim() || '';
+            const value = opt.getAttribute('data-value') ||
+                         opt.getAttribute('value') ||
+                         opt.getAttribute('data-id') ||
+                         text;
 
-          return {
-            value: value,
-            text: text,
-            selected: false
-          };
-        })
-        .filter(opt => opt.text && opt.text.length > 0 && opt.text !== 'Select...');
+            return {
+              value: value,
+              text: text,
+              selected: opt.getAttribute('aria-selected') === 'true'
+            };
+          })
+          .filter(opt => opt.text && opt.text.length > 0 &&
+                        opt.text !== 'Select...' &&
+                        opt.text !== '...' &&
+                        opt.text.length < 200); // Filter out long non-option text
+      }
 
-      // Close dropdown by clicking input again or pressing Escape
-      input.blur();
-      document.body.click(); // Click elsewhere to close
-
-      return extractedOptions;
+      // No options found without interaction - return null
+      // AI will handle these fields by typing and selecting
+      return null;
     }, safeSelector);
-
-    // Give page a moment to close dropdown
-    await this.sleep(100);
 
     return options;
   }
