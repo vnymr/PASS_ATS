@@ -33,8 +33,16 @@ async function getBrowser() {
   browserLaunchPromise = (async () => {
     try {
       logger.info('Launching browser for PDF generation...');
+
+      // Use system Chromium if available (for Docker/production)
+      const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined;
+      if (executablePath) {
+        logger.info(`Using system Chromium at: ${executablePath}`);
+      }
+
       browserInstance = await chromium.launch({
         headless: true,
+        executablePath,
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
