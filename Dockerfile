@@ -77,5 +77,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=5 \
 
 WORKDIR /app/server
 
-# Run database migrations and start server
-CMD npx prisma migrate deploy && node server.js
+# Run start script (handles migrations, server, and worker)
+CMD node start.js
