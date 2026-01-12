@@ -167,20 +167,87 @@ def start_health_server():
     server.serve_forever()
 
 
-def start_socat_proxy(proxy_port: int, target_port: int, browser_id: str) -> Optional[subprocess.Popen]:
-    """Start socat to proxy from 0.0.0.0:proxy_port to localhost:target_port"""
+async def handle_proxy_connection(reader, writer, target_port: int, browser_id: str):
+    """Handle a single proxied connection with logging"""
+    client_addr = writer.get_extra_info('peername')
+    print(f"🔗 [{browser_id}] New connection from {client_addr[0]}:{client_addr[1]}", flush=True)
+
     try:
-        # socat forwards TCP connections from external port to internal localhost port
-        process = subprocess.Popen(
-            ['socat', f'TCP-LISTEN:{proxy_port},fork,reuseaddr,bind=0.0.0.0', f'TCP:localhost:{target_port}'],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
+        # Connect to the target browser
+        target_reader, target_writer = await asyncio.open_connection('localhost', target_port)
+        print(f"✅ [{browser_id}] Connected to browser (port {target_port})", flush=True)
+
+        async def forward(src, dst, direction):
+            """Forward data between source and destination"""
+            try:
+                while True:
+                    data = await src.read(65536)
+                    if not data:
+                        break
+                    dst.write(data)
+                    await dst.drain()
+            except Exception:
+                pass
+            finally:
+                try:
+                    dst.close()
+                    await dst.wait_closed()
+                except:
+                    pass
+
+        # Forward traffic in both directions
+        await asyncio.gather(
+            forward(reader, target_writer, "client->browser"),
+            forward(target_reader, writer, "browser->client"),
+            return_exceptions=True
         )
-        print(f"[{browser_id}] socat proxy started: 0.0.0.0:{proxy_port} -> localhost:{target_port}", flush=True)
-        socat_processes.append(process)
-        return process
+
     except Exception as e:
-        print(f"[{browser_id}] Failed to start socat proxy: {e}", flush=True)
+        print(f"❌ [{browser_id}] Connection error: {e}", flush=True)
+    finally:
+        print(f"🔌 [{browser_id}] Connection closed from {client_addr[0]}:{client_addr[1]}", flush=True)
+        try:
+            writer.close()
+            await writer.wait_closed()
+        except:
+            pass
+
+
+async def start_python_proxy(proxy_port: int, target_port: int, browser_id: str):
+    """Start Python TCP proxy instead of socat for connection logging"""
+    async def client_handler(reader, writer):
+        await handle_proxy_connection(reader, writer, target_port, browser_id)
+
+    server = await asyncio.start_server(client_handler, '0.0.0.0', proxy_port)
+    print(f"[{browser_id}] Python proxy started: 0.0.0.0:{proxy_port} -> localhost:{target_port}", flush=True)
+
+    async with server:
+        await server.serve_forever()
+
+
+def start_proxy_in_thread(proxy_port: int, target_port: int, browser_id: str):
+    """Start the Python proxy in a background thread with its own event loop"""
+    def run_proxy():
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(start_python_proxy(proxy_port, target_port, browser_id))
+        except Exception as e:
+            print(f"[{browser_id}] Proxy error: {e}", flush=True)
+
+    thread = Thread(target=run_proxy, daemon=True)
+    thread.start()
+    return thread
+
+
+def start_socat_proxy(proxy_port: int, target_port: int, browser_id: str) -> Optional[subprocess.Popen]:
+    """Start proxy from 0.0.0.0:proxy_port to localhost:target_port (now uses Python proxy for logging)"""
+    try:
+        # Use Python proxy instead of socat for connection logging
+        start_proxy_in_thread(proxy_port, target_port, browser_id)
+        return None  # No subprocess to track
+    except Exception as e:
+        print(f"[{browser_id}] Failed to start proxy: {e}", flush=True)
         return None
 
 
