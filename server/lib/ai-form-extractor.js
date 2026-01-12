@@ -7,17 +7,22 @@ import logger from './logger.js';
 
 /**
  * Escape CSS selector for IDs that start with numbers or contain special characters
- * CSS selectors like #123 are invalid - need to use [id="123"] or escape properly
+ * CSS selectors like #123 or #foo[] are invalid - need to use [id="..."] or escape properly
  * @param {string} selector - The selector to escape
  * @returns {string} Safe CSS selector
  */
 function escapeCssSelector(selector) {
   if (!selector) return selector;
 
-  // If it's an ID selector starting with # followed by a digit, convert to attribute selector
-  if (selector.match(/^#\d/)) {
+  // If it's an ID selector, check if it needs escaping
+  if (selector.startsWith('#')) {
     const id = selector.slice(1); // Remove the #
-    return `[id="${id}"]`;
+
+    // Check if ID contains special characters that need escaping: [], (), :, ., etc
+    // Or if it starts with a digit
+    if (/[\[\]():.~>+*^$|=!@%&]/.test(id) || /^\d/.test(id)) {
+      return `[id="${id}"]`;
+    }
   }
 
   return selector;

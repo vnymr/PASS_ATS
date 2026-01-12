@@ -8,6 +8,20 @@
 
 import logger from './logger.js';
 
+/**
+ * Escape CSS selector for IDs with special characters
+ */
+function escapeCssSelector(selector) {
+  if (!selector) return selector;
+  if (selector.startsWith('#')) {
+    const id = selector.slice(1);
+    if (/[\[\]():.~>+*^$|=!@%&]/.test(id) || /^\d/.test(id)) {
+      return `[id="${id}"]`;
+    }
+  }
+  return selector;
+}
+
 class ParallelFormFiller {
   constructor() {
     this.typingDelay = 20; // Reduced from 50ms for speed
@@ -22,9 +36,9 @@ class ParallelFormFiller {
     const startTime = Date.now();
 
     try {
-      // Prepare field data for batch filling
+      // Prepare field data for batch filling (escape selectors with special characters)
       const fillData = fields.map(field => ({
-        selector: field.selector,
+        selector: escapeCssSelector(field.selector),
         name: field.name,
         type: field.type,
         value: responses[field.name],
