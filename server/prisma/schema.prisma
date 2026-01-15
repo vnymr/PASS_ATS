@@ -8,40 +8,18 @@ datasource db {
 }
 
 model User {
-  id               Int               @id @default(autoincrement())
-  email            String            @unique
-  password         String
-  createdAt        DateTime          @default(now())
-  clerkId          String?           @unique
-  autoApplications AutoApplication[]
-  conversations    Conversation[]
-  gmailConnection  GmailConnection?
-  goals            Goal[]
-  jobs             Job[]
-  payments         Payment[]
-  profile          Profile?
-  resumeTemplates  ResumeTemplate[]
-  routines         Routine[]
-  subscription     Subscription?
-  usageTracking    UsageTracking[]
-}
-
-model GmailConnection {
-  id           String    @id @default(cuid())
-  userId       Int       @unique
-  email        String
-  accessToken  String
-  refreshToken String
-  expiresAt    DateTime
-  scope        String
-  isActive     Boolean   @default(true)
-  lastUsed     DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([isActive])
+  id              Int             @id @default(autoincrement())
+  email           String          @unique
+  password        String
+  createdAt       DateTime        @default(now())
+  clerkId         String?         @unique
+  conversations   Conversation[]
+  jobs            Job[]
+  payments        Payment[]
+  profile         Profile?
+  resumeTemplates ResumeTemplate[]
+  subscription    Subscription?
+  usageTracking   UsageTracking[]
 }
 
 model Profile {
@@ -172,140 +150,6 @@ model Payment {
   @@index([stripePaymentId])
 }
 
-model AggregatedJob {
-  id                   String            @id @default(cuid())
-  externalId           String            @unique
-  source               String
-  title                String
-  company              String
-  location             String?
-  salary               String?
-  description          String
-  requirements         String?
-  applyUrl             String
-  companyUrl           String?
-  atsType              String
-  atsCompany           String?
-  atsComplexity        String
-  atsConfidence        Float
-  aiApplyable          Boolean           @default(false)
-  postedDate           DateTime
-  expiresAt            DateTime?
-  lastChecked          DateTime          @default(now())
-  isActive             Boolean           @default(true)
-  extractedSkills      String[]          @default([])
-  extractedExperience  String?
-  extractedEducation   String?
-  extractedJobLevel    String?
-  extractedKeywords    String[]          @default([])
-  extractedBenefits    String[]          @default([])
-  lastExtractedAt      DateTime?
-  extractionConfidence Float?
-  closedAt             DateTime?
-  createdAt            DateTime          @default(now())
-  firstSeenAt          DateTime          @default(now())
-  updatedAt            DateTime?         @updatedAt
-  applications         AutoApplication[]
-
-  @@index([aiApplyable, postedDate])
-  @@index([isActive, postedDate])
-  @@index([isActive, aiApplyable, postedDate])
-  @@index([isActive, source, postedDate])
-  @@index([lastChecked])
-  @@index([atsType])
-  @@index([source])
-  @@index([company])
-  @@index([location])
-  @@index([postedDate])
-  @@index([extractedSkills], type: Gin)
-}
-
-model AutoApplication {
-  id               String                @id @default(cuid())
-  userId           Int
-  jobId            String
-  method           String                @default("AI_AUTO")
-  submittedAt      DateTime?
-  confirmationUrl  String?
-  confirmationId   String?
-  confirmationData Json?
-  error            String?
-  errorType        String?
-  retryCount       Int                   @default(0)
-  maxRetries       Int                   @default(3)
-  cost             Float                 @default(0.0)
-  createdAt        DateTime              @default(now())
-  startedAt        DateTime?
-  completedAt      DateTime?
-  status           AutoApplicationStatus @default(QUEUED)
-  job              AggregatedJob         @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  user             User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workerSession    WorkerSession?
-
-  @@unique([userId, jobId])
-  @@index([userId, status])
-  @@index([status])
-  @@index([createdAt])
-}
-
-model ApplicationRecipe {
-  id            String            @id @default(cuid())
-  platform      String            @unique
-  atsType       String
-  version       Int               @default(1)
-  steps         Json
-  successRate   Float             @default(1.0)
-  timesUsed     Int               @default(0)
-  failureCount  Int               @default(0)
-  recordingCost Float             @default(0.80)
-  replayCost    Float             @default(0.05)
-  totalSaved    Float             @default(0.0)
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
-  lastUsed      DateTime?
-  lastFailure   DateTime?
-  recordedBy    String?
-  executions    RecipeExecution[]
-
-  @@index([platform])
-  @@index([atsType])
-  @@index([successRate])
-}
-
-model RecipeExecution {
-  id         String            @id @default(cuid())
-  recipeId   String
-  success    Boolean
-  method     String
-  duration   Int?
-  cost       Float
-  error      String?
-  errorType  String?
-  jobUrl     String?
-  executedAt DateTime          @default(now())
-  recipe     ApplicationRecipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
-
-  @@index([recipeId, executedAt])
-  @@index([success])
-}
-
-model DiscoveredCompany {
-  id             String   @id @default(cuid())
-  atsType        String
-  slug           String
-  name           String?
-  discoveredAt   DateTime @default(now())
-  discoveredFrom String?
-  lastFetchedAt  DateTime
-  isActive       Boolean  @default(true)
-  totalJobs      Int      @default(0)
-  lastJobCount   Int      @default(0)
-
-  @@unique([atsType, slug])
-  @@index([atsType, isActive])
-  @@index([lastFetchedAt])
-}
-
 model Conversation {
   id            String    @id @default(cuid())
   userId        Int?
@@ -314,7 +158,6 @@ model Conversation {
   updatedAt     DateTime  @updatedAt
   lastMessageAt DateTime  @default(now())
   user          User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  goals         Goal[]
   messages      Message[]
 
   @@index([userId, lastMessageAt])
@@ -335,26 +178,6 @@ model Message {
   @@index([conversationId, createdAt])
 }
 
-model Goal {
-  id             String        @id @default(cuid())
-  conversationId String?
-  userId         Int
-  title          String
-  description    String?
-  type           GoalType      @default(JOB_SEARCH)
-  status         GoalStatus    @default(ACTIVE)
-  targetDate     DateTime?
-  completedAt    DateTime?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-  metadata       Json?
-  conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId, status])
-  @@index([conversationId])
-}
-
 model MessageUsage {
   id        String   @id @default(cuid())
   userId    Int?
@@ -370,91 +193,6 @@ model MessageUsage {
   @@index([userId, date])
   @@index([ip, date])
   @@index([resetAt])
-}
-
-model Routine {
-  id          String             @id @default(cuid())
-  userId      Int
-  title       String
-  description String?
-  type        RoutineType        @default(SEARCH_JOBS)
-  frequency   String             @default("DAILY")
-  schedule    String             @default("09:00")
-  config      Json?
-  isActive    Boolean            @default(true)
-  lastRun     DateTime?
-  nextRun     DateTime?
-  runCount    Int                @default(0)
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
-  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  executions  RoutineExecution[]
-
-  @@index([userId, isActive])
-  @@index([nextRun, isActive])
-  @@index([type, isActive])
-}
-
-model RoutineExecution {
-  id        String   @id @default(cuid())
-  routineId String
-  status    String   @default("SUCCESS")
-  summary   String?
-  results   Json?
-  duration  Int?
-  error     String?
-  createdAt DateTime @default(now())
-  routine   Routine  @relation(fields: [routineId], references: [id], onDelete: Cascade)
-
-  @@index([routineId, createdAt])
-  @@index([status])
-}
-
-model Worker {
-  id               Int             @id @default(autoincrement())
-  email            String          @unique
-  password         String
-  name             String
-  isActive         Boolean         @default(true)
-  role             WorkerRole      @default(OPERATOR)
-  totalCompleted   Int             @default(0)
-  totalFailed      Int             @default(0)
-  totalSkipped     Int             @default(0)
-  avgTimeSeconds   Int?
-  lastActiveAt     DateTime?
-  currentSessionId String?
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
-  sessions         WorkerSession[]
-
-  @@index([isActive])
-  @@index([email])
-}
-
-model WorkerSession {
-  id                String              @id @default(cuid())
-  workerId          Int?
-  autoApplicationId String              @unique
-  status            WorkerSessionStatus @default(QUEUED)
-  browserSessionId  String?
-  vncUrl            String?
-  queuedAt          DateTime            @default(now())
-  assignedAt        DateTime?
-  aiStartedAt       DateTime?
-  aiCompletedAt     DateTime?
-  submittedAt       DateTime?
-  completedAt       DateTime?
-  formData          Json?
-  screenshotUrl     String?
-  workerNotes       String?
-  failReason        String?
-  skipReason        String?
-  autoApplication   AutoApplication     @relation(fields: [autoApplicationId], references: [id], onDelete: Cascade)
-  worker            Worker?             @relation(fields: [workerId], references: [id])
-
-  @@index([status])
-  @@index([workerId, status])
-  @@index([queuedAt])
 }
 
 enum JobStatus {
@@ -501,60 +239,8 @@ enum PaymentStatus {
   REFUNDED
 }
 
-enum AutoApplicationStatus {
-  QUEUED
-  APPLYING
-  SUBMITTED
-  FAILED
-  CANCELLED
-  RETRYING
-  MANUAL_REQUIRED
-}
-
 enum MessageRole {
   USER
   ASSISTANT
   SYSTEM
-}
-
-enum GoalType {
-  JOB_SEARCH
-  RESUME_IMPROVEMENT
-  SKILL_DEVELOPMENT
-  INTERVIEW_PREP
-  CAREER_PLANNING
-  OTHER
-}
-
-enum GoalStatus {
-  ACTIVE
-  PAUSED
-  COMPLETED
-  CANCELLED
-}
-
-enum RoutineType {
-  SEARCH_JOBS
-  APPLY_TO_JOBS
-  REVIEW_APPLICATIONS
-  UPDATE_GOALS
-  DAILY_DIGEST
-  WEEKLY_SUMMARY
-  CUSTOM
-}
-
-enum WorkerRole {
-  OPERATOR
-  ADMIN
-}
-
-enum WorkerSessionStatus {
-  QUEUED
-  ASSIGNED
-  AI_PROCESSING
-  READY_FOR_SUBMIT
-  SUBMITTED
-  COMPLETED
-  FAILED
-  SKIPPED
 }

@@ -1,4 +1,0 @@
-# Camoufox with geoip support
-# Note: Requires patch to server.py to filter None values (fixes "proxy: expected object, got null")
-camoufox[geoip]>=0.4.11
-playwright>=1.40.0

@@ -17,10 +17,6 @@ import CheckoutSuccess from './pages/CheckoutSuccess';
 import CheckoutCancel from './pages/CheckoutCancel';
 import Support from './pages/Support';
 import Privacy from './pages/Privacy';
-import FindJob from './pages/FindJob';
-import JobApplicationQuestions from './components/JobApplicationQuestions';
-import Happy from './pages/Happy';
-import Applications from './pages/Applications';
 import Onboarding from './pages/Onboarding';
 import Templates from './pages/Templates';
 
@@ -36,7 +32,7 @@ function AuthPage() {
 
   useEffect(() => {
     if (isLoaded && isSignedIn) {
-      navigate('/happy', { replace: true });
+      navigate('/generate', { replace: true });
     }
   }, [isLoaded, isSignedIn, navigate]);
 
@@ -168,15 +164,6 @@ export default function App() {
           </ErrorBoundary>
         </ProtectedRoute>
       } />
-      <Route path="/application-questions" element={
-        <ProtectedRoute>
-          <ErrorBoundary>
-            <ModernLayout>
-              <JobApplicationQuestions />
-            </ModernLayout>
-          </ErrorBoundary>
-        </ProtectedRoute>
-      } />
       <Route path="/generate" element={
         <ProtectedRoute>
           <ErrorBoundary>
@@ -204,24 +191,6 @@ export default function App() {
           </ErrorBoundary>
         </ProtectedRoute>
       } />
-      <Route path="/find-jobs" element={
-        <ProtectedRoute>
-          <ErrorBoundary>
-            <ModernLayout>
-              <FindJob />
-            </ModernLayout>
-          </ErrorBoundary>
-        </ProtectedRoute>
-      } />
-      <Route path="/applications" element={
-        <ProtectedRoute>
-          <ErrorBoundary>
-            <ModernLayout>
-              <Applications />
-            </ModernLayout>
-          </ErrorBoundary>
-        </ProtectedRoute>
-      } />
       <Route path="/billing" element={
         <ProtectedRoute>
           <ErrorBoundary>
@@ -242,15 +211,6 @@ export default function App() {
         <ProtectedRoute>
           <ErrorBoundary>
             <CheckoutCancel />
-          </ErrorBoundary>
-        </ProtectedRoute>
-      } />
-      <Route path="/happy" element={
-        <ProtectedRoute>
-          <ErrorBoundary>
-            <ModernLayout>
-              <Happy />
-            </ModernLayout>
           </ErrorBoundary>
         </ProtectedRoute>
       } />

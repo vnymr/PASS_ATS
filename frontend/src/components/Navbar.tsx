@@ -2,7 +2,7 @@ import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { UserButton } from '@clerk/clerk-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FileText, User, Download, Briefcase, Sparkles, MessageSquare } from 'lucide-react';
+import { FileText, User, Sparkles, Clock, Layout } from 'lucide-react';
 import type { Quota } from '../api-adapter';
 
 export default function Navbar({ quota }: { quota: Quota | null }) {
@@ -11,10 +11,10 @@ export default function Navbar({ quota }: { quota: Quota | null }) {
   const location = useLocation();
 
   const navItems = [
-    { id: 'generate', label: 'Resume Generator', icon: FileText, path: '/generate' },
-    { id: 'coach', label: 'AI Coach', icon: MessageSquare, path: '/chat' },
+    { id: 'generate', label: 'Generate', icon: FileText, path: '/generate' },
+    { id: 'templates', label: 'Templates', icon: Layout, path: '/templates' },
+    { id: 'history', label: 'History', icon: Clock, path: '/history' },
     { id: 'profile', label: 'Profile', icon: User, path: '/profile' },
-    { id: 'jobs', label: 'Jobs', icon: Briefcase, path: '/find-jobs' },
   ];
 
   return (
@@ -72,16 +72,6 @@ export default function Navbar({ quota }: { quota: Quota | null }) {
           })}
         </motion.nav>
 
-        {/* Extension Link */}
-        <a
-          className="hidden lg:flex items-center gap-2 ml-3 px-3 py-2 text-sm text-gray-600 rounded-lg hover:bg-gray-100 hover:text-gray-900 transition-all duration-200"
-          href="https://chrome.google.com/webstore"
-          target="_blank"
-          rel="noreferrer"
-        >
-          <Download className="w-4 h-4" />
-          <span>Extension</span>
-        </a>
       </div>
 
       <div className="right flex items-center gap-2">

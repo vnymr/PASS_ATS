@@ -1,14 +1,12 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { SignedIn, SignedOut, SignInButton, SignUpButton, UserButton, useAuth } from '@clerk/clerk-react';
-import { Menu, CheckCircle, Zap, Shield, FileText, MousePointer, Clock, Chrome } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { HeroSection, FeatureSection, CareerCoachSection, CTASection } from '@/components/landing';
-import logoImg from '../logo.svg';
+import { motion } from 'framer-motion';
+import {
+  Menu, X, CheckCircle, Zap, FileText, Target, Clock,
+  Sparkles, ArrowRight, Star, Users, Download, Shield
+} from 'lucide-react';
 import { trackCTAClick } from '../utils/analytics';
-import logger from '../utils/logger';
-
-const CHROME_EXTENSION_URL = 'https://chromewebstore.google.com/detail/happyresumes-ai-resume-bu/enddmomfdfphcppmhbpbnpmkfjekiled';
 
 export default function Landing() {
   const navigate = useNavigate();
@@ -16,14 +14,14 @@ export default function Landing() {
   const [resumeCount, setResumeCount] = useState<number | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // Redirect signed-in users directly to happy page
+  // Redirect signed-in users to generate page
   useEffect(() => {
     if (isSignedIn) {
-      navigate('/happy');
+      navigate('/generate');
     }
   }, [isSignedIn, navigate]);
 
-  // Fetch resume count
+  // Fetch resume count for social proof
   useEffect(() => {
     async function fetchResumeCount() {
       try {
@@ -32,438 +30,374 @@ export default function Landing() {
         const data = await response.json();
         setResumeCount(data.totalResumes);
       } catch (error) {
-        logger.error('Failed to fetch resume count', error);
+        console.error('Failed to fetch resume count');
       }
     }
     fetchResumeCount();
   }, []);
 
   const handleGetStarted = () => {
-    trackCTAClick('hero', 'Start Your Free Trial');
+    trackCTAClick('hero', 'Get Started Free');
   };
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: '#f5f7f7' }}>
+    <div className="min-h-screen bg-white">
       {/* Navigation */}
-      <nav
-        className="sticky top-0 z-50 px-6 py-3.5 backdrop-blur-md border-b"
-        style={{ backgroundColor: 'rgba(245, 247, 247, 0.8)', borderColor: 'rgba(28, 63, 64, 0.06)' }}
-      >
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-10">
-            <button
-              onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-              className="flex items-center gap-2"
-            >
-              <img src={logoImg} alt="HappyResume Logo" className="h-8 w-auto" />
-            </button>
+      <nav className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-100">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+          <div className="flex items-center justify-between h-16">
+            {/* Logo */}
+            <Link to="/" className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-teal-500 to-teal-600 flex items-center justify-center">
+                <Sparkles className="w-4 h-4 text-white" />
+              </div>
+              <span className="font-bold text-xl tracking-tight">
+                Happy<span className="text-teal-600">Resumes</span>
+              </span>
+            </Link>
 
-            <div className="hidden md:flex items-center gap-7">
-              <button
-                onClick={() => navigate('/features')}
-                className="hover:opacity-70 transition-opacity text-[0.875rem]"
-                style={{ color: '#0c1310' }}
-              >
+            {/* Desktop Nav */}
+            <div className="hidden md:flex items-center gap-8">
+              <Link to="/features" className="text-gray-600 hover:text-gray-900 text-sm font-medium">
                 Features
-              </button>
-              <button
-                onClick={() => navigate('/extension')}
-                className="hover:opacity-70 transition-opacity text-[0.875rem]"
-                style={{ color: '#0c1310' }}
-              >
-                Chrome Extension
-              </button>
-              <button
-                onClick={() => navigate('/pricing')}
-                className="hover:opacity-70 transition-opacity text-[0.875rem]"
-                style={{ color: '#0c1310' }}
-              >
+              </Link>
+              <Link to="/extension" className="text-gray-600 hover:text-gray-900 text-sm font-medium">
+                Extension
+              </Link>
+              <Link to="/pricing" className="text-gray-600 hover:text-gray-900 text-sm font-medium">
                 Pricing
+              </Link>
+            </div>
+
+            {/* Auth Buttons */}
+            <div className="flex items-center gap-3">
+              <SignedOut>
+                <SignInButton mode="modal">
+                  <button className="hidden sm:block text-gray-600 hover:text-gray-900 text-sm font-medium">
+                    Sign In
+                  </button>
+                </SignInButton>
+                <SignUpButton mode="modal">
+                  <button
+                    onClick={handleGetStarted}
+                    className="bg-teal-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-teal-700 transition-colors"
+                  >
+                    Get Started Free
+                  </button>
+                </SignUpButton>
+              </SignedOut>
+              <SignedIn>
+                <button
+                  onClick={() => navigate('/generate')}
+                  className="bg-teal-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-teal-700 transition-colors"
+                >
+                  Dashboard
+                </button>
+                <UserButton afterSignOutUrl="/" />
+              </SignedIn>
+
+              {/* Mobile Menu Button */}
+              <button
+                className="md:hidden p-2"
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              >
+                {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
               </button>
             </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <SignedOut>
-              <SignInButton mode="modal">
-                <Button
-                  variant="ghost"
-                  className="hidden md:inline-flex h-9 px-4 text-[0.875rem]"
-                  style={{ color: '#0c1310' }}
-                >
-                  Sign In
-                </Button>
-              </SignInButton>
-
-              <SignUpButton mode="modal">
-                <Button
-                  className="h-9 px-4 text-[0.875rem]"
-                  style={{
-                    backgroundColor: '#3eaca7',
-                    color: '#ffffff'
-                  }}
-                  onClick={handleGetStarted}
-                >
-                  Get Started
-                </Button>
-              </SignUpButton>
-            </SignedOut>
-
-            <SignedIn>
-              <Button
-                className="h-9 px-4 text-[0.875rem]"
-                style={{
-                  backgroundColor: '#3eaca7',
-                  color: '#ffffff'
-                }}
-                onClick={() => navigate('/happy')}
-              >
-                Go to Dashboard
-              </Button>
-              <UserButton afterSignOutUrl="/" />
-            </SignedIn>
-
-            <Button
-              variant="ghost"
-              size="icon"
-              className="md:hidden h-9 w-9"
-              style={{ color: '#0c1310' }}
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            >
-              <Menu className="w-4 h-4" />
-            </Button>
           </div>
         </div>
 
         {/* Mobile Menu */}
         {isMobileMenuOpen && (
-          <div className="md:hidden mt-4 pb-4 border-t" style={{ borderColor: 'rgba(28, 63, 64, 0.08)' }}>
-            <div className="flex flex-col gap-3 pt-4">
-              <button
-                onClick={() => { navigate('/features'); setIsMobileMenuOpen(false); }}
-                className="px-4 py-2 text-[0.875rem] hover:bg-gray-100 rounded-lg text-left"
-                style={{ color: '#0c1310' }}
-              >
-                Features
-              </button>
-              <button
-                onClick={() => { navigate('/extension'); setIsMobileMenuOpen(false); }}
-                className="px-4 py-2 text-[0.875rem] hover:bg-gray-100 rounded-lg text-left"
-                style={{ color: '#0c1310' }}
-              >
-                Chrome Extension
-              </button>
-              <button
-                onClick={() => { navigate('/pricing'); setIsMobileMenuOpen(false); }}
-                className="px-4 py-2 text-[0.875rem] hover:bg-gray-100 rounded-lg text-left"
-                style={{ color: '#0c1310' }}
-              >
-                Pricing
-              </button>
-              <SignedOut>
-                <SignInButton mode="modal">
-                  <button
-                    className="px-4 py-2 text-[0.875rem] hover:bg-gray-100 rounded-lg text-left"
-                    style={{ color: '#0c1310' }}
-                  >
-                    Sign In
-                  </button>
-                </SignInButton>
-              </SignedOut>
+          <div className="md:hidden border-t border-gray-100 bg-white">
+            <div className="px-4 py-4 space-y-3">
+              <Link to="/features" className="block py-2 text-gray-600">Features</Link>
+              <Link to="/extension" className="block py-2 text-gray-600">Extension</Link>
+              <Link to="/pricing" className="block py-2 text-gray-600">Pricing</Link>
             </div>
           </div>
         )}
       </nav>
 
       {/* Hero Section */}
-      <SignedOut>
-        <SignUpButton mode="modal">
-          <div>
-            <HeroSection
-              onGetStarted={handleGetStarted}
-              onWatchDemo={() => {}}
-              resumeCount={resumeCount}
-            />
+      <section className="pt-16 pb-20 px-4 sm:px-6">
+        <div className="max-w-4xl mx-auto text-center">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+          >
+            {/* Badge */}
+            <div className="inline-flex items-center gap-2 px-3 py-1 bg-teal-50 text-teal-700 rounded-full text-sm font-medium mb-6">
+              <Zap className="w-4 h-4" />
+              AI-Powered Resume Generator
+            </div>
+
+            {/* Main Headline - SEO Optimized */}
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 mb-6 leading-tight">
+              Create ATS-Optimized Resumes{' '}
+              <span className="text-teal-600">in Seconds</span>
+            </h1>
+
+            {/* Subheadline */}
+            <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto leading-relaxed">
+              Paste any job description and get a perfectly tailored resume that passes
+              Applicant Tracking Systems. Powered by AI, built for results.
+            </p>
+
+            {/* CTA Buttons */}
+            <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
+              <SignedOut>
+                <SignUpButton mode="modal">
+                  <button
+                    onClick={handleGetStarted}
+                    className="inline-flex items-center justify-center gap-2 bg-teal-600 text-white px-8 py-4 rounded-xl text-lg font-semibold hover:bg-teal-700 transition-colors shadow-lg shadow-teal-600/20"
+                  >
+                    Create Your Resume Free
+                    <ArrowRight className="w-5 h-5" />
+                  </button>
+                </SignUpButton>
+              </SignedOut>
+              <SignedIn>
+                <button
+                  onClick={() => navigate('/generate')}
+                  className="inline-flex items-center justify-center gap-2 bg-teal-600 text-white px-8 py-4 rounded-xl text-lg font-semibold hover:bg-teal-700 transition-colors shadow-lg shadow-teal-600/20"
+                >
+                  Go to Generator
+                  <ArrowRight className="w-5 h-5" />
+                </button>
+              </SignedIn>
+              <Link
+                to="/extension"
+                className="inline-flex items-center justify-center gap-2 bg-gray-100 text-gray-700 px-8 py-4 rounded-xl text-lg font-medium hover:bg-gray-200 transition-colors"
+              >
+                <Download className="w-5 h-5" />
+                Get Extension
+              </Link>
+            </div>
+
+            {/* Social Proof */}
+            <div className="flex flex-wrap items-center justify-center gap-6 text-sm text-gray-500">
+              {resumeCount && resumeCount > 0 && (
+                <div className="flex items-center gap-2">
+                  <Users className="w-4 h-4 text-teal-600" />
+                  <span><strong className="text-gray-900">{resumeCount.toLocaleString()}+</strong> resumes created</span>
+                </div>
+              )}
+              <div className="flex items-center gap-1">
+                {[1,2,3,4,5].map(i => <Star key={i} className="w-4 h-4 fill-yellow-400 text-yellow-400" />)}
+                <span className="ml-1">4.9/5 rating</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Shield className="w-4 h-4 text-teal-600" />
+                <span>100% Free to start</span>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* How It Works */}
+      <section className="py-20 px-4 sm:px-6 bg-gray-50">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
+              Generate Tailored Resumes in 3 Steps
+            </h2>
+            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+              No more generic resumes. Create perfectly matched applications in minutes.
+            </p>
           </div>
-        </SignUpButton>
-      </SignedOut>
-      <SignedIn>
-        <HeroSection
-          onGetStarted={() => navigate('/happy')}
-          onWatchDemo={() => {}}
-          resumeCount={resumeCount}
-        />
-      </SignedIn>
+
+          <div className="grid md:grid-cols-3 gap-8">
+            {[
+              {
+                step: '1',
+                icon: FileText,
+                title: 'Paste Job Description',
+                description: 'Copy any job posting from LinkedIn, Indeed, or company websites and paste it into our generator.'
+              },
+              {
+                step: '2',
+                icon: Sparkles,
+                title: 'AI Tailors Your Resume',
+                description: 'Our AI analyzes the job requirements and optimizes your resume with relevant keywords and skills.'
+              },
+              {
+                step: '3',
+                icon: Download,
+                title: 'Download & Apply',
+                description: 'Get your ATS-optimized PDF resume instantly. Ready to submit and land interviews.'
+              }
+            ].map((item, index) => (
+              <motion.div
+                key={index}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.5, delay: index * 0.1 }}
+                className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100 text-center"
+              >
+                <div className="w-14 h-14 rounded-xl bg-teal-100 flex items-center justify-center mx-auto mb-6">
+                  <item.icon className="w-7 h-7 text-teal-600" />
+                </div>
+                <div className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-teal-600 text-white text-sm font-bold mb-4">
+                  {item.step}
+                </div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-3">{item.title}</h3>
+                <p className="text-gray-600 leading-relaxed">{item.description}</p>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
 
       {/* Features Section */}
-      <div id="features">
-        {/* AI Resume Generator Section */}
-        <FeatureSection
-          badge="AI Resume Generator"
-          title="AI Resume Generator That Beats the Bots"
-          description="Our AI doesn't just fill in a template. It analyzes your profile and the job description to generate a professionally designed, ATS-optimized resume in seconds. Built on LaTeX, our resumes are flawless by design."
-          features={[
-            {
-              icon: <CheckCircle className="w-5 h-5" />,
-              title: "ATS-Optimized",
-              description: "Keywords and formatting designed to pass through any applicant tracking system."
-            },
-            {
-              icon: <FileText className="w-5 h-5" />,
-              title: "LaTeX Precision",
-              description: "Get a pixel-perfect, professional resume that stands out."
-            },
-            {
-              icon: <Zap className="w-5 h-5" />,
-              title: "AI-Tailored Content",
-              description: "Generate unique summaries and bullet points for every application."
-            }
-          ]}
-          visualContent={
-            <div
-              className="rounded-xl p-6 shadow-sm border"
-              style={{ backgroundColor: '#ffffff', borderColor: 'rgba(28, 63, 64, 0.08)' }}
-            >
-              <div className="space-y-4">
-                {/* Resume preview */}
-                <div className="space-y-2.5">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-full" style={{ backgroundColor: '#e5e9e9' }} />
-                    <div className="flex-1 space-y-2">
-                      <div className="h-3 rounded" style={{ backgroundColor: '#e5e9e9', width: '55%' }} />
-                      <div className="h-2 rounded" style={{ backgroundColor: '#e5e9e9', width: '35%' }} />
-                    </div>
-                  </div>
+      <section className="py-20 px-4 sm:px-6">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
+              Why Job Seekers Choose HappyResumes
+            </h2>
+            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+              Built specifically to help you pass ATS screening and land more interviews.
+            </p>
+          </div>
 
-                  <div className="h-px" style={{ backgroundColor: 'rgba(28, 63, 64, 0.08)' }} />
-
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: '#3eaca7' }} />
-                      <div className="h-2 rounded flex-1" style={{ backgroundColor: '#e5e9e9' }} />
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: '#409677' }} />
-                      <div className="h-2 rounded flex-1" style={{ backgroundColor: '#e5e9e9', width: '85%' }} />
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: '#3eaca7' }} />
-                      <div className="h-2 rounded flex-1" style={{ backgroundColor: '#e5e9e9', width: '70%' }} />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="h-px" style={{ backgroundColor: 'rgba(28, 63, 64, 0.08)' }} />
-
-                <div className="space-y-3">
-                  <div className="h-3 rounded" style={{ backgroundColor: '#3eaca7', opacity: 0.15, width: '45%' }} />
-                  <div className="space-y-1.5">
-                    <div className="h-2 rounded" style={{ backgroundColor: '#e5e9e9' }} />
-                    <div className="h-2 rounded" style={{ backgroundColor: '#e5e9e9', width: '90%' }} />
-                    <div className="h-2 rounded" style={{ backgroundColor: '#e5e9e9', width: '95%' }} />
-                  </div>
-                </div>
-              </div>
-            </div>
-          }
-        />
-
-        {/* AI Job Application Filler Section */}
-        <FeatureSection
-          badge="Auto-Apply Technology"
-          title="Apply to Hundreds of Jobs, Automatically"
-          description="Why waste hours on repetitive forms? Our AI job application filler, powered by our stealth browser technology, applies to jobs on your behalf. It's smart, silent, and effective."
-          features={[
-            {
-              icon: <Shield className="w-5 h-5" />,
-              title: "Undetectable Auto-Apply",
-              description: "Our Camoufox engine mimics human behavior, avoiding CAPTCHAs and bot detectors."
-            },
-            {
-              icon: <MousePointer className="w-5 h-5" />,
-              title: "Smart Form Filling",
-              description: "Intelligently handles even the most complex and custom application forms."
-            },
-            {
-              icon: <Clock className="w-5 h-5" />,
-              title: "Works Everywhere",
-              description: "Seamlessly applies on Workday, Greenhouse, Lever, and more."
-            }
-          ]}
-          visualContent={
-            <div
-              className="rounded-xl p-6 shadow-sm space-y-3 border"
-              style={{ backgroundColor: '#ffffff', borderColor: 'rgba(28, 63, 64, 0.08)' }}
-            >
-              {/* Application forms animation */}
-              {[1, 2, 3].map((i) => (
-                <div
-                  key={i}
-                  className="rounded-lg p-4 border"
-                  style={{
-                    backgroundColor: '#f5f7f7',
-                    borderColor: 'rgba(28, 63, 64, 0.08)'
-                  }}
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="h-2 rounded" style={{ backgroundColor: '#e5e9e9', width: '35%' }} />
-                    <div
-                      className="w-4 h-4 rounded-full flex items-center justify-center"
-                      style={{ backgroundColor: '#3eaca7' }}
-                    >
-                      <CheckCircle className="w-2.5 h-2.5" style={{ color: '#ffffff' }} />
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <div className="h-1.5 rounded" style={{ backgroundColor: '#e5e9e9', width: '85%' }} />
-                    <div className="h-1.5 rounded" style={{ backgroundColor: '#e5e9e9', width: '70%' }} />
-                  </div>
-                </div>
-              ))}
-
-              <div
-                className="text-center py-2.5 rounded-lg text-[0.8125rem]"
-                style={{
-                  backgroundColor: '#3eaca7',
-                  color: '#ffffff'
-                }}
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[
+              {
+                icon: Target,
+                title: 'ATS-Optimized Format',
+                description: 'Clean, parseable formatting that works with all major Applicant Tracking Systems.'
+              },
+              {
+                icon: Zap,
+                title: 'Instant Generation',
+                description: 'Get your tailored resume in under 30 seconds. No waiting, no manual editing.'
+              },
+              {
+                icon: CheckCircle,
+                title: 'Keyword Matching',
+                description: 'AI extracts and incorporates relevant keywords from every job description.'
+              },
+              {
+                icon: FileText,
+                title: 'Professional Templates',
+                description: 'Choose from multiple ATS-friendly templates designed by career experts.'
+              },
+              {
+                icon: Clock,
+                title: 'Resume History',
+                description: 'Access all your generated resumes anytime. Track what you sent where.'
+              },
+              {
+                icon: Shield,
+                title: 'Privacy First',
+                description: 'Your data is encrypted and never shared. Delete anytime.'
+              }
+            ].map((feature, index) => (
+              <motion.div
+                key={index}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.4, delay: index * 0.05 }}
+                className="p-6 rounded-xl border border-gray-100 hover:border-teal-200 hover:shadow-md transition-all"
               >
-                3 Applications Submitted
-              </div>
-            </div>
-          }
-          reverse
-        />
-      </div>
-
-      {/* AI Career Coach Section */}
-      <CareerCoachSection />
+                <div className="w-12 h-12 rounded-lg bg-teal-50 flex items-center justify-center mb-4">
+                  <feature.icon className="w-6 h-6 text-teal-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">{feature.title}</h3>
+                <p className="text-gray-600 text-sm leading-relaxed">{feature.description}</p>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
 
       {/* CTA Section */}
-      <SignedOut>
-        <SignUpButton mode="modal">
-          <div>
-            <CTASection
-              onGetStarted={() => trackCTAClick('cta_section', 'Get Started Now')}
-            />
-          </div>
-        </SignUpButton>
-      </SignedOut>
-      <SignedIn>
-        <CTASection
-          onGetStarted={() => {
-            trackCTAClick('cta_section', 'Get Started Now');
-            navigate('/happy');
-          }}
-        />
-      </SignedIn>
+      <section className="py-20 px-4 sm:px-6 bg-gradient-to-br from-teal-600 to-teal-700">
+        <div className="max-w-3xl mx-auto text-center">
+          <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
+            Ready to Land More Interviews?
+          </h2>
+          <p className="text-teal-100 text-lg mb-8">
+            Join thousands of job seekers who've improved their application success rate with HappyResumes.
+          </p>
+          <SignedOut>
+            <SignUpButton mode="modal">
+              <button
+                onClick={() => trackCTAClick('bottom_cta', 'Create Free Resume')}
+                className="inline-flex items-center gap-2 bg-white text-teal-700 px-8 py-4 rounded-xl text-lg font-semibold hover:bg-gray-50 transition-colors"
+              >
+                Create Your Free Resume
+                <ArrowRight className="w-5 h-5" />
+              </button>
+            </SignUpButton>
+          </SignedOut>
+          <SignedIn>
+            <button
+              onClick={() => navigate('/generate')}
+              className="inline-flex items-center gap-2 bg-white text-teal-700 px-8 py-4 rounded-xl text-lg font-semibold hover:bg-gray-50 transition-colors"
+            >
+              Go to Resume Generator
+              <ArrowRight className="w-5 h-5" />
+            </button>
+          </SignedIn>
+        </div>
+      </section>
 
       {/* Footer */}
-      <footer className="px-6 py-10" style={{ backgroundColor: '#ffffff', borderTop: '1px solid rgba(28, 63, 64, 0.08)' }}>
+      <footer className="py-12 px-4 sm:px-6 bg-gray-50 border-t border-gray-100">
         <div className="max-w-6xl mx-auto">
-          <div className="grid md:grid-cols-4 gap-8 mb-8">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-8 mb-8">
+            {/* Brand */}
             <div>
-              <div className="flex items-center gap-2 mb-3">
-                <img src={logoImg} alt="HappyResume Logo" className="h-7 w-auto" />
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-teal-500 to-teal-600 flex items-center justify-center">
+                  <Sparkles className="w-4 h-4 text-white" />
+                </div>
+                <span className="font-bold text-lg">Happy<span className="text-teal-600">Resumes</span></span>
               </div>
-              <p style={{ color: '#5a6564', fontSize: '0.8125rem', lineHeight: 1.6 }}>
-                The smarter way to get hired with AI.
+              <p className="text-gray-600 text-sm">
+                AI-powered resume generator that helps you beat ATS screening and land more interviews.
               </p>
             </div>
 
+            {/* Product */}
             <div>
-              <h4 className="mb-3 text-[0.875rem]" style={{ color: '#0c1310', fontWeight: 500 }}>Product</h4>
-              <ul className="space-y-2">
-                <li>
-                  <button
-                    onClick={() => navigate('/features')}
-                    className="hover:opacity-70 transition-opacity text-left"
-                    style={{ color: '#5a6564', fontSize: '0.8125rem' }}
-                  >
-                    Features
-                  </button>
-                </li>
-                <li>
-                  <button
-                    onClick={() => navigate('/pricing')}
-                    className="hover:opacity-70 transition-opacity text-left"
-                    style={{ color: '#5a6564', fontSize: '0.8125rem' }}
-                  >
-                    Pricing
-                  </button>
-                </li>
-                <li>
-                  <button
-                    onClick={() => navigate('/extension')}
-                    className="hover:opacity-70 transition-opacity text-left"
-                    style={{ color: '#5a6564', fontSize: '0.8125rem' }}
-                  >
-                    Chrome Extension
-                  </button>
-                </li>
-                <li>
-                  <a
-                    href={CHROME_EXTENSION_URL}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="hover:opacity-70 transition-opacity inline-flex items-center gap-1.5"
-                    style={{ color: '#3eaca7', fontSize: '0.8125rem', fontWeight: 500 }}
-                  >
-                    <Chrome className="w-3.5 h-3.5" />
-                    Install Extension
-                  </a>
-                </li>
+              <h4 className="font-semibold text-gray-900 mb-4">Product</h4>
+              <ul className="space-y-2 text-sm">
+                <li><Link to="/features" className="text-gray-600 hover:text-teal-600">Features</Link></li>
+                <li><Link to="/pricing" className="text-gray-600 hover:text-teal-600">Pricing</Link></li>
+                <li><Link to="/extension" className="text-gray-600 hover:text-teal-600">Chrome Extension</Link></li>
+                <li><Link to="/templates" className="text-gray-600 hover:text-teal-600">Templates</Link></li>
               </ul>
             </div>
 
+            {/* Support */}
             <div>
-              <h4 className="mb-3 text-[0.875rem]" style={{ color: '#0c1310', fontWeight: 500 }}>Support</h4>
-              <ul className="space-y-2">
-                <li>
-                  <button
-                    onClick={() => navigate('/support')}
-                    className="hover:opacity-70 transition-opacity text-left"
-                    style={{ color: '#5a6564', fontSize: '0.8125rem' }}
-                  >
-                    Help Center
-                  </button>
-                </li>
-                <li>
-                  <a href="mailto:support@happyresumes.com" className="hover:opacity-70 transition-opacity" style={{ color: '#5a6564', fontSize: '0.8125rem' }}>
-                    Contact Us
-                  </a>
-                </li>
+              <h4 className="font-semibold text-gray-900 mb-4">Support</h4>
+              <ul className="space-y-2 text-sm">
+                <li><Link to="/support" className="text-gray-600 hover:text-teal-600">Help Center</Link></li>
+                <li><a href="mailto:support@happyresumes.com" className="text-gray-600 hover:text-teal-600">Contact Us</a></li>
               </ul>
             </div>
 
+            {/* Legal */}
             <div>
-              <h4 className="mb-3 text-[0.875rem]" style={{ color: '#0c1310', fontWeight: 500 }}>Legal</h4>
-              <ul className="space-y-2">
-                <li>
-                  <button
-                    onClick={() => navigate('/privacy')}
-                    className="hover:opacity-70 transition-opacity text-left"
-                    style={{ color: '#5a6564', fontSize: '0.8125rem' }}
-                  >
-                    Privacy Policy
-                  </button>
-                </li>
-                <li>
-                  <button
-                    onClick={() => navigate('/terms')}
-                    className="hover:opacity-70 transition-opacity text-left"
-                    style={{ color: '#5a6564', fontSize: '0.8125rem' }}
-                  >
-                    Terms of Service
-                  </button>
-                </li>
+              <h4 className="font-semibold text-gray-900 mb-4">Legal</h4>
+              <ul className="space-y-2 text-sm">
+                <li><Link to="/privacy" className="text-gray-600 hover:text-teal-600">Privacy Policy</Link></li>
+                <li><Link to="/terms" className="text-gray-600 hover:text-teal-600">Terms of Service</Link></li>
               </ul>
             </div>
           </div>
 
-          <div className="pt-6" style={{ borderTop: '1px solid rgba(28, 63, 64, 0.08)' }}>
-            <p className="text-center" style={{ color: '#5a6564', fontSize: '0.8125rem' }}>
-              2025 HappyResume. All rights reserved.
+          <div className="pt-8 border-t border-gray-200">
+            <p className="text-center text-gray-500 text-sm">
+              &copy; {new Date().getFullYear()} HappyResumes. All rights reserved.
             </p>
           </div>
         </div>
